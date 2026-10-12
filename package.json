@@ -1,6 +1,6 @@
 {
   "name": "crewdeck-desktop",
-  "version": "1.5.1",
+  "version": "1.5.2",
   "private": true,
   "author": "CptSpaceDust",
   "description": "The private desktop home for the CrewDeck community.",
@@ -25,10 +25,11 @@
   },
   "devDependencies": {
     "@vitejs/plugin-react": "4.3.4",
-    "concurrently": "9.2.4",
+    "concurrently": "9.2.5",
     "electron": "44.5.1",
     "electron-builder": "26.15.3",
     "prettier": "3.6.2",
+    "source-map-js": "1.2.2",
     "vite": "6.4.3",
     "wait-on": "8.0.3"
   },
@@ -70,5 +71,8 @@
         "releaseType": "release"
       }
     ]
+  },
+  "overrides": {
+    "@electron/get": "5.1.0"
   }
 }
