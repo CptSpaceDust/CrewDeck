@@ -2,6 +2,13 @@
 
 Every published CrewDeck release is documented here and copied into its GitHub release notes.
 
+## [1.6.1] - 2026-10-12
+
+### Changed
+
+- My Meetups now keeps its header focused on invitations and plans instead of showing the availability control.
+- The calendar availability control now uses the clearer My availability label.
+
 ## [1.6.0] - 2026-10-12
 
 ### Added
