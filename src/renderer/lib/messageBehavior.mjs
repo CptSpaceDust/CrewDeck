@@ -1,3 +1,7 @@
+export function scrollMessageStream(endRef) {
+  endRef?.current?.scrollIntoView({ behavior: "smooth" });
+}
+
 export function shouldSendOnEnter(event) {
   return (
     event.key === "Enter" &&

@@ -30,7 +30,10 @@ import MessageComposer, {
   MessageNotices,
   MessageReplyQuote,
 } from "../components/MessageComposer";
-import { recordDirectMessageBurst } from "../lib/messageBehavior.mjs";
+import {
+  recordDirectMessageBurst,
+  scrollMessageStream,
+} from "../lib/messageBehavior.mjs";
 import { Room, RoomEvent, Track } from "livekit-client";
 import {
   changeGroupAvatar,
@@ -1094,10 +1097,9 @@ function DirectMessagesPage({
       supabase.removeChannel(channel);
     };
   }, [selected?.id]);
-  useEffect(
-    () => endRef.current?.scrollIntoView({ behavior: "smooth" }),
-    [messages.length],
-  );
+  useEffect(() => {
+    scrollMessageStream(endRef);
+  }, [messages.length]);
   const visible = useMemo(
     () =>
       conversations.filter((x) =>
@@ -1883,10 +1885,9 @@ function GroupMessagesPage({
     });
     onRouteConsumed?.();
   }, [route?.call, details?.id, selected?.id]);
-  useEffect(
-    () => endRef.current?.scrollIntoView({ behavior: "smooth" }),
-    [messages.length],
-  );
+  useEffect(() => {
+    scrollMessageStream(endRef);
+  }, [messages.length]);
   const profiles = useMemo(
     () =>
       Object.fromEntries(

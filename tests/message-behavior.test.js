@@ -7,6 +7,23 @@ const { transformSync } = require("esbuild");
 const React = require("react");
 const { renderToStaticMarkup } = require("react-dom/server");
 
+test("message auto-scroll never returns Chromium's scroll promise to React", async () => {
+  const { scrollMessageStream } = await import(
+    "../src/renderer/lib/messageBehavior.mjs"
+  );
+  const calls = [];
+  const endRef = {
+    current: {
+      scrollIntoView(options) {
+        calls.push(options);
+        return Promise.resolve();
+      },
+    },
+  };
+  assert.equal(scrollMessageStream(endRef), undefined);
+  assert.deepEqual(calls, [{ behavior: "smooth" }]);
+});
+
 test("Enter sends; Shift+Enter, IME composition, and held Enter do not", async () => {
   const { shouldSendOnEnter } = await import(
     "../src/renderer/lib/messageBehavior.mjs"

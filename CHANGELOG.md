@@ -2,6 +2,14 @@
 
 Every published CrewDeck release is documented here and copied into its GitHub release notes.
 
+## [1.5.1] - 2026-10-12
+
+### Fixed
+
+- Direct and group message screens no longer turn blank after the message list changes.
+- Message auto-scroll no longer returns a Chromium Promise to React as an effect cleanup value.
+- The isolated Electron interaction check now includes the realtime client used by the message composer.
+
 ## [1.5.0] - 2026-10-04
 
 ### Added
