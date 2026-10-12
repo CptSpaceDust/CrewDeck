@@ -1,13 +1,26 @@
 import BrandMark from "./BrandMark";
 
-export default function StartupScreen({ label = "Opening your community…" }) {
+export default function StartupScreen() {
   return (
-    <main className="startup-screen" role="status" aria-live="polite">
+    <main
+      className="startup-screen"
+      role="status"
+      aria-live="polite"
+      aria-label="CrewDeck is starting"
+    >
       <div className="startup-grid" aria-hidden="true" />
       <div className="startup-glow startup-glow-one" aria-hidden="true" />
       <div className="startup-glow startup-glow-two" aria-hidden="true" />
-      <section className="startup-card">
-        <div className="startup-mark" aria-hidden="true">
+      <div className="startup-starflight" aria-hidden="true">
+        {Array.from({ length: 14 }, (_, index) => (
+          <i key={index} style={{ "--star": index }} />
+        ))}
+      </div>
+      <section className="startup-animation" aria-hidden="true">
+        <i className="startup-launch-wave startup-launch-wave-one" />
+        <i className="startup-launch-wave startup-launch-wave-two" />
+        <i className="startup-launch-wave startup-launch-wave-three" />
+        <div className="startup-mark">
           <i className="startup-ring startup-ring-one" />
           <i className="startup-ring startup-ring-two" />
           <i className="startup-node startup-node-one" />
@@ -15,25 +28,6 @@ export default function StartupScreen({ label = "Opening your community…" }) {
           <i className="startup-node startup-node-three" />
           <span>
             <BrandMark />
-          </span>
-        </div>
-        <div className="startup-copy">
-          <span className="eyebrow">CrewDeck</span>
-          <h1>Bringing your crew together</h1>
-          <p>{label}</p>
-        </div>
-        <div className="startup-progress" aria-hidden="true">
-          <i />
-        </div>
-        <div className="startup-checks" aria-hidden="true">
-          <span>
-            <i /> Secure session
-          </span>
-          <span>
-            <i /> Community sync
-          </span>
-          <span>
-            <i /> Ready
           </span>
         </div>
       </section>

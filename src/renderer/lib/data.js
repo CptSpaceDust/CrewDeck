@@ -402,12 +402,16 @@ export async function setLongTermMeetupAvailability(userId, enabled, timeZone) {
 }
 
 export async function respondToMeetup(meetupId, response) {
-  return unwrap(
+  const updated = unwrap(
     await supabase.rpc("respond_to_meetup_invitation", {
       target_meetup_id: meetupId,
       response,
     }),
   );
+  const { error } = await supabase.functions.invoke("send-meetup-email", {
+    body: { meetupId, status: response },
+  });
+  return { ...updated, emailSent: !error };
 }
 
 export async function createMeetup(userId, fields) {

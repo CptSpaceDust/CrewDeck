@@ -72,7 +72,7 @@ function parseNavigation(value) {
     memberbirthdays: "birthdays",
     communityguidelines: "guidelines",
     meetupcalendar: "meetups",
-    mymeetups: "meetups",
+    mymeetups: "my-meetups",
     support: "support",
     profile: "profile",
     security: "profile",
@@ -520,6 +520,8 @@ export default function App() {
         return <GuidelinesPage />;
       case "meetups":
         return <MeetupsPage {...props} />;
+      case "my-meetups":
+        return <MeetupsPage {...props} myMeetupsOnly />;
       case "support":
         return <SupportPage profile={profile} onUpdated={setProfile} />;
       case "profile":
@@ -553,7 +555,7 @@ export default function App() {
     viewedPerson,
   ]);
   if (!startupMinimumElapsed || lock.loading || loading)
-    return <StartupScreen label="Preparing your private community…" />;
+    return <StartupScreen />;
   if (lock.locked) return <LockScreen />;
   if (recovery)
     return <ResetPasswordScreen onDone={() => setRecovery(false)} />;

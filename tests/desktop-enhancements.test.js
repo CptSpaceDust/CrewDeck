@@ -46,10 +46,11 @@ test("desktop enhancements cover notifications, drafts, reminders, and privacy",
   assert.match(mayuLoader, /mayu-walk-6\.png/);
   assert.match(mayuLoader, /src=\{walkFrames\[frame\]\}/);
   assert.doesNotMatch(mayuLoader, /backgroundImage/);
-  assert.match(startup, /Bringing your crew together/);
+  assert.doesNotMatch(startup, /Bringing your crew together|Secure session|Community sync|Ready/);
+  assert.match(startup, /startup-starflight/);
   assert.match(startup, /startup-ring/);
   assert.doesNotMatch(startup, /Mayu|mayu/);
-  assert.match(app, /<StartupScreen label="Preparing your private community…"/);
+  assert.match(app, /<StartupScreen \/>/);
   assert.match(auth, /auth-card-\$\{mode\}/);
   assert.match(auth, /Forgot password\?/);
   assert.match(auth, /What happens next\?/);

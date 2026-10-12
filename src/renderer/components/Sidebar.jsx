@@ -1,5 +1,6 @@
 import {
   Cake,
+  CalendarCheck,
   CalendarDays,
   Heart,
   Lightbulb,
@@ -26,7 +27,13 @@ const groups = [
       ["birthdays", "Birthdays", Cake],
     ],
   },
-  { label: "Connect", items: [["meetups", "Meetup Calendar", CalendarDays]] },
+  {
+    label: "Connect",
+    items: [
+      ["meetups", "Meetup Calendar", CalendarDays],
+      ["my-meetups", "My Meetups", CalendarCheck],
+    ],
+  },
   { label: "Captain", items: [["support", "Support the Captain", Heart]] },
 ];
 

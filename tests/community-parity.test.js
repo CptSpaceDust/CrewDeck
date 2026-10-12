@@ -80,7 +80,10 @@ test("person-to-person meetup planning includes availability and captain reports
   assert.match(captain, /Member Reports/);
   assert.match(captain, /with_user_id/);
   assert.match(captain, /requiresCaptainApproval/);
-  assert.match(meetups, /Captain approval is not needed/);
+  assert.doesNotMatch(meetups, /Captain approval is not needed/);
+  assert.match(meetups, /When they accept, the meetup is confirmed automatically/);
+  assert.match(read("components/Sidebar.jsx"), /My Meetups/);
+  assert.match(app, /my-meetups/);
   assert.match(meetups, /All dates and times are shown in your time zone/);
   assert.match(meetups, /time_zone: localTimeZoneName\(\)/);
   assert.doesNotMatch(meetups, /Times use Mountain Time/);

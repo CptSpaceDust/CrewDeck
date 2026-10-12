@@ -133,12 +133,14 @@ function AvailabilityModal({ user, rows, onClose, onSaved }) {
     <Modal title="Configure off days" onClose={onClose}>
       <div className="availability-layout">
         <form className="availability-form" onSubmit={save}>
-          <p className="micro-copy">
-            Block a whole day or only the hours when you will not be online.
-            Everything is entered and shown in your time zone (
-            {localTimeZoneName()}). Other crew members see availability in their
-            own local time, never the reason.
-          </p>
+          {!longTerm && (
+            <p className="micro-copy">
+              Block a whole day or only the hours when you will not be online.
+              Everything is entered and shown in your time zone (
+              {localTimeZoneName()}). Other crew members see availability in their
+              own local time, never the reason.
+            </p>
+          )}
           <label className="availability-long-toggle">
             <input
               type="checkbox"
@@ -150,71 +152,81 @@ function AvailabilityModal({ user, rows, onClose, onSaved }) {
             <span>
               <strong>I’m off for a long time</strong>
               <small>
-                Makes every upcoming day unavailable until you turn this off.
+                Makes every upcoming day unavailable to other crew members until
+                you turn this off. You can still invite someone else.
               </small>
             </span>
           </label>
-          <Field label="Date">
-            <input name="date" type="date" min={dateKey(new Date())} required />
-          </Field>
-          <label className="check-field">
-            <input
-              type="checkbox"
-              checked={allDay}
-              onChange={(event) => setAllDay(event.target.checked)}
-            />
-            <span>Unavailable all day</span>
-          </label>
-          {!allDay && (
-            <div className="form-grid">
-              <Field label="Unavailable from">
-                <input name="start" type="time" required />
+          {longTerm ? (
+            <p className="availability-long-active">
+              Your calendar appears unavailable to other crew members. Turn this
+              off to configure individual days again.
+            </p>
+          ) : (
+            <>
+              <Field label="Date">
+                <input name="date" type="date" min={dateKey(new Date())} required />
               </Field>
-              <Field label="Until">
-                <input name="end" type="time" required />
-              </Field>
-            </div>
+              <label className="check-field">
+                <input
+                  type="checkbox"
+                  checked={allDay}
+                  onChange={(event) => setAllDay(event.target.checked)}
+                />
+                <span>Unavailable all day</span>
+              </label>
+              {!allDay && (
+                <div className="form-grid">
+                  <Field label="Unavailable from">
+                    <input name="start" type="time" required />
+                  </Field>
+                  <Field label="Until">
+                    <input name="end" type="time" required />
+                  </Field>
+                </div>
+              )}
+              <button className="button primary" disabled={busy}>
+                {busy ? "Saving…" : "Add off time"}
+              </button>
+            </>
           )}
-          <button className="button primary" disabled={busy}>
-            {busy ? "Saving…" : "Add off time"}
-          </button>
           {message && <p className="form-message">{message}</p>}
         </form>
-        <section className="availability-list">
-          <h3>Your upcoming off time</h3>
-          {!mine.length && (
-            <p className="micro-copy">No off days configured.</p>
-          )}
-          {mine.map((item) => (
-            <article key={item.id}>
-              <div>
-                <strong>
-                  {item.indefinite
-                    ? "Away indefinitely"
-                    : availabilityInstantRange(item)[0].toLocaleDateString(
-                        undefined,
-                        { weekday: "short", month: "short", day: "numeric" },
-                      )}
-                </strong>
-                <span>{localAvailabilityLabel(item)}</span>
-              </div>
-              <button
-                type="button"
-                className="icon-button"
-                title="Remove off time"
-                onClick={() => remove(item)}
-              >
-                <Trash2 />
-              </button>
-            </article>
-          ))}
-        </section>
+        {!longTerm && (
+          <section className="availability-list">
+            <h3>Your upcoming off time</h3>
+            {!mine.length && (
+              <p className="micro-copy">No off days configured.</p>
+            )}
+            {mine.map((item) => (
+              <article key={item.id}>
+                <div>
+                  <strong>
+                    {availabilityInstantRange(item)[0].toLocaleDateString(
+                      undefined,
+                      { weekday: "short", month: "short", day: "numeric" },
+                    )}
+                  </strong>
+                  <span>{localAvailabilityLabel(item)}</span>
+                </div>
+                <button
+                  type="button"
+                  className="icon-button"
+                  title="Remove off time"
+                  onClick={() => remove(item)}
+                >
+                  <Trash2 />
+                </button>
+              </article>
+            ))}
+          </section>
+        )}
       </div>
     </Modal>
   );
 }
 
-export default function MeetupsPage({ user, profile }) {
+export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
   const meetupLoader = useLoader(getMeetups, []);
   const profileLoader = useLoader(getProfiles, []);
   const availabilityLoader = useLoader(getMeetupAvailability, []);
@@ -245,7 +257,7 @@ export default function MeetupsPage({ user, profile }) {
   const selectedBlocks = availability.filter(
     (item) =>
       selected &&
-      selectedIds.includes(item.user_id) &&
+      item.user_id === selectedPerson &&
       availabilityOverlapsDay(item, selected),
   );
   const loading =
@@ -278,7 +290,7 @@ export default function MeetupsPage({ user, profile }) {
   const dayState = (key) => {
     const blocks = availability.filter(
       (item) =>
-        selectedIds.includes(item.user_id) &&
+        item.user_id === selectedPerson &&
         availabilityOverlapsDay(item, key),
     );
     const scheduled = approved.some(
@@ -314,6 +326,7 @@ export default function MeetupsPage({ user, profile }) {
       );
       const overlap = availability.some((item) => {
         if (!selectedIds.includes(item.user_id)) return false;
+        if (item.user_id === user.id && item.indefinite) return false;
         const [blockStart, blockEnd] = availabilityInstantRange(item);
         return overlaps(requestedStart, requestedEnd, blockStart, blockEnd);
       });
@@ -323,7 +336,7 @@ export default function MeetupsPage({ user, profile }) {
         );
       const blocked = await restrictionMessage(user.id, "meetups");
       if (blocked) throw new Error(blocked);
-      const result = await createMeetup(user.id, {
+      await createMeetup(user.id, {
         with_user_id: selectedPerson,
         meetup_date: selected,
         start_time: form.get("time"),
@@ -365,11 +378,13 @@ export default function MeetupsPage({ user, profile }) {
   async function respond(item, response) {
     setBusy(true);
     try {
-      await respondToMeetup(item.id, response);
+      const updated = await respondToMeetup(item.id, response);
       setMessage(
-        response === "accepted"
-          ? "Invitation accepted. It is ready for Captain approval."
-          : "Invitation declined.",
+        response === "declined"
+          ? "Invitation declined."
+          : updated.status === "approved"
+            ? "Invitation accepted. Your meetup is confirmed."
+            : "Invitation accepted. It is ready for Captain approval.",
       );
       await reloadAll();
     } catch (error) {
@@ -395,9 +410,11 @@ export default function MeetupsPage({ user, profile }) {
   return (
     <div className="page meetup-page">
       <PageHeader
-        eyebrow="Meetup calendar"
-        title="Plan time together"
-        description={`Choose a crew member, compare availability, and send an invitation. All dates and times are shown in your time zone (${localTimeZoneName()}).`}
+        eyebrow={myMeetupsOnly ? "My meetups" : "Meetup calendar"}
+        title={myMeetupsOnly ? "Your meetups and invitations" : "Plan time together"}
+        description={myMeetupsOnly
+          ? "Review meetup invitations, respond to requests, and keep track of confirmed plans."
+          : `Choose a crew member, compare availability, and send an invitation. All dates and times are shown in your time zone (${localTimeZoneName()}).`}
         action={
           <div className="header-actions">
             <button
@@ -423,6 +440,8 @@ export default function MeetupsPage({ user, profile }) {
         <ErrorState message={String(error)} retry={reloadAll} />
       ) : (
         <>
+          {!myMeetupsOnly && (
+            <>
           <section className="panel meetup-person-picker">
             <div>
               <h2>Who are you meeting?</h2>
@@ -563,6 +582,9 @@ export default function MeetupsPage({ user, profile }) {
               <span>Scroll down to finish your meetup request</span>
             </button>
           )}
+            </>
+          )}
+          {myMeetupsOnly && (
           <section className="my-meetups-section">
             <h2 className="section-title">My Meetups & Invitations</h2>
             {myMeetups.length ? (
@@ -658,7 +680,8 @@ export default function MeetupsPage({ user, profile }) {
               />
             )}
           </section>
-          {selected && (
+          )}
+          {!myMeetupsOnly && selected && (
             <form className="panel meetup-request-form" onSubmit={submit}>
               <div className="meetup-form-heading" ref={formHeadingRef}>
                 <span>📅</span>
@@ -761,7 +784,7 @@ export default function MeetupsPage({ user, profile }) {
                   {personName(profiles, selectedPerson)} receives an invitation.{" "}
                   {captainApprovalRequired
                     ? "Because this request includes the Captain, they also have the final approval."
-                    : "When they accept, the meetup is confirmed automatically—Captain approval is not needed."}
+                    : "When they accept, the meetup is confirmed automatically."}
                 </p>
               </div>
               <div className="modal-actions">

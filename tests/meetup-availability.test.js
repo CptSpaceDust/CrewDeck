@@ -113,3 +113,28 @@ test("available dates continue through request creation", async () => {
   assert.equal(result.emailSent, true);
   assert.equal(data.inserted(), true);
 });
+
+test("long-term away blocks invitations to a member but not meetups they organize", () => {
+  const page = fs.readFileSync(
+    require.resolve("../src/renderer/pages/MeetupsPage.jsx"),
+    "utf8",
+  );
+  const migrations = fs.readFileSync(
+    require.resolve("../supabase/migrations/20261012225603_organizer_can_override_own_availability.sql"),
+    "utf8",
+  );
+  assert.match(page, /item\.user_id === selectedPerson/);
+  assert.match(page, /item\.user_id === user\.id && item\.indefinite/);
+  assert.match(migrations, /block\.user_id = new\.with_user_id/);
+  assert.match(migrations, /block\.user_id = new\.user_id and not block\.indefinite/);
+});
+
+test("long-term away hides individual off-day controls", () => {
+  const page = fs.readFileSync(
+    require.resolve("../src/renderer/pages/MeetupsPage.jsx"),
+    "utf8",
+  );
+  assert.match(page, /longTerm \? \(/);
+  assert.match(page, /Your calendar appears unavailable to other crew members/);
+  assert.match(page, /You can still invite someone else/);
+});
