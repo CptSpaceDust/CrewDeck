@@ -2,6 +2,20 @@
 
 Every published CrewDeck release is documented here and copied into its GitHub release notes.
 
+## [1.6.0] - 2026-10-12
+
+### Added
+
+- A dedicated My Meetups screen for invitations, responses, and upcoming meetup details.
+- Meetup invitation and response emails from both the website and CrewDeck app.
+- An animation-only startup experience.
+
+### Changed
+
+- Members marked away for a long time remain unavailable to others while still being able to organize their own meetup.
+- Long-term away mode now hides the day and time availability controls until it is turned off.
+- Meetup invitations use clearer wording about what happens after the recipient responds.
+
 ## [1.5.2] - 2026-10-12
 
 ### Fixed
