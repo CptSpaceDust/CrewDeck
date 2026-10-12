@@ -72,7 +72,7 @@ test("person-to-person meetup planning includes availability and captain reports
   const settings = read("components/AppSettings.jsx");
   assert.match(app, /startupMinimumElapsed/);
   assert.match(meetups, /Who are you meeting\?/);
-  assert.match(meetups, /Configure off days/);
+  assert.match(meetups, /My availability/);
   assert.match(meetups, /Offline all day/);
   assert.match(meetups, /Some hours offline/);
   assert.match(meetups, /Already has a meetup/);

@@ -130,7 +130,7 @@ function AvailabilityModal({ user, rows, onClose, onSaved }) {
     await onSaved();
   }
   return (
-    <Modal title="Configure off days" onClose={onClose}>
+    <Modal title="My availability" onClose={onClose}>
       <div className="availability-layout">
         <form className="availability-form" onSubmit={save}>
           {!longTerm && (
@@ -417,12 +417,14 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
           : `Choose a crew member, compare availability, and send an invitation. All dates and times are shown in your time zone (${localTimeZoneName()}).`}
         action={
           <div className="header-actions">
-            <button
-              className="button secondary"
-              onClick={() => setAvailabilityOpen(true)}
-            >
-              <CalendarOff /> Configure off days
-            </button>
+            {!myMeetupsOnly && (
+              <button
+                className="button secondary"
+                onClick={() => setAvailabilityOpen(true)}
+              >
+                <CalendarOff /> My availability
+              </button>
+            )}
             <button
               className="icon-button refresh-button"
               title="Refresh meetups"
