@@ -59,19 +59,26 @@ function Dial({
   min,
   max,
   suffix = "",
+  tone = "danger",
   disabled = false,
   onChange,
   onRelease,
 }) {
   const percent = max === min ? 0 : (value - min) / (max - min);
+  const hue =
+    tone === "safe"
+      ? 190 - percent * 70
+      : tone === "duration"
+        ? 190 - percent * 160
+        : 190 - percent * 188;
   function update(event) {
     if (disabled) return;
     const rect = event.currentTarget.getBoundingClientRect();
     const x = event.clientX - (rect.left + rect.width / 2);
     const y = event.clientY - (rect.top + rect.height / 2);
-    let angle = (Math.atan2(y, x) * 180) / Math.PI + 90;
-    if (angle < 0) angle += 360;
-    angle = Math.min(270, angle);
+    const pointerAngle = (Math.atan2(y, x) * 180) / Math.PI;
+    let angle = (pointerAngle - 135 + 360) % 360;
+    if (angle > 270) angle = value >= (min + max) / 2 ? 270 : 0;
     onChange(Math.round(min + (angle / 270) * (max - min)));
   }
   function key(event) {
@@ -92,7 +99,10 @@ function Dial({
       <span>{label}</span>
       <div
         className={`control-dial${disabled ? " disabled" : ""}`}
-        style={{ "--dial-angle": `${percent * 270}deg` }}
+        style={{
+          "--dial-angle": `${percent * 270}deg`,
+          "--dial-color": `hsl(${hue} 88% 62%)`,
+        }}
         role="slider"
         tabIndex={disabled ? -1 : 0}
         aria-label={label}
@@ -115,7 +125,7 @@ function Dial({
             event.currentTarget.releasePointerCapture(event.pointerId);
           onRelease?.();
         }}
-        onPointerCancel={onRelease}
+        onPointerCancel={() => onRelease?.()}
       >
         <div className="control-dial-face">
           <b>
@@ -139,8 +149,10 @@ export default function ControlCenterPage({ user, profile }) {
   const [live, setLive] = useState(false);
   const [liveMode, setLiveMode] = useState("vibrate");
   const [pendingWarning, setPendingWarning] = useState(null);
+  const [emergencyActive, setEmergencyActive] = useState(false);
   const warningRun = useRef(null);
   const lastLiveCommand = useRef(0);
+  const emergencyTimer = useRef(null);
 
   const verifyAccess = useCallback(async () => {
     const {
@@ -259,6 +271,7 @@ export default function ControlCenterPage({ user, profile }) {
       .subscribe();
     return () => {
       warningRun.current = null;
+      window.clearTimeout(emergencyTimer.current);
       supabase.removeChannel(safety);
       supabase.removeChannel(logChannel);
     };
@@ -432,8 +445,8 @@ export default function ControlCenterPage({ user, profile }) {
     }
   }
 
-  function stopLive() {
-    if (!live) return;
+  function stopLive(force = false) {
+    if (!live && !force) return;
     setControls((current) =>
       Object.fromEntries(
         Object.entries(current).map(([id, item]) => [
@@ -444,13 +457,32 @@ export default function ControlCenterPage({ user, profile }) {
     );
   }
 
-  function emergencyStop() {
+  async function emergencyStop() {
     warningRun.current = null;
     setPendingWarning(null);
     setLive(false);
-    stopLive();
-    setBusy(false);
-    setNotice("Local live controls and pending warnings stopped.");
+    stopLive(true);
+    window.clearTimeout(emergencyTimer.current);
+    setEmergencyActive(false);
+    window.requestAnimationFrame(() => setEmergencyActive(true));
+    setBusy(true);
+    try {
+      const results = await Promise.allSettled(
+        devices.map((device) => sendCommand(device, "stop", 0, 0, true)),
+      );
+      const failed = results.filter((result) => result.status === "rejected");
+      setNotice(
+        failed.length
+          ? `Emergency stop reached ${devices.length - failed.length} of ${devices.length} devices.`
+          : "Emergency stop sent. Active device output has been halted.",
+      );
+    } finally {
+      setBusy(false);
+      emergencyTimer.current = window.setTimeout(
+        () => setEmergencyActive(false),
+        1400,
+      );
+    }
   }
 
   async function savePreset(device) {
@@ -560,16 +592,12 @@ export default function ControlCenterPage({ user, profile }) {
 
   const anySynced = Object.values(controls).some((control) => control.synced);
   return (
-    <div className="page control-center-page">
+    <div
+      className={`page control-center-page${emergencyActive ? " emergency-active" : ""}`}
+    >
       <PageHeader
-        eyebrow="Authorized systems"
         title="Control Center"
-        description="Command connected devices from one secure, live console."
-        action={
-          <span className="control-center-secure">
-            <i /> Secure control link
-          </span>
-        }
+        description="Adjust the power, timing, and safety controls for connected OpenShock devices."
       />
       <div className="control-center-notice" role="status">
         {notice || "Control access confirmed."}
@@ -611,6 +639,7 @@ export default function ControlCenterPage({ user, profile }) {
           <button
             className="button danger control-emergency"
             onClick={emergencyStop}
+            disabled={!devices.length}
           >
             <AlertTriangle /> Emergency Stop
           </button>
@@ -670,6 +699,7 @@ export default function ControlCenterPage({ user, profile }) {
                 {!live && (
                   <Dial
                     label="Duration"
+                    tone="duration"
                     value={control.duration}
                     min={1}
                     max={30}
@@ -707,6 +737,7 @@ export default function ControlCenterPage({ user, profile }) {
                       {control.warningEnabled && (
                         <Dial
                           label="Warning duration"
+                          tone="safe"
                           value={control.warningDelay}
                           min={1}
                           max={10}

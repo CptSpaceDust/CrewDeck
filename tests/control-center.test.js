@@ -41,8 +41,14 @@ test("Control Center includes device operations and real dials", () => {
   ])
     assert.ok(page.includes(feature), `Missing ${feature}`);
   assert.match(page, /role="slider"/);
+  assert.match(page, /pointerAngle - 135/);
+  assert.match(page, /--dial-color/);
+  assert.match(page, /sendCommand\(device, "stop", 0, 0, true\)/);
+  assert.doesNotMatch(page, /Authorized systems|Secure control link/);
   assert.doesNotMatch(page, /[⚡🔊]\s*(?:Vibrate|Beep|Shock)/);
   assert.match(css, /\.control-dial/);
   assert.match(css, /repeating-conic-gradient/);
   assert.match(css, /--dial-angle/);
+  assert.match(css, /--dial-color/);
+  assert.match(css, /control-emergency-flash/);
 });

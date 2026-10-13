@@ -2,6 +2,18 @@
 
 Every published CrewDeck release is documented here and copied into its GitHub release notes.
 
+## [1.6.2] - 2026-10-13
+
+### Added
+
+- The Space Glass Control Center now matches the website with authenticated OpenShock device controls.
+- Emergency Stop now sends an unlogged stop command to every connected device and shows an immediate system response.
+
+### Changed
+
+- Control dials now follow their visible 270-degree track smoothly, use value-aware colors, and place their readouts lower on the dial face.
+- The Control Center header now focuses on OpenShock device power, timing, and safety controls.
+
 ## [1.6.1] - 2026-10-12
 
 ### Changed

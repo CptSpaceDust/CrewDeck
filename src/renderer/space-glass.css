@@ -1488,28 +1488,6 @@ html[data-motion="reduced"] *::after {
   letter-spacing: -0.055em;
 }
 
-.control-center-secure {
-  display: inline-flex;
-  align-items: center;
-  gap: 9px;
-  padding: 10px 15px;
-  border: 1px solid rgba(103, 235, 255, 0.24);
-  border-radius: 999px;
-  background: rgba(4, 19, 34, 0.54);
-  color: #c9f6ff;
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-}
-
-.control-center-secure i {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #5bffc5;
-  box-shadow: 0 0 12px #46f2b5;
-}
-
 .control-center-notice {
   min-height: 40px;
   margin: 12px 0;
@@ -1586,6 +1564,31 @@ html[data-motion="reduced"] *::after {
     rgba(154, 30, 50, 0.72),
     rgba(82, 10, 25, 0.78)
   );
+}
+
+.control-center-page.emergency-active::after {
+  content: "";
+  position: fixed;
+  z-index: 9998;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    circle,
+    rgba(255, 92, 105, 0.08),
+    rgba(145, 8, 31, 0.42)
+  );
+  animation: control-emergency-flash 1.4s ease-out both;
+}
+
+.control-center-page.emergency-active .page-header,
+.control-center-page.emergency-active .control-global-panel,
+.control-center-page.emergency-active .control-device-grid,
+.control-center-page.emergency-active .control-log-panel {
+  animation: control-emergency-jolt 0.42s ease-out;
+}
+
+.control-center-page.emergency-active .control-emergency {
+  animation: control-emergency-button 1.4s ease-out;
 }
 
 .control-live-modes {
@@ -1695,6 +1698,7 @@ html[data-motion="reduced"] *::after {
 
 .control-dial {
   --dial-angle: 0deg;
+  --dial-color: var(--control-cyan);
   position: relative;
   isolation: isolate;
   display: grid;
@@ -1711,7 +1715,7 @@ html[data-motion="reduced"] *::after {
     ),
     conic-gradient(
       from -135deg,
-      var(--control-cyan) 0deg var(--dial-angle),
+      var(--dial-color) 0deg var(--dial-angle),
       rgba(63, 106, 145, 0.21) var(--dial-angle) 270deg,
       rgba(2, 10, 22, 0.82) 270deg 360deg
     );
@@ -1804,9 +1808,9 @@ html[data-motion="reduced"] *::after {
   background: linear-gradient(
     180deg,
     #e8fbff 0 10px,
-    var(--control-cyan) 11px 100%
+    var(--dial-color) 11px 100%
   );
-  box-shadow: 0 0 8px rgba(107, 235, 255, 0.88);
+  box-shadow: 0 0 9px color-mix(in srgb, var(--dial-color) 78%, transparent);
   transform: translateX(-50%) rotate(calc(-135deg + var(--dial-angle)));
   transform-origin: 50% 41px;
 }
@@ -1828,7 +1832,7 @@ html[data-motion="reduced"] *::after {
   position: relative;
   z-index: 3;
   min-width: 45px;
-  margin-top: 34px;
+  margin-top: 45px;
   padding: 4px 6px;
   border: 1px solid rgba(103, 212, 255, 0.17);
   border-radius: 7px;
@@ -2058,6 +2062,55 @@ html[data-motion="reduced"] *::after {
   }
 }
 
+@keyframes control-emergency-flash {
+  0% {
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  38% {
+    opacity: 0.28;
+  }
+  55% {
+    opacity: 0.72;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes control-emergency-jolt {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-7px);
+  }
+  40% {
+    transform: translateX(6px);
+  }
+  60% {
+    transform: translateX(-4px);
+  }
+  80% {
+    transform: translateX(2px);
+  }
+}
+
+@keyframes control-emergency-button {
+  0%,
+  100% {
+    filter: brightness(1);
+  }
+  18%,
+  48% {
+    filter: brightness(1.65);
+    box-shadow: 0 0 38px rgba(255, 73, 91, 0.78);
+  }
+}
+
 @media (max-width: 900px) {
   .control-global-actions {
     grid-template-columns: 1fr;
@@ -2095,7 +2148,7 @@ html[data-motion="reduced"] *::after {
   }
 
   .control-dial-face b {
-    margin-top: 29px;
+    margin-top: 38px;
   }
 }
 
@@ -2128,5 +2181,13 @@ html[data-motion="reduced"] *::after {
   .control-dial-face::before,
   .control-switch span::after {
     transition: none;
+  }
+
+  .control-center-page.emergency-active .page-header,
+  .control-center-page.emergency-active .control-global-panel,
+  .control-center-page.emergency-active .control-device-grid,
+  .control-center-page.emergency-active .control-log-panel,
+  .control-center-page.emergency-active .control-emergency {
+    animation: none;
   }
 }
