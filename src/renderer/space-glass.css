@@ -1447,3 +1447,686 @@ html[data-motion="reduced"] *::after {
     animation: none !important;
   }
 }
+
+.control-center-page {
+  --control-cyan: #73f2ff;
+  --control-line: rgba(130, 205, 255, 0.24);
+}
+
+.control-center-page .page-header {
+  position: relative;
+  overflow: hidden;
+  align-items: flex-end;
+  padding: 30px 32px;
+  border: 1px solid var(--control-line);
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at 86% 0, rgba(83, 186, 255, 0.22), transparent 34%),
+    linear-gradient(135deg, rgba(17, 43, 76, 0.76), rgba(5, 13, 30, 0.72));
+  box-shadow: var(--glass-inset), var(--glass-shadow);
+  backdrop-filter: blur(24px) saturate(140%);
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+}
+
+.control-center-page .page-header::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(117, 221, 255, 0.72),
+    transparent
+  );
+}
+
+.control-center-page .page-header h1 {
+  font-size: clamp(32px, 5vw, 54px);
+  letter-spacing: -0.055em;
+}
+
+.control-center-secure {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 15px;
+  border: 1px solid rgba(103, 235, 255, 0.24);
+  border-radius: 999px;
+  background: rgba(4, 19, 34, 0.54);
+  color: #c9f6ff;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.control-center-secure i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #5bffc5;
+  box-shadow: 0 0 12px #46f2b5;
+}
+
+.control-center-notice {
+  min-height: 40px;
+  margin: 12px 0;
+  padding: 11px 15px;
+  border: 1px solid rgba(125, 200, 255, 0.13);
+  border-radius: 12px;
+  color: #abc3d8;
+  background: rgba(6, 16, 32, 0.45);
+  font-size: 12px;
+}
+
+.control-global-panel,
+.control-device-card,
+.control-log-panel,
+.control-center-access {
+  border-color: var(--control-line);
+  background: linear-gradient(
+    145deg,
+    rgba(18, 40, 70, 0.68),
+    rgba(5, 13, 29, 0.76)
+  );
+}
+
+.control-global-panel {
+  padding: 21px;
+}
+
+.control-global-heading,
+.control-device-card > header,
+.control-log-panel > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.control-global-heading h2,
+.control-device-card h2,
+.control-log-panel h2 {
+  margin: 4px 0 0;
+  color: #f4faff;
+}
+
+.control-global-heading h2 {
+  font-size: 20px;
+}
+
+.control-global-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 11px;
+  margin-top: 18px;
+}
+
+.control-global-actions .button {
+  min-height: 48px;
+}
+
+.control-global-actions .live-active {
+  border-color: rgba(92, 235, 184, 0.46);
+  background: linear-gradient(
+    145deg,
+    rgba(31, 151, 115, 0.34),
+    rgba(28, 86, 110, 0.28)
+  );
+  box-shadow: 0 0 26px rgba(64, 220, 167, 0.14);
+}
+
+.control-global-actions .control-emergency {
+  color: #ffe8eb;
+  border-color: rgba(255, 103, 117, 0.42);
+  background: linear-gradient(
+    180deg,
+    rgba(154, 30, 50, 0.72),
+    rgba(82, 10, 25, 0.78)
+  );
+}
+
+.control-live-modes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+  margin-top: 11px;
+  padding: 9px;
+  border: 1px solid rgba(112, 198, 255, 0.14);
+  border-radius: 14px;
+  background: rgba(2, 12, 27, 0.44);
+}
+
+.control-live-modes button,
+.control-sync-toggle,
+.control-preset-actions button,
+.control-action-row button {
+  min-height: 40px;
+  border: 1px solid rgba(122, 199, 255, 0.22);
+  border-radius: 11px;
+  color: #dbeeff;
+  background: rgba(31, 70, 111, 0.25);
+  cursor: pointer;
+}
+
+.control-live-modes button.active {
+  color: #fff;
+  border-color: rgba(122, 225, 255, 0.48);
+  background: linear-gradient(
+    135deg,
+    rgba(44, 141, 211, 0.62),
+    rgba(83, 82, 198, 0.48)
+  );
+}
+
+.control-device-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
+  gap: 18px;
+  margin-top: 18px;
+}
+
+.control-device-card {
+  padding: 23px;
+  border-radius: 22px;
+}
+
+.control-device-card.synced {
+  border-color: rgba(105, 210, 255, 0.62);
+  box-shadow:
+    var(--glass-inset),
+    0 20px 58px rgba(0, 0, 0, 0.34),
+    0 0 30px rgba(79, 185, 255, 0.2);
+}
+
+.control-device-card > header h2 {
+  font-size: 18px;
+}
+
+.control-sync-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 86px;
+  padding: 0 12px;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.control-sync-toggle svg {
+  width: 15px;
+}
+
+.control-sync-toggle.active {
+  color: #e9fcff;
+  border-color: rgba(98, 216, 255, 0.55);
+  background: rgba(30, 129, 180, 0.28);
+}
+
+.control-dial-panel {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  margin: 20px 0;
+  padding: 22px 12px 18px;
+  border: 1px solid rgba(114, 199, 255, 0.14);
+  border-radius: 18px;
+  background: rgba(1, 11, 25, 0.34);
+  box-shadow: inset 0 1px 18px rgba(0, 0, 0, 0.22);
+}
+
+.control-dial-group {
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.control-dial-group > span {
+  margin-bottom: 12px;
+  color: #b8cce0;
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
+.control-dial {
+  --dial-angle: 0deg;
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  place-items: center;
+  width: 142px;
+  height: 142px;
+  border: 1px solid rgba(213, 240, 255, 0.34);
+  border-radius: 50%;
+  background:
+    radial-gradient(
+      circle at 35% 28%,
+      rgba(255, 255, 255, 0.19),
+      transparent 20%
+    ),
+    conic-gradient(
+      from -135deg,
+      var(--control-cyan) 0deg var(--dial-angle),
+      rgba(63, 106, 145, 0.21) var(--dial-angle) 270deg,
+      rgba(2, 10, 22, 0.82) 270deg 360deg
+    );
+  box-shadow:
+    0 15px 28px rgba(0, 0, 0, 0.48),
+    0 0 20px rgba(79, 185, 255, 0.24),
+    inset 0 0 0 6px rgba(3, 13, 28, 0.82),
+    inset 0 0 0 8px rgba(162, 220, 255, 0.18);
+  cursor: grab;
+  touch-action: none;
+  transition:
+    filter 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+
+.control-dial::before {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  inset: 7px;
+  border-radius: 50%;
+  background: repeating-conic-gradient(
+    from -135deg,
+    rgba(224, 245, 255, 0.72) 0deg 1deg,
+    transparent 1deg 13.5deg
+  );
+  -webkit-mask: radial-gradient(
+    circle,
+    transparent 0 53px,
+    #000 54px 60px,
+    transparent 61px
+  );
+  mask: radial-gradient(
+    circle,
+    transparent 0 53px,
+    #000 54px 60px,
+    transparent 61px
+  );
+  opacity: 0.64;
+  pointer-events: none;
+}
+
+.control-dial:hover,
+.control-dial:focus-visible {
+  filter: brightness(1.1);
+  transform: translateY(-2px);
+  box-shadow:
+    0 18px 34px rgba(0, 0, 0, 0.5),
+    0 0 29px rgba(82, 197, 255, 0.4),
+    inset 0 0 0 6px rgba(3, 13, 28, 0.82),
+    inset 0 0 0 8px rgba(185, 230, 255, 0.26);
+}
+
+.control-dial.disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+.control-dial-face {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 98px;
+  height: 98px;
+  border: 1px solid rgba(170, 218, 250, 0.24);
+  border-radius: 50%;
+  background:
+    radial-gradient(
+      circle at 38% 30%,
+      rgba(84, 118, 155, 0.36),
+      transparent 28%
+    ),
+    linear-gradient(145deg, #14283d, #07111f 62%, #020813);
+  box-shadow:
+    inset 5px 6px 16px rgba(255, 255, 255, 0.05),
+    inset -8px -9px 18px rgba(0, 0, 0, 0.56),
+    0 3px 10px rgba(0, 0, 0, 0.42);
+}
+
+.control-dial-face::before {
+  content: "";
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  width: 4px;
+  height: 31px;
+  border-radius: 999px;
+  background: linear-gradient(
+    180deg,
+    #e8fbff 0 10px,
+    var(--control-cyan) 11px 100%
+  );
+  box-shadow: 0 0 8px rgba(107, 235, 255, 0.88);
+  transform: translateX(-50%) rotate(calc(-135deg + var(--dial-angle)));
+  transform-origin: 50% 41px;
+}
+
+.control-dial-face::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(198, 235, 255, 0.5);
+  border-radius: 50%;
+  background: linear-gradient(145deg, #5f7890, #101e2d);
+  transform: translate(-50%, -50%);
+}
+
+.control-dial-face b {
+  position: relative;
+  z-index: 3;
+  min-width: 45px;
+  margin-top: 34px;
+  padding: 4px 6px;
+  border: 1px solid rgba(103, 212, 255, 0.17);
+  border-radius: 7px;
+  background: rgba(0, 6, 15, 0.76);
+  color: #dff9ff;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.control-advanced {
+  overflow: hidden;
+  margin-bottom: 18px;
+  border: 1px solid rgba(112, 198, 255, 0.16);
+  border-radius: 15px;
+  background: rgba(1, 11, 25, 0.31);
+}
+
+.control-advanced summary {
+  position: relative;
+  padding: 14px 40px 14px 16px;
+  color: #c7dbec;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  list-style: none;
+}
+
+.control-advanced summary::after {
+  content: "+";
+  position: absolute;
+  top: 50%;
+  right: 16px;
+  color: #72c7ff;
+  font-size: 18px;
+  transform: translateY(-50%);
+}
+
+.control-advanced[open] summary::after {
+  content: "−";
+}
+
+.control-advanced-grid {
+  display: grid;
+  gap: 10px;
+  padding: 0 10px 10px;
+}
+
+.control-advanced-grid > section {
+  padding: 15px;
+  border: 1px solid rgba(112, 198, 255, 0.13);
+  border-radius: 13px;
+  background: rgba(12, 28, 50, 0.55);
+}
+
+.control-advanced h3 {
+  margin: 0 0 8px;
+  color: #e5f5ff;
+  font-size: 13px;
+}
+
+.control-advanced p {
+  margin: 0;
+  color: #8fa9c0;
+  font-size: 11px;
+}
+
+.control-setting-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+}
+
+.control-switch input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.control-switch span {
+  position: relative;
+  display: block;
+  width: 42px;
+  height: 24px;
+  border: 1px solid rgba(130, 197, 240, 0.26);
+  border-radius: 999px;
+  background: rgba(2, 11, 24, 0.72);
+  cursor: pointer;
+}
+
+.control-switch span::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #708ba5;
+  transition: 0.18s ease;
+}
+
+.control-switch input:checked + span {
+  border-color: rgba(255, 116, 132, 0.54);
+  background: rgba(151, 32, 52, 0.38);
+}
+
+.control-switch input:checked + span::after {
+  background: #ff8393;
+  box-shadow: 0 0 10px rgba(255, 105, 126, 0.7);
+  transform: translateX(18px);
+}
+
+.control-advanced select {
+  width: 100%;
+  min-height: 40px;
+  padding: 0 11px;
+  border: 1px solid rgba(113, 204, 255, 0.21);
+  border-radius: 10px;
+  color: #e9f5ff;
+  background: rgba(2, 12, 27, 0.76);
+}
+
+.control-preset-actions,
+.control-action-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 9px;
+}
+
+.control-preset-actions button:disabled,
+.control-action-row button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.control-action-row button:nth-child(1) {
+  color: #dff3ff;
+  background: rgba(31, 112, 176, 0.3);
+}
+
+.control-action-row button:nth-child(2) {
+  color: #ffe7a7;
+  background: rgba(162, 125, 25, 0.23);
+}
+
+.control-action-row button.shock {
+  color: #ffc3cb;
+  background: rgba(161, 35, 54, 0.28);
+}
+
+.control-log-panel {
+  margin-top: 18px;
+  padding: 21px;
+}
+
+.control-log-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.control-log-grid article {
+  padding: 13px;
+  border: 1px solid rgba(112, 198, 255, 0.14);
+  border-radius: 12px;
+  background: rgba(4, 16, 34, 0.5);
+}
+
+.control-log-grid strong,
+.control-log-grid span,
+.control-log-grid time {
+  display: block;
+}
+
+.control-log-grid span {
+  margin-top: 4px;
+  color: #85d7ff;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: capitalize;
+}
+
+.control-log-grid p,
+.control-log-grid time {
+  color: #94a9bf;
+  font-size: 11px;
+}
+
+.control-log-grid p {
+  margin: 8px 0 5px;
+}
+
+.control-center-access {
+  width: min(520px, 100%);
+  margin: 60px auto;
+  padding: 38px;
+  text-align: center;
+}
+
+.control-center-access > svg {
+  width: 52px;
+  height: 52px;
+  margin-bottom: 16px;
+  color: #ff8294;
+  filter: drop-shadow(0 0 16px rgba(255, 84, 111, 0.3));
+}
+
+.control-center-access h1 {
+  margin: 7px 0;
+}
+
+.control-center-access p {
+  color: #a5b7cc;
+}
+
+.spin {
+  animation: control-spin 0.8s linear infinite;
+}
+
+@keyframes control-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 900px) {
+  .control-global-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .control-dial {
+    width: 124px;
+    height: 124px;
+  }
+
+  .control-dial::before {
+    -webkit-mask: radial-gradient(
+      circle,
+      transparent 0 46px,
+      #000 47px 52px,
+      transparent 53px
+    );
+    mask: radial-gradient(
+      circle,
+      transparent 0 46px,
+      #000 47px 52px,
+      transparent 53px
+    );
+  }
+
+  .control-dial-face {
+    width: 84px;
+    height: 84px;
+  }
+
+  .control-dial-face::before {
+    top: 7px;
+    height: 26px;
+    transform-origin: 50% 35px;
+  }
+
+  .control-dial-face b {
+    margin-top: 29px;
+  }
+}
+
+@media (max-width: 620px) {
+  .control-center-page .page-header,
+  .control-global-heading,
+  .control-device-card > header,
+  .control-log-panel > header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .control-center-page .page-header {
+    padding: 24px;
+  }
+
+  .control-dial-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .control-preset-actions,
+  .control-action-row,
+  .control-live-modes {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .control-dial,
+  .control-dial-face::before,
+  .control-switch span::after {
+    transition: none;
+  }
+}

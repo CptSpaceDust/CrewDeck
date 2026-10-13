@@ -35,6 +35,7 @@ import { activeConversation } from "./components/MessageComposer";
 import { shouldAlertForMessage } from "./lib/messageBehavior.mjs";
 import { claimConversationAlert } from "./lib/alertDelivery.mjs";
 import CaptainPage from "./pages/CaptainPage";
+import ControlCenterPage from "./pages/ControlCenterPage";
 import UpdateOverlay from "./components/UpdateVisual";
 import { InAppDialogHost } from "./components/InAppDialog";
 import {
@@ -81,6 +82,8 @@ function parseNavigation(value) {
     notifications: "notifications",
     appsettings: "settings",
     captainpanel: "captain",
+    controlcenter: "control-center",
+    "control-center": "control-center",
   };
   return {
     page: map[name] || "introductions",
@@ -500,6 +503,8 @@ export default function App() {
     switch (page) {
       case "captain":
         return <CaptainPage {...props} />;
+      case "control-center":
+        return <ControlCenterPage {...props} />;
       case "ideas":
         return <IdeasPage {...props} />;
       case "collabs":

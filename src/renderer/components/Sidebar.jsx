@@ -3,6 +3,7 @@ import {
   CalendarCheck,
   CalendarDays,
   Heart,
+  Gauge,
   Lightbulb,
   LockKeyhole,
   LogOut,
@@ -14,6 +15,27 @@ import {
 } from "lucide-react";
 import { Avatar } from "./ui";
 import BrandMark from "./BrandMark";
+
+function controlCenterAccess(profile) {
+  let badges = profile?.badges;
+  if (!Array.isArray(badges) && typeof badges === "string") {
+    try {
+      badges = JSON.parse(badges);
+    } catch {
+      badges = badges
+        .replace(/[\[\]"]/g, "")
+        .split(",")
+        .map((badge) => badge.trim());
+    }
+  }
+  return (
+    profile?.rank?.trim().toLowerCase() === "captain" ||
+    (Array.isArray(badges) &&
+      badges.some(
+        (badge) => String(badge).trim().toLowerCase() === "trusted person",
+      ))
+  );
+}
 
 const groups = [
   {
@@ -52,6 +74,17 @@ export default function Sidebar({ page, setPage, profile, onLogout, unread }) {
           >
             <LockKeyhole />
             <span>Captain Panel</span>
+          </button>
+        )}
+        {controlCenterAccess(profile) && (
+          <button
+            className={
+              page === "control-center" ? "nav-item active" : "nav-item"
+            }
+            onClick={() => setPage("control-center")}
+          >
+            <Gauge />
+            <span>Control Center</span>
           </button>
         )}
         {groups.map((group) => (
