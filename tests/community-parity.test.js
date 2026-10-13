@@ -7,20 +7,44 @@ const read = (path) => readFileSync(new URL(path, root), "utf8");
 
 test("sidebar matches the requested website community layout", () => {
   const source = read("components/Sidebar.jsx");
+  const groupedNavigation = source.slice(
+    source.indexOf("const groups"),
+    source.indexOf("export default function Sidebar"),
+  );
   const labels = [
+    "Community",
     "Guidelines",
-    "Introductions",
     "Crew Directory",
+    "Introductions",
     "Collab Board",
     "Ideas Board",
     "Birthdays",
+    "Connect",
+    "Meetup Calendar",
+    "My Meetups",
   ];
   let previous = -1;
   for (const label of labels) {
-    const index = source.indexOf(`\"${label}\"`);
+    const index = groupedNavigation.indexOf(`\"${label}\"`);
     assert.ok(index > previous, `${label} should appear in order`);
     previous = index;
   }
+  const renderedNavigation = source.slice(
+    source.indexOf("export default function Sidebar"),
+  );
+  assert.ok(
+    renderedNavigation.indexOf("Captain Panel") <
+      renderedNavigation.indexOf("groups.map"),
+  );
+  assert.ok(
+    renderedNavigation.indexOf("groups.map") <
+      renderedNavigation.indexOf("VRChat"),
+  );
+  assert.ok(
+    renderedNavigation.indexOf("VRChat") <
+      renderedNavigation.indexOf("Control Center"),
+  );
+  assert.equal(source.includes("Support the Captain"), false);
   assert.doesNotMatch(source, /\[\"messages\",\"Messages\"/);
   assert.doesNotMatch(source, /\[\"notifications\",\"Notifications\"/);
 });
@@ -81,7 +105,10 @@ test("person-to-person meetup planning includes availability and captain reports
   assert.match(captain, /with_user_id/);
   assert.match(captain, /requiresCaptainApproval/);
   assert.doesNotMatch(meetups, /Captain approval is not needed/);
-  assert.match(meetups, /When they accept, the meetup is confirmed automatically/);
+  assert.match(
+    meetups,
+    /When they accept, the meetup is confirmed automatically/,
+  );
   assert.match(read("components/Sidebar.jsx"), /My Meetups/);
   assert.match(app, /my-meetups/);
   assert.match(meetups, /All dates and times are shown in your time zone/);

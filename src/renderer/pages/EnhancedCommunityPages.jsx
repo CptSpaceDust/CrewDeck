@@ -70,8 +70,10 @@ export function CrewPage({ onViewProfile }) {
               className="icon-button refresh-button"
               title="Refresh crew"
               onClick={reload}
+              disabled={loading}
+              aria-busy={loading}
             >
-              <RefreshCw />
+              <RefreshCw className={loading ? "spin" : ""} />
             </button>
           </div>
         }
@@ -328,8 +330,10 @@ export function BirthdaysPage() {
             className="icon-button refresh-button"
             title="Refresh birthdays"
             onClick={reload}
+            disabled={loading}
+            aria-busy={loading}
           >
-            <RefreshCw />
+            <RefreshCw className={loading ? "spin" : ""} />
           </button>
         }
       />

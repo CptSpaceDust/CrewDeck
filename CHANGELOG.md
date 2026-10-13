@@ -2,6 +2,20 @@
 
 Every published CrewDeck release is documented here and copied into its GitHub release notes.
 
+## [1.6.3] - 2026-10-13
+
+### Changed
+
+- Reordered the sidebar into Community, Connect, and VRChat sections, with the Captain Panel first for Captains.
+- Control Center access now requires the Trusted Person badge throughout the app, website, and OpenShock functions.
+- Control Center dials no longer select nearby text while being adjusted, and the header uses the new warning copy.
+- Refresh controls now show an active state and reliably reload their complete page data.
+
+### Removed
+
+- Removed the connected-device count from the Control Center status area.
+- Removed the Captain-rank shortcut for Control Center access.
+
 ## [1.6.2] - 2026-10-13
 
 ### Added
@@ -46,6 +60,7 @@ Every published CrewDeck release is documented here and copied into its GitHub r
 ### Security
 
 - Updated affected release dependencies and replaced the older Electron download helper that pulled in the vulnerable proxy package.
+
 ## [1.5.1] - 2026-10-12
 
 ### Fixed

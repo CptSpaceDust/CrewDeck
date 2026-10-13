@@ -36,11 +36,8 @@ function badgesOf(profile) {
 }
 
 function canUseControlCenter(profile) {
-  return (
-    profile?.rank?.trim().toLowerCase() === "captain" ||
-    badgesOf(profile).some(
-      (badge) => badge.trim().toLowerCase() === "trusted person",
-    )
+  return badgesOf(profile).some(
+    (badge) => badge.trim().toLowerCase() === "trusted person",
   );
 }
 
@@ -73,6 +70,7 @@ function Dial({
         : 190 - percent * 188;
   function update(event) {
     if (disabled) return;
+    event.preventDefault();
     const rect = event.currentTarget.getBoundingClientRect();
     const x = event.clientX - (rect.left + rect.width / 2);
     const y = event.clientY - (rect.top + rect.height / 2);
@@ -167,7 +165,7 @@ export default function ControlCenterPage({ user, profile }) {
       await Promise.all([
         supabase
           .from("profiles")
-          .select("rank,badges")
+          .select("badges")
           .eq("id", verifiedUser.id)
           .single(),
         supabase.from("site_settings").select("safe_mode").eq("id", 1).single(),
@@ -239,11 +237,7 @@ export default function ControlCenterPage({ user, profile }) {
         return next;
       });
       await Promise.all([loadPresets(nextDevices), loadLogs()]);
-      setNotice(
-        nextDevices.length
-          ? `${nextDevices.length} connected device${nextDevices.length === 1 ? "" : "s"}.`
-          : "No connected devices were found.",
-      );
+      setNotice(nextDevices.length ? "" : "No connected devices were found.");
     } catch (error) {
       setNotice(error.message || "Unable to load the Control Center.");
     } finally {
@@ -586,7 +580,7 @@ export default function ControlCenterPage({ user, profile }) {
         <ShieldAlert />
         <span className="eyebrow">Restricted system</span>
         <h1>Access denied</h1>
-        <p>Captain or Trusted Person access is required.</p>
+        <p>The Trusted Person badge is required.</p>
       </div>
     );
 
@@ -597,7 +591,7 @@ export default function ControlCenterPage({ user, profile }) {
     >
       <PageHeader
         title="Control Center"
-        description="Adjust the power, timing, and safety controls for connected OpenShock devices."
+        description="Control my shock devices over the internet! Be careful!!"
       />
       <div className="control-center-notice" role="status">
         {notice || "Control access confirmed."}

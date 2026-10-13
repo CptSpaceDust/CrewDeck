@@ -304,9 +304,11 @@ export function IntroductionsPage({ user, profile }) {
             <button
               className="icon-button refresh-button"
               onClick={reload}
+              disabled={loading}
+              aria-busy={loading}
               title="Refresh introductions"
             >
-              <RefreshCw />
+              <RefreshCw className={loading ? "spin" : ""} />
             </button>
             <button className="button primary" onClick={() => setEditing(true)}>
               <Plus />
@@ -477,9 +479,11 @@ export function IdeasPage({ user, profile }) {
                 await reload();
                 await reloadLimit();
               }}
+              disabled={loading}
+              aria-busy={loading}
               title="Refresh ideas"
             >
-              <RefreshCw />
+              <RefreshCw className={loading ? "spin" : ""} />
             </button>
             <button className="button primary" onClick={() => setOpen(true)}>
               <Plus />
@@ -733,9 +737,11 @@ export function CollabsPage({ user, profile }) {
             <button
               className="icon-button refresh-button"
               onClick={reload}
+              disabled={loading}
+              aria-busy={loading}
               title="Refresh collaborations"
             >
-              <RefreshCw />
+              <RefreshCw className={loading ? "spin" : ""} />
             </button>
             <button className="button primary" onClick={() => setModal({})}>
               <Plus />

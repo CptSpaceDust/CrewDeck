@@ -145,9 +145,8 @@ export function WhatsNew() {
             <div>
               <strong>Added</strong>
               <p>
-                Person-to-person meetup invitations, configurable off days,
-                clearer availability colors, a Captain reports workspace, and
-                new accessibility controls.
+                A dedicated VRChat navigation section now keeps the
+                badge-protected Control Center easy to find for Trusted People.
               </p>
             </div>
           </article>
@@ -156,9 +155,9 @@ export function WhatsNew() {
             <div>
               <strong>Changed</strong>
               <p>
-                Crew meetups confirm when the invited member accepts. Captain
-                approval is only needed for meetups involving the Captain, and
-                the startup sequence now appears reliably at launch.
+                Community pages follow the new requested order, refresh buttons
+                show their loading state, and Control Center dials no longer
+                select nearby text while you turn them.
               </p>
             </div>
           </article>
@@ -167,9 +166,8 @@ export function WhatsNew() {
             <div>
               <strong>Removed</strong>
               <p>
-                In-app account creation and the extra Windows notification
-                availability notice. Sign in with your existing CptSpaceDust
-                account instead.
+                The connected-device count and the Captain-rank shortcut for
+                Control Center access. The Trusted Person badge is now required.
               </p>
             </div>
           </article>

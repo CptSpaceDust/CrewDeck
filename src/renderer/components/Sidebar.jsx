@@ -2,7 +2,6 @@ import {
   Cake,
   CalendarCheck,
   CalendarDays,
-  Heart,
   Gauge,
   Lightbulb,
   LockKeyhole,
@@ -29,11 +28,10 @@ function controlCenterAccess(profile) {
     }
   }
   return (
-    profile?.rank?.trim().toLowerCase() === "captain" ||
-    (Array.isArray(badges) &&
-      badges.some(
-        (badge) => String(badge).trim().toLowerCase() === "trusted person",
-      ))
+    Array.isArray(badges) &&
+    badges.some(
+      (badge) => String(badge).trim().toLowerCase() === "trusted person",
+    )
   );
 }
 
@@ -42,8 +40,8 @@ const groups = [
     label: "Community",
     items: [
       ["guidelines", "Guidelines", ScrollText],
-      ["introductions", "Introductions", Sparkles],
       ["crew", "Crew Directory", UserRound],
+      ["introductions", "Introductions", Sparkles],
       ["collabs", "Collab Board", Users],
       ["ideas", "Ideas Board", Lightbulb],
       ["birthdays", "Birthdays", Cake],
@@ -56,7 +54,6 @@ const groups = [
       ["my-meetups", "My Meetups", CalendarCheck],
     ],
   },
-  { label: "Captain", items: [["support", "Support the Captain", Heart]] },
 ];
 
 export default function Sidebar({ page, setPage, profile, onLogout, unread }) {
@@ -74,17 +71,6 @@ export default function Sidebar({ page, setPage, profile, onLogout, unread }) {
           >
             <LockKeyhole />
             <span>Captain Panel</span>
-          </button>
-        )}
-        {controlCenterAccess(profile) && (
-          <button
-            className={
-              page === "control-center" ? "nav-item active" : "nav-item"
-            }
-            onClick={() => setPage("control-center")}
-          >
-            <Gauge />
-            <span>Control Center</span>
           </button>
         )}
         {groups.map((group) => (
@@ -105,6 +91,20 @@ export default function Sidebar({ page, setPage, profile, onLogout, unread }) {
             ))}
           </section>
         ))}
+        {controlCenterAccess(profile) && (
+          <section className="nav-group">
+            <span>VRChat</span>
+            <button
+              className={
+                page === "control-center" ? "nav-item active" : "nav-item"
+              }
+              onClick={() => setPage("control-center")}
+            >
+              <Gauge />
+              <span>Control Center</span>
+            </button>
+          </section>
+        )}
       </nav>
       <div className="sidebar-footer">
         <button

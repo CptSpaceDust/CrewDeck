@@ -429,8 +429,10 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
               className="icon-button refresh-button"
               title="Refresh meetups"
               onClick={reloadAll}
+              disabled={loading}
+              aria-busy={loading}
             >
-              <RefreshCw />
+              <RefreshCw className={loading ? "spin" : ""} />
             </button>
           </div>
         }
