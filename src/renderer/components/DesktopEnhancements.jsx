@@ -156,8 +156,8 @@ export function WhatsNew() {
             <div>
               <strong>Added</strong>
               <p>
-                Recurring meetups, reminders, calendar exports, live check-ins,
-                group polls and roles, moderation appeals, and saved drafts.
+                Page recovery keeps a broken screen from turning the whole app
+                blank, and message views now include reliable refresh controls.
               </p>
             </div>
           </article>
@@ -166,9 +166,10 @@ export function WhatsNew() {
             <div>
               <strong>Changed</strong>
               <p>
-                Calls now include a microphone test, connection warnings, and
-                noise controls. Meetup check-ins and group activity update in
-                real time across the website and app.
+                Messages appear immediately after sending. Group polls, roles,
+                and management now live in one cleaner options menu. Settings,
+                Meetup Calendar, Control Center, and startup visuals are also
+                more reliable and organized.
               </p>
             </div>
           </article>
@@ -177,8 +178,8 @@ export function WhatsNew() {
             <div>
               <strong>Removed</strong>
               <p>
-                Group poll creation no longer relies on browser prompts. It now
-                uses a centered Space Glass creation panel.
+                Removed the unused message search boxes and repeated connected
+                device labels from Control Center.
               </p>
             </div>
           </article>

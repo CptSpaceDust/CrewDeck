@@ -2,6 +2,26 @@
 
 Every published CrewDeck release is documented here and copied into its GitHub release notes.
 
+## [1.7.1] - 2026-10-14
+
+### Added
+
+- Page-level recovery controls prevent a single rendering failure from leaving CrewDeck on a blank screen.
+- Direct and group message screens now include manual refresh controls.
+
+### Changed
+
+- Group polls, group management, member roles, and leaving a group now live in the group conversation options menu.
+- Direct and group messages appear immediately after sending while realtime synchronization continues in the background.
+- The Manage Group panel and Settings page use clearer, more organized Space Glass layouts.
+- The Meetup Calendar now ignores malformed schedule records instead of allowing them to break the page.
+- The startup animation uses a cleaner CrewDeck scan sequence with stronger contrast.
+- Control Center headings focus on shock controls without repeated connected-device labels.
+
+### Removed
+
+- Removed message search fields from direct and group conversations.
+
 ## [1.7.0] - 2026-10-13
 
 ### Added
