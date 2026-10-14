@@ -47,6 +47,11 @@ export default function CaptainPage({ user, profile }) {
           )
           .order("created_at", { ascending: false })
           .limit(200),
+        appeals: supabase
+          .from("moderation_appeals")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .limit(200),
         flags: supabase
           .from("message_safety_flags")
           .select(
@@ -142,6 +147,7 @@ export default function CaptainPage({ user, profile }) {
       "meetup_requests",
       "user_restrictions",
       "user_reports",
+      "moderation_appeals",
       "message_safety_flags",
       "trusted_friends",
       "music_artists",

@@ -18,6 +18,7 @@ import {
   updatePreferences,
 } from "../lib/preferences";
 import { playNotificationSound } from "../lib/sounds";
+import { MyModerationAppeals } from "./ModerationAppeals";
 
 function AudioDevices({ preferences, preference }) {
   const [inputs, setInputs] = useState([]);
@@ -68,9 +69,14 @@ function AudioDevices({ preferences, preference }) {
     let frame;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: preferences.audioInputDeviceId
-          ? { deviceId: { exact: preferences.audioInputDeviceId } }
-          : true,
+        audio: {
+          deviceId: preferences.audioInputDeviceId
+            ? { exact: preferences.audioInputDeviceId }
+            : undefined,
+          noiseSuppression: preferences.noiseSuppression !== false,
+          echoCancellation: preferences.echoCancellation !== false,
+          autoGainControl: preferences.autoGainControl !== false,
+        },
       });
       streamRef.current = stream;
       context = new AudioContext();
@@ -179,12 +185,38 @@ function AudioDevices({ preferences, preference }) {
         />
         <span>Start calls with push to talk enabled</span>
       </label>
+      <div className="settings-audio-processing">
+        <label className="check-field">
+          <input
+            type="checkbox"
+            checked={preferences.noiseSuppression !== false}
+            onChange={(event) => preference("noiseSuppression", event.target.checked)}
+          />
+          <span>Reduce background noise</span>
+        </label>
+        <label className="check-field">
+          <input
+            type="checkbox"
+            checked={preferences.echoCancellation !== false}
+            onChange={(event) => preference("echoCancellation", event.target.checked)}
+          />
+          <span>Cancel speaker echo</span>
+        </label>
+        <label className="check-field">
+          <input
+            type="checkbox"
+            checked={preferences.autoGainControl !== false}
+            onChange={(event) => preference("autoGainControl", event.target.checked)}
+          />
+          <span>Automatically balance microphone volume</span>
+        </label>
+      </div>
       {message && <p className="micro-copy">{message}</p>}
     </section>
   );
 }
 
-export default function AppSettings() {
+export default function AppSettings({ user }) {
   const [settings, setSettings] = useState({
     enabled: false,
     timeoutMinutes: 5,
@@ -454,6 +486,7 @@ export default function AppSettings() {
           {message && <p className="form-message">{message}</p>}
         </section>
         <AudioDevices preferences={preferences} preference={preference} />
+        {user && <MyModerationAppeals user={user} />}
         <section className="panel settings-panel settings-panel-wide">
           <div className="section-icon">
             <Bell />
@@ -617,6 +650,7 @@ export default function AppSettings() {
               <option value="15">15 minutes before</option>
               <option value="30">30 minutes before</option>
               <option value="60">1 hour before</option>
+              <option value="1440">1 day before</option>
             </select>
           </Field>
           {notificationMessage && (

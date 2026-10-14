@@ -21,9 +21,11 @@ import {
   Volume2,
   VolumeX,
   Wifi,
+  WifiOff,
   X,
 } from "lucide-react";
 import EditMessageButton from "../components/EditMessageButton";
+import GroupPolls from "../components/GroupPolls";
 import { confirmInApp, promptInApp } from "../components/InAppDialog";
 import MessageComposer, {
   FormattedMessage,
@@ -60,6 +62,7 @@ import {
 } from "../lib/data";
 import { supabase } from "../lib/supabase";
 import { playCallEventSound, startRingtone, stopRingtone } from "../lib/sounds";
+import { changeGroupRole } from "../lib/crewFeatures";
 import {
   conversationUnreadCount,
   getPreferences,
@@ -252,6 +255,13 @@ function VoiceCall({ conversation, user, onClose, requestedCallId }) {
   const [pushToTalk, setPushToTalk] = useState(
     Boolean(callPreferences.pushToTalkDefault),
   );
+  const [joinRequested, setJoinRequested] = useState(false);
+  const [micTest, setMicTest] = useState({
+    running: false,
+    level: 0,
+    message: "Test your microphone before joining.",
+  });
+  const [qualities, setQualities] = useState({});
   const roomRef = useRef();
   const callRef = useRef();
   const startedAtRef = useRef(0);
@@ -262,7 +272,59 @@ function VoiceCall({ conversation, user, onClose, requestedCallId }) {
       ? conversation.name
       : conversation.person?.username || "Crew member";
 
+  async function testMicrophone() {
+    setMicTest({ running: true, level: 0, message: "Listening… speak normally." });
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          deviceId: inputDevice ? { exact: inputDevice } : undefined,
+          echoCancellation: callPreferences.echoCancellation !== false,
+          noiseSuppression: callPreferences.noiseSuppression !== false,
+          autoGainControl: callPreferences.autoGainControl !== false,
+        },
+      });
+      const context = new AudioContext();
+      const analyser = context.createAnalyser();
+      analyser.fftSize = 256;
+      context.createMediaStreamSource(stream).connect(analyser);
+      const values = new Uint8Array(analyser.frequencyBinCount);
+      let peak = 0;
+      const started = performance.now();
+      while (performance.now() - started < 2800) {
+        analyser.getByteFrequencyData(values);
+        peak = Math.max(
+          peak,
+          values.reduce((sum, value) => sum + value, 0) / values.length,
+        );
+        setMicTest((current) => ({
+          ...current,
+          level: Math.min(100, Math.round((peak / 90) * 100)),
+        }));
+        await new Promise((resolve) => setTimeout(resolve, 80));
+      }
+      await context.close();
+      setMicTest({
+        running: false,
+        level: Math.min(100, Math.round((peak / 90) * 100)),
+        message:
+          peak > 5
+            ? "Microphone sounds ready."
+            : "No microphone audio detected. Check your input and permission.",
+      });
+    } catch {
+      setMicTest({
+        running: false,
+        level: 0,
+        message: "Microphone test failed. Check your permission and selected input.",
+      });
+    } finally {
+      stream?.getTracks().forEach((track) => track.stop());
+    }
+  }
+
   useEffect(() => {
+    if (!joinRequested) return undefined;
     let disposed = false;
     let heartbeat;
     let ringback;
@@ -419,6 +481,12 @@ function VoiceCall({ conversation, user, onClose, requestedCallId }) {
           .on(RoomEvent.ActiveSpeakersChanged, (active) =>
             setSpeaking(new Set(active.map((person) => person.identity))),
           )
+          .on(RoomEvent.ConnectionQualityChanged, (quality, participant) =>
+            setQualities((current) => ({
+              ...current,
+              [participant.identity]: String(quality || "unknown").toLowerCase(),
+            })),
+          )
           .on(RoomEvent.AudioPlaybackStatusChanged, () =>
             setAudioBlocked(!room.canPlaybackAudio),
           )
@@ -444,7 +512,12 @@ function VoiceCall({ conversation, user, onClose, requestedCallId }) {
           await room
             .switchActiveDevice("audiooutput", outputDevice)
             .catch(() => {});
-        await room.localParticipant.setMicrophoneEnabled(true);
+        await room.localParticipant.setMicrophoneEnabled(true, {
+          deviceId: inputDevice || undefined,
+          echoCancellation: callPreferences.echoCancellation !== false,
+          noiseSuppression: callPreferences.noiseSuppression !== false,
+          autoGainControl: callPreferences.autoGainControl !== false,
+        });
         if (disposed) return;
         stopRingtone();
         refresh();
@@ -519,7 +592,7 @@ function VoiceCall({ conversation, user, onClose, requestedCallId }) {
           .eq("call_id", callRef.current)
           .then(() => {});
     };
-  }, []);
+  }, [joinRequested]);
 
   useEffect(() => {
     if (!connected || !pushToTalk) return undefined;
@@ -675,6 +748,58 @@ function VoiceCall({ conversation, user, onClose, requestedCallId }) {
     onClose();
   }
 
+  if (!joinRequested) {
+    return (
+      <div className="call-overlay">
+        <section
+          className="call-panel call-lobby"
+          aria-label={`${callTitle} call lobby`}
+        >
+          <header className="call-header">
+            <div>
+              <span className="eyebrow">Voice check</span>
+              <h2>Ready to join {callTitle}?</h2>
+            </div>
+          </header>
+          <div className="call-lobby-mic">
+            <Mic />
+            <div>
+              <strong>Microphone test</strong>
+              <p>{micTest.message}</p>
+              <span className="mic-level">
+                <i style={{ width: `${micTest.level}%` }} />
+              </span>
+            </div>
+          </div>
+          <div className="call-processing-summary">
+            <span>
+              Noise suppression {callPreferences.noiseSuppression !== false ? "on" : "off"}
+            </span>
+            <span>
+              Echo cancellation {callPreferences.echoCancellation !== false ? "on" : "off"}
+            </span>
+            <span>
+              Automatic gain {callPreferences.autoGainControl !== false ? "on" : "off"}
+            </span>
+          </div>
+          <div className="modal-actions">
+            <button className="button ghost" onClick={onClose}>Cancel</button>
+            <button
+              className="button secondary"
+              disabled={micTest.running}
+              onClick={testMicrophone}
+            >
+              {micTest.running ? "Testing…" : "Test microphone"}
+            </button>
+            <button className="button primary" onClick={() => setJoinRequested(true)}>
+              <Phone /> Join call
+            </button>
+          </div>
+        </section>
+      </div>
+    );
+  }
+
   return (
     <div className="call-overlay">
       <section className="call-panel" aria-label={`${callTitle} voice call`}>
@@ -740,6 +865,8 @@ function VoiceCall({ conversation, user, onClose, requestedCallId }) {
             const isMuted =
               Boolean(micPublication?.isMuted) || (local && muted);
             const isSpeaking = speaking.has(participant.identity);
+            const quality =
+              qualities[participant.identity] || (connected ? "good" : "unknown");
             return (
               <article
                 className={`call-participant${isSpeaking ? " speaking" : ""}${isMuted ? " muted" : ""}`}
@@ -758,6 +885,25 @@ function VoiceCall({ conversation, user, onClose, requestedCallId }) {
                   {profile.username}
                   {local ? " (you)" : ""}
                 </strong>
+                <span
+                  className={`call-quality ${quality}`}
+                  title={`${profile.username} connection quality`}
+                >
+                  {quality === "poor" || quality === "lost" ? (
+                    <WifiOff />
+                  ) : (
+                    <Wifi />
+                  )}
+                  {quality === "excellent"
+                    ? "Excellent"
+                    : quality === "good"
+                      ? "Good"
+                      : quality === "poor"
+                        ? "Poor connection"
+                        : quality === "lost"
+                          ? "Connection lost"
+                          : "Checking"}
+                </span>
                 {!local && (
                   <label
                     className="call-volume"
@@ -1669,6 +1815,18 @@ function ManageGroupButton({ group, user, onChanged, onNotice }) {
       setBusy("");
     }
   }
+  async function role(person, nextRole) {
+    setBusy(`role-${person.id}`);
+    try {
+      await changeGroupRole(group.id, person.id, nextRole);
+      await onChanged();
+    } catch (error) {
+      onNotice(error.message);
+    } finally {
+      setBusy("");
+    }
+  }
+  const myRole = group.members.find((member) => member.id === user.id)?.groupRole || (group.owner_id === user.id ? "owner" : "member");
   const memberIds = new Set(group.members.map((member) => member.id));
   const invitees = people.filter((person) => !memberIds.has(person.id));
   const removable = group.members.filter((member) => member.id !== user.id);
@@ -1679,7 +1837,7 @@ function ManageGroupButton({ group, user, onChanged, onNotice }) {
       </button>
       {open && (
         <Modal title="Manage group" onClose={() => setOpen(false)}>
-          <form className="stack-form" onSubmit={rename}>
+          {myRole === "owner" && <form className="stack-form" onSubmit={rename}>
             <Field label="Group name">
               <input
                 name="name"
@@ -1691,8 +1849,8 @@ function ManageGroupButton({ group, user, onChanged, onNotice }) {
             <button className="button secondary" disabled={busy === "name"}>
               {busy === "name" ? "Saving…" : "Change group name"}
             </button>
-          </form>
-          <div className="group-manage-section">
+          </form>}
+          {myRole === "owner" && <div className="group-manage-section">
             <h3>Group picture</h3>
             <Field label="PNG, JPG, or WebP under 5 MB">
               <input
@@ -1702,7 +1860,7 @@ function ManageGroupButton({ group, user, onChanged, onNotice }) {
                 disabled={busy === "picture"}
               />
             </Field>
-          </div>
+          </div>}
           <div className="group-manage-section">
             <h3>Invite member</h3>
             <div className="crew-picker">
@@ -1731,6 +1889,24 @@ function ManageGroupButton({ group, user, onChanged, onNotice }) {
               )}
             </div>
           </div>
+          {myRole === "owner" && (
+            <div className="group-manage-section">
+              <h3>Member roles</h3>
+              <p className="micro-copy">Moderators can invite and remove members. Only the owner can change roles and group details.</p>
+              <div className="crew-picker group-role-picker">
+                {group.members.filter((person) => person.id !== user.id).map((person) => (
+                  <div className="group-role-row" key={person.id}>
+                    <Avatar profile={person} />
+                    <span><strong>{person.username}</strong><small>{person.groupRole || "member"}</small></span>
+                    <select disabled={busy === `role-${person.id}`} value={person.groupRole || "member"} onChange={(event) => role(person, event.target.value)}>
+                      <option value="member">Member</option>
+                      <option value="moderator">Moderator</option>
+                    </select>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           <div className="group-manage-section">
             <h3>Remove member</h3>
             <div className="crew-picker">
@@ -1895,6 +2071,7 @@ function GroupMessagesPage({
       ),
     [details],
   );
+  const myGroupRole = details?.members.find((member) => member.id === user.id)?.groupRole || (details?.owner_id === user.id ? "owner" : "member");
   const byId = useMemo(
     () => Object.fromEntries(messages.map((item) => [item.id, item])),
     [messages],
@@ -2121,7 +2298,7 @@ function GroupMessagesPage({
                   >
                     <Phone />
                   </button>
-                  {details.owner_id === user.id && (
+                  {myGroupRole !== "member" && (
                     <ManageGroupButton
                       group={details}
                       user={user}
@@ -2142,6 +2319,12 @@ function GroupMessagesPage({
                 </div>
               </header>
               <div className="message-stream">
+                <GroupPolls
+                  group={details}
+                  user={user}
+                  role={myGroupRole}
+                  onNotice={setNotice}
+                />
                 {shownMessages.map((item) => {
                   const sender = profiles[item.sender_id];
                   const quoted = item.reply_to_id
@@ -2262,7 +2445,7 @@ function GroupMessagesPage({
                     className={`presence-chip ${online ? "online" : "offline"}`}
                   >
                     <i />
-                    {member.id === details.owner_id ? "Owner · " : ""}
+                    {member.groupRole === "owner" ? "Owner · " : member.groupRole === "moderator" ? "Moderator · " : ""}
                     {online ? "Online" : "Offline"}
                   </small>
                 </span>

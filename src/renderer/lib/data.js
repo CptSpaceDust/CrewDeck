@@ -459,17 +459,50 @@ export async function createMeetup(userId, fields) {
     duplicate.some((item) => meetupInstant(item).getTime() === requestedInstant)
   )
     throw new Error("You already requested a meetup at this time.");
-  const created = unwrap(
+  const recurrenceRule = fields.recurrence_rule || "none";
+  const recurrenceCount = Math.min(12, Math.max(1, Number(fields.recurrence_count) || 1));
+  const seriesId = recurrenceRule === "none" ? null : crypto.randomUUID();
+  const addMonths = (key, count) => {
+    const [year, month, day] = key.split("-").map(Number);
+    const targetMonth = month - 1 + count;
+    const lastDay = new Date(year, targetMonth + 1, 0, 12).getDate();
+    const date = new Date(year, targetMonth, Math.min(day, lastDay), 12);
+    return localDateKey(date);
+  };
+  const addDays = (key, count) => {
+    const [year, month, day] = key.split("-").map(Number);
+    const date = new Date(year, month - 1, day + count, 12);
+    return localDateKey(date);
+  };
+  const { recurrence_count: _ignored, ...baseFields } = fields;
+  const rows = Array.from({ length: recurrenceCount }, (_, index) => ({
+    user_id: userId,
+    ...baseFields,
+    meetup_date:
+      recurrenceRule === "weekly"
+        ? addDays(fields.meetup_date, index * 7)
+        : recurrenceRule === "monthly"
+          ? addMonths(fields.meetup_date, index)
+          : fields.meetup_date,
+    recurrence_rule: recurrenceRule,
+    recurrence_series_id: seriesId,
+    recurrence_index: index,
+    status: "pending",
+  }));
+  const createdResult = unwrap(
     await supabase
       .from("meetup_requests")
-      .insert({ user_id: userId, ...fields, status: "pending" })
-      .select()
-      .single(),
+      .insert(rows.length === 1 ? rows[0] : rows)
+      .select(),
   );
+  const createdRows = Array.isArray(createdResult)
+    ? createdResult
+    : [createdResult];
+  const created = createdRows[0];
   const { error } = await supabase.functions.invoke("send-meetup-email", {
     body: { meetupId: created.id, status: "pending" },
   });
-  return { ...created, emailSent: !error };
+  return { ...created, emailSent: !error, recurrenceCount: createdRows.length };
 }
 
 export async function cancelMeetup(id, userId) {
@@ -791,7 +824,7 @@ export async function getGroupDetails(groupId) {
   const rows = unwrap(
     await supabase
       .from("group_members")
-      .select("user_id")
+      .select("user_id,role")
       .eq("group_id", groupId),
   );
   const ids = (rows || []).map((row) => row.user_id);
@@ -803,7 +836,8 @@ export async function getGroupDetails(groupId) {
           .in("id", ids),
       )
     : [];
-  return { ...group, members: people || [] };
+  const roles = Object.fromEntries((rows || []).map((row) => [row.user_id, row.role || (row.user_id === group.owner_id ? "owner" : "member")]));
+  return { ...group, members: (people || []).map((person) => ({ ...person, groupRole: roles[person.id] || "member" })) };
 }
 
 export async function getGroupMessages(groupId) {
@@ -986,7 +1020,7 @@ export async function manageGroupMember(
   groupName = "the group",
 ) {
   const result = unwrap(
-    await supabase.rpc("manage_group_member", {
+    await supabase.rpc("moderate_group_member", {
       group_key: groupId,
       target_user: targetUserId,
       operation,

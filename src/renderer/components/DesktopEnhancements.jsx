@@ -4,6 +4,7 @@ import { getMeetups } from "../lib/data";
 import { getPreferences, isQuietTime } from "../lib/preferences";
 import { playNotificationSound } from "../lib/sounds";
 import { meetupInstant } from "../lib/time";
+import { getMeetupParticipantSettings } from "../lib/crewFeatures";
 import BrandMark from "./BrandMark";
 
 export function ConnectivityBanner() {
@@ -35,15 +36,25 @@ export function useMeetupReminders(userId) {
       const settings = getPreferences();
       if (!settings.meetupReminders || isQuietTime(settings)) return;
       const rows = await getMeetups().catch(() => []);
-      const now = Date.now(),
-        windowMs = Number(settings.reminderMinutes) * 60000;
-      for (const item of rows.filter(
+      const mine = rows.filter(
         (row) =>
           (row.user_id === userId || row.with_user_id === userId) &&
           row.status === "approved",
-      )) {
+      );
+      const participantSettings = await getMeetupParticipantSettings(
+        mine.map((item) => item.id),
+      ).catch(() => []);
+      const now = Date.now();
+      for (const item of mine) {
+        const custom = participantSettings.find(
+          (setting) => setting.meetup_id === item.id && setting.user_id === userId,
+        );
+        const reminderMinutes = Number(
+          custom?.reminder_minutes || settings.reminderMinutes,
+        );
+        const windowMs = reminderMinutes * 60000;
         const start = meetupInstant(item).getTime();
-        const key = `meetup-reminder:${item.id}:${settings.reminderMinutes}`;
+        const key = `meetup-reminder:${item.id}:${reminderMinutes}`;
         if (
           start > now &&
           start - now <= windowMs &&
@@ -145,8 +156,8 @@ export function WhatsNew() {
             <div>
               <strong>Added</strong>
               <p>
-                A dedicated VRChat navigation section now keeps the
-                badge-protected Control Center easy to find for Trusted People.
+                Recurring meetups, reminders, calendar exports, live check-ins,
+                group polls and roles, moderation appeals, and saved drafts.
               </p>
             </div>
           </article>
@@ -155,9 +166,9 @@ export function WhatsNew() {
             <div>
               <strong>Changed</strong>
               <p>
-                Community pages follow the new requested order, refresh buttons
-                show their loading state, and Control Center dials no longer
-                select nearby text while you turn them.
+                Calls now include a microphone test, connection warnings, and
+                noise controls. Meetup check-ins and group activity update in
+                real time across the website and app.
               </p>
             </div>
           </article>
@@ -166,8 +177,8 @@ export function WhatsNew() {
             <div>
               <strong>Removed</strong>
               <p>
-                The connected-device count and the Captain-rank shortcut for
-                Control Center access. The Trusted Person badge is now required.
+                Group poll creation no longer relies on browser prompts. It now
+                uses a centered Space Glass creation panel.
               </p>
             </div>
           </article>

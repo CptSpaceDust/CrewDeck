@@ -2,6 +2,26 @@
 
 Every published CrewDeck release is documented here and copied into its GitHub release notes.
 
+## [1.7.0] - 2026-10-13
+
+### Added
+
+- Recurring weekly and monthly meetups, live countdowns, participant check-ins, email reminders, and Google Calendar, Outlook, and `.ics` exports.
+- Polls inside group conversations for crew decisions.
+- Owner, moderator, and member group roles, including moderator invite and removal controls.
+- Pre-call microphone testing, connection quality warnings, echo cancellation, noise suppression, and automatic gain controls.
+- Moderation appeals with saved evidence, Captain review history, and automatic restriction removal when an appeal is approved.
+- Saved drafts for messages, ideas, collabs, and introductions, plus offline status and automatic reconnection feedback.
+
+### Changed
+
+- Meetup reminder preferences and participant check-ins synchronize between the website and CrewDeck in real time.
+- Monthly meetup recurrence stays on the last valid date when a month is shorter than the original date.
+
+### Removed
+
+- Removed browser prompts from website poll creation in favor of a centered Space Glass panel.
+
 ## [1.6.3] - 2026-10-13
 
 ### Changed

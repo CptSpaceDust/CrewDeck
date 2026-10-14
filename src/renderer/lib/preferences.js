@@ -28,6 +28,9 @@ export const defaultPreferences = Object.freeze({
   audioInputDeviceId: "",
   audioOutputDeviceId: "",
   pushToTalkDefault: false,
+  noiseSuppression: true,
+  echoCancellation: true,
+  autoGainControl: true,
   mutedConversations: {},
 });
 

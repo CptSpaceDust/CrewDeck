@@ -53,6 +53,7 @@ import {
   formatDate,
 } from "../components/ui";
 import { confirmInApp, promptInApp } from "../components/InAppDialog";
+import { useFormDraft } from "../lib/formDrafts";
 
 const captain = (profile) =>
   String(profile?.rank || "")
@@ -62,6 +63,7 @@ const captain = (profile) =>
 function SubmitModal({ kind, onClose, onSaved, user, profile, initial }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const draft = useFormDraft(user.id, `${kind}-post`, !initial);
   async function submit(event) {
     event.preventDefault();
     setBusy(true);
@@ -101,6 +103,7 @@ function SubmitModal({ kind, onClose, onSaved, user, profile, initial }) {
           time_flexibility: form.get("flexibility"),
         });
       await onSaved();
+      draft.clear();
       onClose();
     } catch (e) {
       setError(e.message);
@@ -121,7 +124,13 @@ function SubmitModal({ kind, onClose, onSaved, user, profile, initial }) {
       }
       onClose={onClose}
     >
-      <form className="stack-form" onSubmit={submit}>
+      <form
+        className="stack-form"
+        onSubmit={submit}
+        ref={draft.ref}
+        onInput={draft.onInput}
+        onChange={draft.onChange}
+      >
         {kind !== "meetup" && (
           <Field label="Title">
             <input
@@ -238,6 +247,11 @@ export function IntroductionsPage({ user, profile }) {
   const [editing, setEditing] = useState(false);
   const [sort, setSort] = useState("newest");
   const [message, setMessage] = useState("");
+  const introductionDraft = useFormDraft(
+    user.id,
+    "introduction",
+    !data?.find((x) => x.user_id === user.id),
+  );
   const mine = data?.find((x) => x.user_id === user.id);
   const items = useMemo(
     () =>
@@ -269,6 +283,7 @@ export function IntroductionsPage({ user, profile }) {
         },
         mine?.id,
       );
+      introductionDraft.clear();
       setEditing(false);
       reload();
     } catch (x) {
@@ -363,7 +378,13 @@ export function IntroductionsPage({ user, profile }) {
       )}
       {editing && (
         <Modal title="Your introduction" onClose={() => setEditing(false)}>
-          <form className="stack-form" onSubmit={save}>
+          <form
+            className="stack-form"
+            onSubmit={save}
+            ref={introductionDraft.ref}
+            onInput={introductionDraft.onInput}
+            onChange={introductionDraft.onChange}
+          >
             <Field label="About you">
               <textarea
                 name="introduction"

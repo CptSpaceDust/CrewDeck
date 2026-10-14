@@ -547,7 +547,7 @@ export default function App() {
       case "notifications":
         return <NotificationsPage user={session.user} onNavigate={navigate} />;
       case "settings":
-        return <AppSettings />;
+        return <AppSettings user={session.user} />;
       default:
         return <IntroductionsPage {...props} />;
     }

@@ -53,5 +53,7 @@ test("What’s Changed contains Added, Changed, and Removed summaries", () => {
   assert.match(source, /<strong>Added<\/strong>/);
   assert.match(source, /<strong>Changed<\/strong>/);
   assert.match(source, /<strong>Removed<\/strong>/);
-  assert.match(source, /Trusted Person badge is now required/);
+  assert.match(source, /Recurring meetups, reminders, calendar exports/);
+  assert.match(source, /microphone test, connection warnings/);
+  assert.match(source, /Group poll creation no longer relies on browser prompts/);
 });

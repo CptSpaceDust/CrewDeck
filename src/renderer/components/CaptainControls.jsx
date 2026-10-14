@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { read, captainFunction } from "../lib/captain";
+import { CaptainAppeals } from "./ModerationAppeals";
 import { Modal, Field } from "./ui";
 import CaptainMusic from "./CaptainMusic";
 import CaptainMessages from "./CaptainMessages";
@@ -574,6 +575,17 @@ export default function CaptainControls({
           title="User Moderation"
           description="Review active actions and manage crew access."
         >
+          <div className="captain-section">
+            <h2>Moderation appeals</h2>
+            <p>Review the restriction, member explanation, and decision history together.</p>
+            <CaptainAppeals
+              appeals={data.appeals || []}
+              user={user}
+              name={name}
+              run={run}
+              setTarget={setTarget}
+            />
+          </div>
           <div className="captain-moderation-form">
             <label>
               User

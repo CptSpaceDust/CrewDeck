@@ -33,6 +33,11 @@ import {
 } from "../lib/time";
 import { confirmInApp } from "../components/InAppDialog";
 import {
+  MeetupCountdown,
+  MeetupTools,
+  useMeetupSettings,
+} from "../components/MeetupExtras";
+import {
   Empty,
   ErrorState,
   Field,
@@ -84,6 +89,7 @@ function AvailabilityModal({ user, rows, onClose, onSaved }) {
   const [busy, setBusy] = useState(false);
   const [longTermBusy, setLongTermBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [recurrence, setRecurrence] = useState("none");
   const mine = rows.filter((item) => item.user_id === user.id);
   const longTerm = mine.find((item) => item.indefinite);
   async function toggleLongTerm(event) {
@@ -252,6 +258,8 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
   const myMeetups = meetups.filter(
     (item) => item.user_id === user.id || item.with_user_id === user.id,
   );
+  const [participantSettings, reloadParticipantSettings] =
+    useMeetupSettings(myMeetups);
   const selectedIds = [user.id, selectedPerson].filter(Boolean);
   const approved = meetups.filter((item) => item.status === "approved");
   const selectedBlocks = availability.filter(
@@ -347,6 +355,8 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
         meetup_type: form.get("type"),
         additional_participants: String(form.get("participants") || "").trim(),
         time_flexibility: form.get("flexibility"),
+        recurrence_rule: form.get("recurrence"),
+        recurrence_count: Number(form.get("recurrence_count") || 1),
       });
       setMessage(
         captainApprovalRequired
@@ -590,6 +600,11 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
           )}
           {myMeetupsOnly && (
           <section className="my-meetups-section">
+            <MeetupCountdown
+              meetups={myMeetups}
+              userId={user.id}
+              profiles={profiles}
+            />
             <h2 className="section-title">My Meetups & Invitations</h2>
             {myMeetups.length ? (
               <div className="timeline">
@@ -671,6 +686,15 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
                         )}
                         {item.status === "denied" && item.admin_reason && (
                           <p className="meetup-denial">{item.admin_reason}</p>
+                        )}
+                        {item.status === "approved" && (
+                          <MeetupTools
+                            meetup={item}
+                            userId={user.id}
+                            otherName={personName(profiles, otherId)}
+                            settings={participantSettings}
+                            onChanged={reloadParticipantSettings}
+                          />
                         )}
                       </div>
                     </article>
@@ -781,6 +805,28 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
                 <Field label="Message" hint="Optional">
                   <textarea name="message" rows="4" />
                 </Field>
+                <div className="form-grid">
+                  <Field label="Repeat meetup">
+                    <select
+                      name="recurrence"
+                      value={recurrence}
+                      onChange={(event) => setRecurrence(event.target.value)}
+                    >
+                      <option value="none">Does not repeat</option>
+                      <option value="weekly">Every week</option>
+                      <option value="monthly">Every month</option>
+                    </select>
+                  </Field>
+                  {recurrence !== "none" && (
+                    <Field label="Number of meetups">
+                      <select name="recurrence_count" defaultValue="4">
+                        <option value="4">4 meetups</option>
+                        <option value="8">8 meetups</option>
+                        <option value="12">12 meetups</option>
+                      </select>
+                    </Field>
+                  )}
+                </div>
               </section>
               <div className="meetup-warning">
                 <strong>What happens next</strong>
