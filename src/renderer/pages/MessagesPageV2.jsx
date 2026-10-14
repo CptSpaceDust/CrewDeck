@@ -1788,13 +1788,17 @@ function ManageGroupButton({
   onNotice,
   menuItem = false,
   label = "Manage group",
-  onOpen,
+  onClosed,
 }) {
   const [open, setOpen] = useState(false);
   const [people, setPeople] = useState([]);
   const [busy, setBusy] = useState("");
+  const members = Array.isArray(group?.members) ? group.members : [];
+  function close() {
+    setOpen(false);
+    onClosed?.();
+  }
   async function show() {
-    onOpen?.();
     setOpen(true);
     try {
       setPeople(await getProfiles("id,username,avatar,rank"));
@@ -1809,7 +1813,7 @@ function ManageGroupButton({
       const form = new FormData(event.currentTarget);
       await renameGroupConversation(group.id, user.id, form.get("name"));
       await onChanged();
-      setOpen(false);
+      close();
     } catch (error) {
       onNotice(error.message);
     } finally {
@@ -1823,7 +1827,7 @@ function ManageGroupButton({
     try {
       await changeGroupAvatar(group.id, user.id, file);
       await onChanged();
-      setOpen(false);
+      close();
     } catch (error) {
       onNotice(error.message);
     } finally {
@@ -1865,14 +1869,15 @@ function ManageGroupButton({
     }
   }
   const myRole =
-    group.members.find((member) => member.id === user.id)?.groupRole ||
+    members.find((member) => member.id === user.id)?.groupRole ||
     (group.owner_id === user.id ? "owner" : "member");
-  const memberIds = new Set(group.members.map((member) => member.id));
+  const memberIds = new Set(members.map((member) => member.id));
   const invitees = people.filter((person) => !memberIds.has(person.id));
-  const removable = group.members.filter((member) => member.id !== user.id);
+  const removable = members.filter((member) => member.id !== user.id);
   return (
     <>
       <button
+        type="button"
         className={
           menuItem
             ? "group-actions-menu-item"
@@ -1883,7 +1888,7 @@ function ManageGroupButton({
         {label}
       </button>
       {open && (
-        <Modal title="Manage group" onClose={() => setOpen(false)}>
+        <Modal title="Manage group" onClose={close}>
           {myRole === "owner" && (
             <form className="stack-form" onSubmit={rename}>
               <Field label="Group name">
@@ -1919,7 +1924,7 @@ function ManageGroupButton({
                 invitees.map((person) => (
                   <button
                     type="button"
-                    disabled={busy === person.id || group.members.length >= 10}
+                    disabled={busy === person.id || members.length >= 10}
                     onClick={() => member(person, "invite")}
                     key={person.id}
                   >
@@ -1928,9 +1933,7 @@ function ManageGroupButton({
                       <strong>{person.username}</strong>
                       <small>{person.rank || "Crew Member"}</small>
                     </span>
-                    <em>
-                      {group.members.length >= 10 ? "Group full" : "Invite"}
-                    </em>
+                    <em>{members.length >= 10 ? "Group full" : "Invite"}</em>
                   </button>
                 ))
               ) : (
@@ -1948,7 +1951,7 @@ function ManageGroupButton({
                 change roles and group details.
               </p>
               <div className="crew-picker group-role-picker">
-                {group.members
+                {members
                   .filter((person) => person.id !== user.id)
                   .map((person) => (
                     <div className="group-role-row" key={person.id}>
@@ -2009,6 +2012,7 @@ function GroupActionsMenu({ group, user, role, onChanged, onNotice, onLeave }) {
   return (
     <div className="group-actions-menu-wrap">
       <button
+        type="button"
         className="icon-button"
         title="Group options"
         aria-label="Group options"
@@ -2020,6 +2024,7 @@ function GroupActionsMenu({ group, user, role, onChanged, onNotice, onLeave }) {
       {open && (
         <div className="group-actions-menu" role="menu">
           <button
+            type="button"
             className="group-actions-menu-item"
             onClick={() => {
               setOpen(false);
@@ -2036,10 +2041,11 @@ function GroupActionsMenu({ group, user, role, onChanged, onNotice, onLeave }) {
               onNotice={onNotice}
               menuItem
               label="Manage group & roles"
-              onOpen={() => setOpen(false)}
+              onClosed={() => setOpen(false)}
             />
           )}
           <button
+            type="button"
             className="group-actions-menu-item danger"
             onClick={() => {
               setOpen(false);
@@ -2195,8 +2201,9 @@ function GroupMessagesPage({
     [details],
   );
   const myGroupRole =
-    details?.members.find((member) => member.id === user.id)?.groupRole ||
-    (details?.owner_id === user.id ? "owner" : "member");
+    (Array.isArray(details?.members) ? details.members : []).find(
+      (member) => member.id === user.id,
+    )?.groupRole || (details?.owner_id === user.id ? "owner" : "member");
   const byId = useMemo(
     () => Object.fromEntries(messages.map((item) => [item.id, item])),
     [messages],
@@ -2561,31 +2568,36 @@ function GroupMessagesPage({
           )}
         </section>
         <aside className="panel group-members">
-          <h3>Members ({details?.members.length || 0})</h3>
-          {details?.members.map((member) => {
-            const online =
-              member.last_seen &&
-              Date.now() - new Date(member.last_seen).getTime() < 120000;
-            return (
-              <div className="group-member" key={member.id}>
-                <Avatar profile={member} size={34} />
-                <span>
-                  <strong>{member.username}</strong>
-                  <small
-                    className={`presence-chip ${online ? "online" : "offline"}`}
-                  >
-                    <i />
-                    {member.groupRole === "owner"
-                      ? "Owner · "
-                      : member.groupRole === "moderator"
-                        ? "Moderator · "
-                        : ""}
-                    {online ? "Online" : "Offline"}
-                  </small>
-                </span>
-              </div>
-            );
-          })}
+          <h3>
+            Members (
+            {Array.isArray(details?.members) ? details.members.length : 0})
+          </h3>
+          {(Array.isArray(details?.members) ? details.members : []).map(
+            (member) => {
+              const online =
+                member.last_seen &&
+                Date.now() - new Date(member.last_seen).getTime() < 120000;
+              return (
+                <div className="group-member" key={member.id}>
+                  <Avatar profile={member} size={34} />
+                  <span>
+                    <strong>{member.username}</strong>
+                    <small
+                      className={`presence-chip ${online ? "online" : "offline"}`}
+                    >
+                      <i />
+                      {member.groupRole === "owner"
+                        ? "Owner · "
+                        : member.groupRole === "moderator"
+                          ? "Moderator · "
+                          : ""}
+                      {online ? "Online" : "Offline"}
+                    </small>
+                  </span>
+                </div>
+              );
+            },
+          )}
         </aside>
       </div>
       {call && (

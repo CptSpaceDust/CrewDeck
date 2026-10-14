@@ -63,6 +63,16 @@ test("community parity controls are wired", () => {
   assert.match(notifications, /Clear All/);
 });
 
+test("group polls announce themselves and group menus stay interactive", () => {
+  const polls = read("components/GroupPolls.jsx");
+  const messages = read("pages/MessagesPageV2.jsx");
+  assert.match(polls, /await sendGroupMessage\(/);
+  assert.match(polls, /New poll:/);
+  assert.match(messages, /const members = Array\.isArray\(group\?\.members\)/);
+  assert.doesNotMatch(messages, /onOpen=\{\(\) => setOpen\(false\)\}/);
+  assert.match(messages, /onClosed=\{\(\) => setOpen\(false\)\}/);
+});
+
 test("the ideas guide only appears on the Ideas Board", () => {
   const pages = read("pages/CommunityPagesV2.jsx");
   const introductionsStart = pages.indexOf("export function IntroductionsPage");

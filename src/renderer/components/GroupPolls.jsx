@@ -6,16 +6,19 @@ import {
   getGroupPolls,
   voteInGroupPoll,
 } from "../lib/crewFeatures";
+import { sendGroupMessage } from "../lib/data";
 import { supabase } from "../lib/supabase";
 import { Field, Modal } from "./ui";
 
 function PollCard({ poll, user, canModerate, onChanged }) {
-  const total = poll.options.reduce(
-    (sum, option) => sum + option.votes.length,
+  const pollOptions = Array.isArray(poll?.options) ? poll.options : [];
+  const total = pollOptions.reduce(
+    (sum, option) =>
+      sum + (Array.isArray(option?.votes) ? option.votes.length : 0),
     0,
   );
-  const mine = poll.options.find((option) =>
-    option.votes.some((vote) => vote.user_id === user.id),
+  const mine = pollOptions.find((option) =>
+    (option.votes || []).some((vote) => vote.user_id === user.id),
   )?.id;
   const ended =
     Boolean(poll.closed_at) ||
@@ -47,8 +50,8 @@ function PollCard({ poll, user, canModerate, onChanged }) {
         </small>
       </header>
       <div className="group-poll-options">
-        {poll.options.map((option) => {
-          const count = option.votes.length;
+        {pollOptions.map((option) => {
+          const count = (option.votes || []).length;
           const percent = total ? Math.round((count / total) * 100) : 0;
           return (
             <button
@@ -134,12 +137,18 @@ export default function GroupPolls({
     setSaving(true);
     try {
       const form = new FormData(event.currentTarget);
+      const question = String(form.get("question") || "").trim();
       await createGroupPoll(
         group.id,
         user.id,
-        form.get("question"),
+        question,
         options,
         form.get("duration"),
+      );
+      await sendGroupMessage(
+        group.id,
+        user.id,
+        `New poll: ${question}\nOpen Group options and choose Polls to vote.`,
       );
       setCreating(false);
       setOptions(["", ""]);
