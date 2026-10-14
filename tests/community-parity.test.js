@@ -66,9 +66,15 @@ test("community parity controls are wired", () => {
 test("group polls announce themselves and group menus stay interactive", () => {
   const polls = read("components/GroupPolls.jsx");
   const messages = read("pages/MessagesPageV2.jsx");
+  const pollApi = read("lib/crewFeatures.js");
   assert.match(polls, /await sendGroupMessage\(/);
   assert.match(polls, /New poll:/);
+  assert.match(polls, /isOwner &&/);
+  assert.match(polls, /deleteClosedGroupPoll\(poll\.id\)/);
+  assert.match(pollApi, /rpc\("delete_closed_group_poll"/);
   assert.match(messages, /const members = Array\.isArray\(group\?\.members\)/);
+  assert.match(messages, /createPortal\(/);
+  assert.match(messages, /group-actions-menu-layer/);
   assert.doesNotMatch(messages, /onOpen=\{\(\) => setOpen\(false\)\}/);
   assert.match(messages, /onClosed=\{\(\) => setOpen\(false\)\}/);
 });

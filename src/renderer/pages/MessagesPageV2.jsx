@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   Check,
   CheckCheck,
@@ -2008,54 +2009,87 @@ function ManageGroupButton({
 function GroupActionsMenu({ group, user, role, onChanged, onNotice, onLeave }) {
   const [open, setOpen] = useState(false);
   const [pollsOpen, setPollsOpen] = useState(false);
+  const [menuPosition, setMenuPosition] = useState(null);
+  const buttonRef = useRef(null);
   const canManage = role === "owner" || role === "moderator";
+  function toggleMenu() {
+    if (open) {
+      setOpen(false);
+      return;
+    }
+    const bounds = buttonRef.current?.getBoundingClientRect();
+    setMenuPosition(
+      bounds
+        ? {
+            top: Math.min(bounds.bottom + 8, window.innerHeight - 190),
+            right: Math.max(12, window.innerWidth - bounds.right),
+          }
+        : { top: 80, right: 20 },
+    );
+    setOpen(true);
+  }
   return (
     <div className="group-actions-menu-wrap">
       <button
+        ref={buttonRef}
         type="button"
         className="icon-button"
         title="Group options"
         aria-label="Group options"
         aria-expanded={open}
-        onClick={() => setOpen((value) => !value)}
+        onClick={toggleMenu}
       >
         <MoreVertical />
       </button>
-      {open && (
-        <div className="group-actions-menu" role="menu">
-          <button
-            type="button"
-            className="group-actions-menu-item"
-            onClick={() => {
-              setOpen(false);
-              setPollsOpen(true);
-            }}
+      {open &&
+        createPortal(
+          <div
+            className="group-actions-menu-layer"
+            onMouseDown={(event) =>
+              event.target === event.currentTarget && setOpen(false)
+            }
           >
-            <BarChart3 /> Polls
-          </button>
-          {canManage && (
-            <ManageGroupButton
-              group={group}
-              user={user}
-              onChanged={onChanged}
-              onNotice={onNotice}
-              menuItem
-              label="Manage group & roles"
-              onClosed={() => setOpen(false)}
-            />
-          )}
-          <button
-            type="button"
-            className="group-actions-menu-item danger"
-            onClick={() => {
-              setOpen(false);
-              onLeave();
-            }}
-          >
-            <Trash2 /> Leave group
-          </button>
-        </div>
-      )}
+            <div
+              className="group-actions-menu group-actions-menu-portal"
+              role="menu"
+              style={menuPosition || undefined}
+              onMouseDown={(event) => event.stopPropagation()}
+            >
+              <button
+                type="button"
+                className="group-actions-menu-item"
+                onClick={() => {
+                  setOpen(false);
+                  setPollsOpen(true);
+                }}
+              >
+                <BarChart3 /> Polls
+              </button>
+              {canManage && (
+                <ManageGroupButton
+                  group={group}
+                  user={user}
+                  onChanged={onChanged}
+                  onNotice={onNotice}
+                  menuItem
+                  label="Manage group & roles"
+                  onClosed={() => setOpen(false)}
+                />
+              )}
+              <button
+                type="button"
+                className="group-actions-menu-item danger"
+                onClick={() => {
+                  setOpen(false);
+                  onLeave();
+                }}
+              >
+                <Trash2 /> Leave group
+              </button>
+            </div>
+          </div>,
+          document.body,
+        )}
       <GroupPolls
         group={group}
         user={user}

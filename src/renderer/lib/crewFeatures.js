@@ -41,7 +41,13 @@ export async function getGroupPolls(groupId) {
   }));
 }
 
-export async function createGroupPoll(groupId, userId, question, options, hours) {
+export async function createGroupPoll(
+  groupId,
+  userId,
+  question,
+  options,
+  hours,
+) {
   const clean = options.map((value) => value.trim()).filter(Boolean);
   if (clean.length < 2 || clean.length > 10)
     throw new Error("Add between 2 and 10 choices.");
@@ -57,10 +63,12 @@ export async function createGroupPoll(groupId, userId, question, options, hours)
 
 export async function voteInGroupPoll(pollId, optionId, userId) {
   return unwrap(
-    await supabase.from("group_poll_votes").upsert(
-      { poll_id: pollId, option_id: optionId, user_id: userId },
-      { onConflict: "poll_id,user_id" },
-    ),
+    await supabase
+      .from("group_poll_votes")
+      .upsert(
+        { poll_id: pollId, option_id: optionId, user_id: userId },
+        { onConflict: "poll_id,user_id" },
+      ),
   );
 }
 
@@ -70,6 +78,12 @@ export async function closeGroupPoll(pollId) {
       .from("group_polls")
       .update({ closed_at: new Date().toISOString() })
       .eq("id", pollId),
+  );
+}
+
+export async function deleteClosedGroupPoll(pollId) {
+  return unwrap(
+    await supabase.rpc("delete_closed_group_poll", { poll_key: pollId }),
   );
 }
 
@@ -88,7 +102,9 @@ export async function getMeetupParticipantSettings(meetupIds = []) {
   return unwrap(
     await supabase
       .from("meetup_participant_settings")
-      .select("meetup_id,user_id,reminder_minutes,check_in_status,checked_in_at")
+      .select(
+        "meetup_id,user_id,reminder_minutes,check_in_status,checked_in_at",
+      )
       .in("meetup_id", meetupIds),
   );
 }
@@ -123,16 +139,24 @@ const escapeIcs = (value) =>
 
 export function meetupCalendarDetails(meetup, otherName = "Crew member") {
   const start = meetupInstant(meetup);
-  const end = new Date(start.getTime() + Number(meetup.duration || 1) * 3600000);
+  const end = new Date(
+    start.getTime() + Number(meetup.duration || 1) * 3600000,
+  );
   const title = `${meetup.meetup_type || "Crew meetup"} with ${otherName}`;
-  const details = [meetup.message, meetup.vrc_username ? `VRChat: ${meetup.vrc_username}` : ""]
+  const details = [
+    meetup.message,
+    meetup.vrc_username ? `VRChat: ${meetup.vrc_username}` : "",
+  ]
     .filter(Boolean)
     .join("\n");
   return { start, end, title, details };
 }
 
 export function downloadMeetupIcs(meetup, otherName) {
-  const { start, end, title, details } = meetupCalendarDetails(meetup, otherName);
+  const { start, end, title, details } = meetupCalendarDetails(
+    meetup,
+    otherName,
+  );
   const text = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
@@ -157,10 +181,18 @@ export function downloadMeetupIcs(meetup, otherName) {
 }
 
 export function meetupCalendarUrl(provider, meetup, otherName) {
-  const { start, end, title, details } = meetupCalendarDetails(meetup, otherName);
+  const { start, end, title, details } = meetupCalendarDetails(
+    meetup,
+    otherName,
+  );
   const dates = `${icsDate(start)}/${icsDate(end)}`;
   if (provider === "google") {
-    const query = new URLSearchParams({ action: "TEMPLATE", text: title, dates, details });
+    const query = new URLSearchParams({
+      action: "TEMPLATE",
+      text: title,
+      dates,
+      details,
+    });
     return `https://calendar.google.com/calendar/render?${query}`;
   }
   const query = new URLSearchParams({

@@ -72,9 +72,21 @@ const availabilityOverlapsDay = (item, key) => {
     return false;
   }
 };
+const safeAvailabilityRange = (item) => {
+  try {
+    const range = availabilityInstantRange(item);
+    return range.every((value) => Number.isFinite(value.getTime()))
+      ? range
+      : null;
+  } catch {
+    return null;
+  }
+};
 const localAvailabilityLabel = (item) => {
   if (item.indefinite) return "Unavailable until you turn this off";
-  const [start, end] = availabilityInstantRange(item);
+  const range = safeAvailabilityRange(item);
+  if (!range) return "Unavailable time";
+  const [start, end] = range;
   const sameZone = (item.time_zone || "America/Denver") === localTimeZoneName();
   if (item.all_day && sameZone) return "All day";
   const startLabel = start.toLocaleString(undefined, {
@@ -92,13 +104,15 @@ const localAvailabilityLabel = (item) => {
   return `${startLabel}–${endLabel}`;
 };
 
-function AvailabilityModal({ user, rows, onClose, onSaved }) {
+function AvailabilityModal({ user, rows = [], onClose, onSaved }) {
   const [allDay, setAllDay] = useState(true);
   const [busy, setBusy] = useState(false);
   const [longTermBusy, setLongTermBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [recurrence, setRecurrence] = useState("none");
-  const mine = rows.filter((item) => item.user_id === user.id);
+  const mine = (Array.isArray(rows) ? rows : []).filter(
+    (item) => item?.user_id === user.id,
+  );
   const longTerm = mine.find((item) => item.indefinite);
   async function toggleLongTerm(event) {
     const enabled = event.target.checked;
@@ -217,27 +231,33 @@ function AvailabilityModal({ user, rows, onClose, onSaved }) {
             {!mine.length && (
               <p className="micro-copy">No off days configured.</p>
             )}
-            {mine.map((item) => (
-              <article key={item.id}>
-                <div>
-                  <strong>
-                    {availabilityInstantRange(item)[0].toLocaleDateString(
-                      undefined,
-                      { weekday: "short", month: "short", day: "numeric" },
-                    )}
-                  </strong>
-                  <span>{localAvailabilityLabel(item)}</span>
-                </div>
-                <button
-                  type="button"
-                  className="icon-button"
-                  title="Remove off time"
-                  onClick={() => remove(item)}
-                >
-                  <Trash2 />
-                </button>
-              </article>
-            ))}
+            {mine.map((item) => {
+              const range = safeAvailabilityRange(item);
+              return (
+                <article key={item.id}>
+                  <div>
+                    <strong>
+                      {range
+                        ? range[0].toLocaleDateString(undefined, {
+                            weekday: "short",
+                            month: "short",
+                            day: "numeric",
+                          })
+                        : "Saved off time"}
+                    </strong>
+                    <span>{localAvailabilityLabel(item)}</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="icon-button"
+                    title="Remove off time"
+                    onClick={() => remove(item)}
+                  >
+                    <Trash2 />
+                  </button>
+                </article>
+              );
+            })}
           </section>
         )}
       </div>
@@ -259,9 +279,11 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const formHeadingRef = useRef(null);
-  const meetups = meetupLoader.data || [];
-  const profiles = profileLoader.data || [];
-  const availability = availabilityLoader.data || [];
+  const meetups = Array.isArray(meetupLoader.data) ? meetupLoader.data : [];
+  const profiles = Array.isArray(profileLoader.data) ? profileLoader.data : [];
+  const availability = Array.isArray(availabilityLoader.data)
+    ? availabilityLoader.data
+    : [];
   const people = profiles.filter((person) => person.id !== user.id);
   const selectedProfile = profiles.find(
     (person) => person.id === selectedPerson,
@@ -356,7 +378,9 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
       const overlap = availability.some((item) => {
         if (!selectedIds.includes(item.user_id)) return false;
         if (item.user_id === user.id && item.indefinite) return false;
-        const [blockStart, blockEnd] = availabilityInstantRange(item);
+        const range = safeAvailabilityRange(item);
+        if (!range) return false;
+        const [blockStart, blockEnd] = range;
         return overlaps(requestedStart, requestedEnd, blockStart, blockEnd);
       });
       if (overlap)

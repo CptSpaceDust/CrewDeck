@@ -1,16 +1,18 @@
 import { useEffect, useState } from "react";
-import { BarChart3, Check, Plus, X } from "lucide-react";
+import { BarChart3, Check, Plus, Trash2, X } from "lucide-react";
 import {
   closeGroupPoll,
   createGroupPoll,
+  deleteClosedGroupPoll,
   getGroupPolls,
   voteInGroupPoll,
 } from "../lib/crewFeatures";
 import { sendGroupMessage } from "../lib/data";
 import { supabase } from "../lib/supabase";
+import { confirmInApp } from "./InAppDialog";
 import { Field, Modal } from "./ui";
 
-function PollCard({ poll, user, canModerate, onChanged }) {
+function PollCard({ poll, user, canModerate, isOwner, onChanged, onNotice }) {
   const pollOptions = Array.isArray(poll?.options) ? poll.options : [];
   const total = pollOptions.reduce(
     (sum, option) =>
@@ -24,6 +26,26 @@ function PollCard({ poll, user, canModerate, onChanged }) {
     Boolean(poll.closed_at) ||
     (poll.closes_at && new Date(poll.closes_at) <= new Date());
   const [busy, setBusy] = useState(false);
+  async function remove() {
+    const approved = await confirmInApp(
+      "This closed poll and all of its votes will be permanently removed.",
+      {
+        title: "Delete closed poll?",
+        confirmLabel: "Delete poll",
+        danger: true,
+      },
+    );
+    if (!approved) return;
+    setBusy(true);
+    try {
+      await deleteClosedGroupPoll(poll.id);
+      await onChanged();
+    } catch (error) {
+      onNotice?.(error.message);
+    } finally {
+      setBusy(false);
+    }
+  }
   async function vote(optionId) {
     if (busy || ended) return;
     setBusy(true);
@@ -84,6 +106,11 @@ function PollCard({ poll, user, canModerate, onChanged }) {
             }}
           >
             Close poll
+          </button>
+        )}
+        {ended && isOwner && (
+          <button className="poll-delete" disabled={busy} onClick={remove}>
+            <Trash2 /> {busy ? "Deleting…" : "Delete poll"}
           </button>
         )}
       </footer>
@@ -195,7 +222,9 @@ export default function GroupPolls({
                     poll={poll}
                     user={user}
                     canModerate={role !== "member"}
+                    isOwner={role === "owner"}
                     onChanged={load}
+                    onNotice={onNotice}
                   />
                 ))
               ) : (

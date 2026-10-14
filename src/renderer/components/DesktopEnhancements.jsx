@@ -54,7 +54,13 @@ export function useMeetupReminders(userId) {
           custom?.reminder_minutes || settings.reminderMinutes,
         );
         const windowMs = reminderMinutes * 60000;
-        const start = meetupInstant(item).getTime();
+        let start;
+        try {
+          start = meetupInstant(item).getTime();
+        } catch {
+          continue;
+        }
+        if (!Number.isFinite(start)) continue;
         const key = `meetup-reminder:${item.id}:${reminderMinutes}`;
         if (
           start > now &&
