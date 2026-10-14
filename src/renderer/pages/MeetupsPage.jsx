@@ -60,9 +60,17 @@ const involves = (item, ids) =>
   ids.some((id) => id && (item.user_id === id || item.with_user_id === id));
 const overlaps = (startA, endA, startB, endB) => startA < endB && endA > startB;
 const availabilityOverlapsDay = (item, key) => {
-  const [blockStart, blockEnd] = availabilityInstantRange(item);
-  const [dayStart, dayEnd] = localDayRange(key);
-  return overlaps(blockStart, blockEnd, dayStart, dayEnd);
+  try {
+    const [blockStart, blockEnd] = availabilityInstantRange(item);
+    const [dayStart, dayEnd] = localDayRange(key);
+    return (
+      [blockStart, blockEnd, dayStart, dayEnd].every((value) =>
+        Number.isFinite(value.getTime()),
+      ) && overlaps(blockStart, blockEnd, dayStart, dayEnd)
+    );
+  } catch {
+    return false;
+  }
 };
 const localAvailabilityLabel = (item) => {
   if (item.indefinite) return "Unavailable until you turn this off";
@@ -143,8 +151,8 @@ function AvailabilityModal({ user, rows, onClose, onSaved }) {
             <p className="micro-copy">
               Block a whole day or only the hours when you will not be online.
               Everything is entered and shown in your time zone (
-              {localTimeZoneName()}). Other crew members see availability in their
-              own local time, never the reason.
+              {localTimeZoneName()}). Other crew members see availability in
+              their own local time, never the reason.
             </p>
           )}
           <label className="availability-long-toggle">
@@ -171,7 +179,12 @@ function AvailabilityModal({ user, rows, onClose, onSaved }) {
           ) : (
             <>
               <Field label="Date">
-                <input name="date" type="date" min={dateKey(new Date())} required />
+                <input
+                  name="date"
+                  type="date"
+                  min={dateKey(new Date())}
+                  required
+                />
               </Field>
               <label className="check-field">
                 <input
@@ -255,9 +268,14 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
   );
   const captainApprovalRequired =
     selectedProfile?.rank?.toLowerCase() === "captain";
-  const myMeetups = meetups.filter(
-    (item) => item.user_id === user.id || item.with_user_id === user.id,
-  );
+  const myMeetups = meetups.filter((item) => {
+    if (item.user_id !== user.id && item.with_user_id !== user.id) return false;
+    try {
+      return Number.isFinite(meetupInstant(item).getTime());
+    } catch {
+      return false;
+    }
+  });
   const [participantSettings, reloadParticipantSettings] =
     useMeetupSettings(myMeetups);
   const selectedIds = [user.id, selectedPerson].filter(Boolean);
@@ -298,12 +316,15 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
   const dayState = (key) => {
     const blocks = availability.filter(
       (item) =>
-        item.user_id === selectedPerson &&
-        availabilityOverlapsDay(item, key),
+        item.user_id === selectedPerson && availabilityOverlapsDay(item, key),
     );
-    const scheduled = approved.some(
-      (item) => meetupLocalDateKey(item) === key && involves(item, selectedIds),
-    );
+    const scheduled = approved.some((item) => {
+      try {
+        return meetupLocalDateKey(item) === key && involves(item, selectedIds);
+      } catch {
+        return false;
+      }
+    });
     if (blocks.some((item) => item.all_day)) return "offline";
     if (scheduled) return "scheduled";
     if (blocks.length) return "partial";
@@ -421,10 +442,14 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
     <div className="page meetup-page">
       <PageHeader
         eyebrow={myMeetupsOnly ? "My meetups" : "Meetup calendar"}
-        title={myMeetupsOnly ? "Your meetups and invitations" : "Plan time together"}
-        description={myMeetupsOnly
-          ? "Review meetup invitations, respond to requests, and keep track of confirmed plans."
-          : `Choose a crew member, compare availability, and send an invitation. All dates and times are shown in your time zone (${localTimeZoneName()}).`}
+        title={
+          myMeetupsOnly ? "Your meetups and invitations" : "Plan time together"
+        }
+        description={
+          myMeetupsOnly
+            ? "Review meetup invitations, respond to requests, and keep track of confirmed plans."
+            : `Choose a crew member, compare availability, and send an invitation. All dates and times are shown in your time zone (${localTimeZoneName()}).`
+        }
         action={
           <div className="header-actions">
             {!myMeetupsOnly && (
@@ -456,258 +481,262 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
         <>
           {!myMeetupsOnly && (
             <>
-          <section className="panel meetup-person-picker">
-            <div>
-              <h2>Who are you meeting?</h2>
-              <p>
-                The calendar shows each person’s availability based on how
-                they’ve configured it.
-              </p>
-            </div>
-            <Field label="Crew member">
-              <select
-                value={selectedPerson}
-                onChange={(event) => setSelectedPerson(event.target.value)}
-              >
-                <option value="">Choose someone…</option>
-                {people.map((person) => (
-                  <option key={person.id} value={person.id}>
-                    {person.username} · {person.rank || "Crew"}
-                  </option>
-                ))}
-              </select>
-            </Field>
-          </section>
-          <section className="panel calendar-card">
-            <header>
-              <button
-                className="icon-button"
-                onClick={() =>
-                  setCurrentMonth(
-                    new Date(
-                      currentMonth.getFullYear(),
-                      currentMonth.getMonth() - 1,
-                      1,
-                    ),
-                  )
-                }
-              >
-                <ChevronLeft />
-              </button>
-              <h2>
-                {currentMonth.toLocaleDateString(undefined, {
-                  month: "long",
-                  year: "numeric",
-                })}
-              </h2>
-              <button
-                className="icon-button"
-                onClick={() =>
-                  setCurrentMonth(
-                    new Date(
-                      currentMonth.getFullYear(),
-                      currentMonth.getMonth() + 1,
-                      1,
-                    ),
-                  )
-                }
-              >
-                <ChevronRight />
-              </button>
-            </header>
-            <div className="calendar-weekdays">
-              {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
-                <span key={day}>{day}</span>
-              ))}
-            </div>
-            <div className="calendar-grid">
-              {cells.map((day, index) => {
-                if (!day)
-                  return (
-                    <span
-                      className="calendar-day empty"
-                      key={`empty-${index}`}
-                    />
-                  );
-                const date = new Date(
-                  currentMonth.getFullYear(),
-                  currentMonth.getMonth(),
-                  day,
-                );
-                const key = dateKey(date);
-                const state = dayState(key);
-                const past = date < today;
-                const disabled =
-                  past ||
-                  !selectedPerson ||
-                  state === "offline" ||
-                  state === "scheduled";
-                const labels = {
-                  offline: "Offline",
-                  partial: "Partly off",
-                  scheduled: "Meetup set",
-                  open: "Open",
-                };
-                return (
-                  <button
-                    key={key}
-                    disabled={disabled}
-                    aria-label={`${key}: ${past ? "Unavailable" : labels[state]}`}
-                    className={`calendar-day ${state} ${selected === key ? "selected" : ""}`}
-                    onClick={() => {
-                      setSelected(key);
-                      setShowFormHint(true);
-                    }}
+              <section className="panel meetup-person-picker">
+                <div>
+                  <h2>Who are you meeting?</h2>
+                  <p>
+                    The calendar shows each person’s availability based on how
+                    they’ve configured it.
+                  </p>
+                </div>
+                <Field label="Crew member">
+                  <select
+                    value={selectedPerson}
+                    onChange={(event) => setSelectedPerson(event.target.value)}
                   >
-                    <strong>{day}</strong>
-                    {!past && selectedPerson && <span>{labels[state]}</span>}
+                    <option value="">Choose someone…</option>
+                    {people.map((person) => (
+                      <option key={person.id} value={person.id}>
+                        {person.username} · {person.rank || "Crew"}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              </section>
+              <section className="panel calendar-card">
+                <header>
+                  <button
+                    className="icon-button"
+                    onClick={() =>
+                      setCurrentMonth(
+                        new Date(
+                          currentMonth.getFullYear(),
+                          currentMonth.getMonth() - 1,
+                          1,
+                        ),
+                      )
+                    }
+                  >
+                    <ChevronLeft />
                   </button>
-                );
-              })}
-            </div>
-            <div className="calendar-color-legend">
-              <span className="open">Open</span>
-              <span className="offline">Offline all day</span>
-              <span className="partial">Some hours offline</span>
-              <span className="scheduled">Already has a meetup</span>
-            </div>
-            {!selectedPerson && (
-              <p className="calendar-prompt">
-                Choose a crew member to open the calendar.
-              </p>
-            )}
-          </section>
-          {selected && showFormHint && (
-            <button
-              type="button"
-              className="meetup-form-hint"
-              onClick={() =>
-                formHeadingRef.current?.scrollIntoView({
-                  behavior: window.matchMedia(
-                    "(prefers-reduced-motion: reduce)",
-                  ).matches
-                    ? "auto"
-                    : "smooth",
-                  block: "start",
-                })
-              }
-            >
-              <ArrowDown />
-              <span>Scroll down to finish your meetup request</span>
-            </button>
-          )}
+                  <h2>
+                    {currentMonth.toLocaleDateString(undefined, {
+                      month: "long",
+                      year: "numeric",
+                    })}
+                  </h2>
+                  <button
+                    className="icon-button"
+                    onClick={() =>
+                      setCurrentMonth(
+                        new Date(
+                          currentMonth.getFullYear(),
+                          currentMonth.getMonth() + 1,
+                          1,
+                        ),
+                      )
+                    }
+                  >
+                    <ChevronRight />
+                  </button>
+                </header>
+                <div className="calendar-weekdays">
+                  {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(
+                    (day) => (
+                      <span key={day}>{day}</span>
+                    ),
+                  )}
+                </div>
+                <div className="calendar-grid">
+                  {cells.map((day, index) => {
+                    if (!day)
+                      return (
+                        <span
+                          className="calendar-day empty"
+                          key={`empty-${index}`}
+                        />
+                      );
+                    const date = new Date(
+                      currentMonth.getFullYear(),
+                      currentMonth.getMonth(),
+                      day,
+                    );
+                    const key = dateKey(date);
+                    const state = dayState(key);
+                    const past = date < today;
+                    const disabled =
+                      past ||
+                      !selectedPerson ||
+                      state === "offline" ||
+                      state === "scheduled";
+                    const labels = {
+                      offline: "Offline",
+                      partial: "Partly off",
+                      scheduled: "Meetup set",
+                      open: "Open",
+                    };
+                    return (
+                      <button
+                        key={key}
+                        disabled={disabled}
+                        aria-label={`${key}: ${past ? "Unavailable" : labels[state]}`}
+                        className={`calendar-day ${state} ${selected === key ? "selected" : ""}`}
+                        onClick={() => {
+                          setSelected(key);
+                          setShowFormHint(true);
+                        }}
+                      >
+                        <strong>{day}</strong>
+                        {!past && selectedPerson && (
+                          <span>{labels[state]}</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="calendar-color-legend">
+                  <span className="open">Open</span>
+                  <span className="offline">Offline all day</span>
+                  <span className="partial">Some hours offline</span>
+                  <span className="scheduled">Already has a meetup</span>
+                </div>
+                {!selectedPerson && (
+                  <p className="calendar-prompt">
+                    Choose a crew member to open the calendar.
+                  </p>
+                )}
+              </section>
+              {selected && showFormHint && (
+                <button
+                  type="button"
+                  className="meetup-form-hint"
+                  onClick={() =>
+                    formHeadingRef.current?.scrollIntoView({
+                      behavior: window.matchMedia(
+                        "(prefers-reduced-motion: reduce)",
+                      ).matches
+                        ? "auto"
+                        : "smooth",
+                      block: "start",
+                    })
+                  }
+                >
+                  <ArrowDown />
+                  <span>Scroll down to finish your meetup request</span>
+                </button>
+              )}
             </>
           )}
           {myMeetupsOnly && (
-          <section className="my-meetups-section">
-            <MeetupCountdown
-              meetups={myMeetups}
-              userId={user.id}
-              profiles={profiles}
-            />
-            <h2 className="section-title">My Meetups & Invitations</h2>
-            {myMeetups.length ? (
-              <div className="timeline">
-                {myMeetups.map((item) => {
-                  const invited = item.with_user_id === user.id;
-                  const otherId = invited ? item.user_id : item.with_user_id;
-                  const localStart = meetupInstant(item);
-                  return (
-                    <article
-                      className="panel meetup-card meetup-request-details"
-                      key={item.id}
-                    >
-                      <div className="date-tile">
-                        <strong>{localStart.getDate()}</strong>
-                        <span>
-                          {localStart.toLocaleDateString(undefined, {
-                            month: "short",
-                          })}
-                        </span>
-                      </div>
-                      <div>
-                        <div className="card-meta">
-                          <span className={`status ${item.status}`}>
-                            {item.status}
-                          </span>
+            <section className="my-meetups-section">
+              <MeetupCountdown
+                meetups={myMeetups}
+                userId={user.id}
+                profiles={profiles}
+              />
+              <h2 className="section-title">My Meetups & Invitations</h2>
+              {myMeetups.length ? (
+                <div className="timeline">
+                  {myMeetups.map((item) => {
+                    const invited = item.with_user_id === user.id;
+                    const otherId = invited ? item.user_id : item.with_user_id;
+                    const localStart = meetupInstant(item);
+                    return (
+                      <article
+                        className="panel meetup-card meetup-request-details"
+                        key={item.id}
+                      >
+                        <div className="date-tile">
+                          <strong>{localStart.getDate()}</strong>
                           <span>
-                            {localStart.toLocaleTimeString(undefined, {
-                              hour: "numeric",
-                              minute: "2-digit",
-                            })}{" "}
-                            · {item.duration}h
+                            {localStart.toLocaleDateString(undefined, {
+                              month: "short",
+                            })}
                           </span>
                         </div>
-                        <h3>
-                          {invited ? "Invitation from" : "Meetup with"}{" "}
-                          {personName(profiles, otherId)}
-                        </h3>
-                        <p>
-                          {item.meetup_type || "VRChat meetup"} ·{" "}
-                          {item.message || "No notes."}
-                        </p>
-                        <p className="meetup-local-time">
-                          {formatMeetupLocal(
-                            item.meetup_date,
-                            item.start_time,
-                            item.time_zone || "America/Denver",
+                        <div>
+                          <div className="card-meta">
+                            <span className={`status ${item.status}`}>
+                              {item.status}
+                            </span>
+                            <span>
+                              {localStart.toLocaleTimeString(undefined, {
+                                hour: "numeric",
+                                minute: "2-digit",
+                              })}{" "}
+                              · {item.duration}h
+                            </span>
+                          </div>
+                          <h3>
+                            {invited ? "Invitation from" : "Meetup with"}{" "}
+                            {personName(profiles, otherId)}
+                          </h3>
+                          <p>
+                            {item.meetup_type || "VRChat meetup"} ·{" "}
+                            {item.message || "No notes."}
+                          </p>
+                          <p className="meetup-local-time">
+                            {formatMeetupLocal(
+                              item.meetup_date,
+                              item.start_time,
+                              item.time_zone || "America/Denver",
+                            )}
+                          </p>
+                          {item.with_user_id && (
+                            <small>Invitation: {item.invitee_status}</small>
                           )}
-                        </p>
-                        {item.with_user_id && (
-                          <small>Invitation: {item.invitee_status}</small>
-                        )}
-                        {invited &&
-                          item.status === "pending" &&
-                          item.invitee_status === "pending" && (
-                            <div className="button-row">
-                              <button
-                                className="button primary"
-                                disabled={busy}
-                                onClick={() => respond(item, "accepted")}
-                              >
-                                <Check /> Accept
-                              </button>
-                              <button
-                                className="button danger"
-                                disabled={busy}
-                                onClick={() => respond(item, "declined")}
-                              >
-                                <X /> Decline
-                              </button>
-                            </div>
+                          {invited &&
+                            item.status === "pending" &&
+                            item.invitee_status === "pending" && (
+                              <div className="button-row">
+                                <button
+                                  className="button primary"
+                                  disabled={busy}
+                                  onClick={() => respond(item, "accepted")}
+                                >
+                                  <Check /> Accept
+                                </button>
+                                <button
+                                  className="button danger"
+                                  disabled={busy}
+                                  onClick={() => respond(item, "declined")}
+                                >
+                                  <X /> Decline
+                                </button>
+                              </div>
+                            )}
+                          {!invited && item.status === "pending" && (
+                            <button
+                              className="button danger compact-button"
+                              onClick={() => cancel(item)}
+                            >
+                              Cancel request
+                            </button>
                           )}
-                        {!invited && item.status === "pending" && (
-                          <button
-                            className="button danger compact-button"
-                            onClick={() => cancel(item)}
-                          >
-                            Cancel request
-                          </button>
-                        )}
-                        {item.status === "denied" && item.admin_reason && (
-                          <p className="meetup-denial">{item.admin_reason}</p>
-                        )}
-                        {item.status === "approved" && (
-                          <MeetupTools
-                            meetup={item}
-                            userId={user.id}
-                            otherName={personName(profiles, otherId)}
-                            settings={participantSettings}
-                            onChanged={reloadParticipantSettings}
-                          />
-                        )}
-                      </div>
-                    </article>
-                  );
-                })}
-              </div>
-            ) : (
-              <Empty
-                title="No meetups yet"
-                body="Choose a crew member and an open day to send an invitation."
-              />
-            )}
-          </section>
+                          {item.status === "denied" && item.admin_reason && (
+                            <p className="meetup-denial">{item.admin_reason}</p>
+                          )}
+                          {item.status === "approved" && (
+                            <MeetupTools
+                              meetup={item}
+                              userId={user.id}
+                              otherName={personName(profiles, otherId)}
+                              settings={participantSettings}
+                              onChanged={reloadParticipantSettings}
+                            />
+                          )}
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              ) : (
+                <Empty
+                  title="No meetups yet"
+                  body="Choose a crew member and an open day to send an invitation."
+                />
+              )}
+            </section>
           )}
           {!myMeetupsOnly && selected && (
             <form className="panel meetup-request-form" onSubmit={submit}>

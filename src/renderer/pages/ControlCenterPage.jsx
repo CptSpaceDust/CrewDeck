@@ -599,8 +599,7 @@ export default function ControlCenterPage({ user, profile }) {
       <section className="panel control-global-panel">
         <div className="control-global-heading">
           <div>
-            <span className="eyebrow">System controls</span>
-            <h2>Connected modules</h2>
+            <h2>Shock controls</h2>
           </div>
           <button
             className="button secondary"
@@ -665,7 +664,6 @@ export default function ControlCenterPage({ user, profile }) {
             >
               <header>
                 <div>
-                  <span className="eyebrow">Connected device</span>
                   <h2>{device.name || "Control module"}</h2>
                 </div>
                 <button

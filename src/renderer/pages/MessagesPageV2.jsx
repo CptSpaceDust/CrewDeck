@@ -4,16 +4,19 @@ import {
   CheckCheck,
   BellOff,
   BellRing,
+  BarChart3,
   Edit3,
   Maximize2,
   Mic,
   MicOff,
   Monitor,
   MonitorUp,
+  MoreVertical,
   Phone,
   PhoneOff,
   Plus,
   Reply,
+  RefreshCw,
   Search,
   Send,
   Trash2,
@@ -273,7 +276,11 @@ function VoiceCall({ conversation, user, onClose, requestedCallId }) {
       : conversation.person?.username || "Crew member";
 
   async function testMicrophone() {
-    setMicTest({ running: true, level: 0, message: "Listening… speak normally." });
+    setMicTest({
+      running: true,
+      level: 0,
+      message: "Listening… speak normally.",
+    });
     let stream;
     try {
       stream = await navigator.mediaDevices.getUserMedia({
@@ -316,7 +323,8 @@ function VoiceCall({ conversation, user, onClose, requestedCallId }) {
       setMicTest({
         running: false,
         level: 0,
-        message: "Microphone test failed. Check your permission and selected input.",
+        message:
+          "Microphone test failed. Check your permission and selected input.",
       });
     } finally {
       stream?.getTracks().forEach((track) => track.stop());
@@ -484,7 +492,9 @@ function VoiceCall({ conversation, user, onClose, requestedCallId }) {
           .on(RoomEvent.ConnectionQualityChanged, (quality, participant) =>
             setQualities((current) => ({
               ...current,
-              [participant.identity]: String(quality || "unknown").toLowerCase(),
+              [participant.identity]: String(
+                quality || "unknown",
+              ).toLowerCase(),
             })),
           )
           .on(RoomEvent.AudioPlaybackStatusChanged, () =>
@@ -773,17 +783,22 @@ function VoiceCall({ conversation, user, onClose, requestedCallId }) {
           </div>
           <div className="call-processing-summary">
             <span>
-              Noise suppression {callPreferences.noiseSuppression !== false ? "on" : "off"}
+              Noise suppression{" "}
+              {callPreferences.noiseSuppression !== false ? "on" : "off"}
             </span>
             <span>
-              Echo cancellation {callPreferences.echoCancellation !== false ? "on" : "off"}
+              Echo cancellation{" "}
+              {callPreferences.echoCancellation !== false ? "on" : "off"}
             </span>
             <span>
-              Automatic gain {callPreferences.autoGainControl !== false ? "on" : "off"}
+              Automatic gain{" "}
+              {callPreferences.autoGainControl !== false ? "on" : "off"}
             </span>
           </div>
           <div className="modal-actions">
-            <button className="button ghost" onClick={onClose}>Cancel</button>
+            <button className="button ghost" onClick={onClose}>
+              Cancel
+            </button>
             <button
               className="button secondary"
               disabled={micTest.running}
@@ -791,7 +806,10 @@ function VoiceCall({ conversation, user, onClose, requestedCallId }) {
             >
               {micTest.running ? "Testing…" : "Test microphone"}
             </button>
-            <button className="button primary" onClick={() => setJoinRequested(true)}>
+            <button
+              className="button primary"
+              onClick={() => setJoinRequested(true)}
+            >
               <Phone /> Join call
             </button>
           </div>
@@ -866,7 +884,8 @@ function VoiceCall({ conversation, user, onClose, requestedCallId }) {
               Boolean(micPublication?.isMuted) || (local && muted);
             const isSpeaking = speaking.has(participant.identity);
             const quality =
-              qualities[participant.identity] || (connected ? "good" : "unknown");
+              qualities[participant.identity] ||
+              (connected ? "good" : "unknown");
             return (
               <article
                 className={`call-participant${isSpeaking ? " speaking" : ""}${isMuted ? " muted" : ""}`}
@@ -1122,12 +1141,12 @@ function DirectMessagesPage({
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [query, setQuery] = useState("");
-  const [messageQuery, setMessageQuery] = useState("");
   const [, setReadRevision] = useState(0);
   const [call, setCall] = useState(null);
   const [replying, setReplying] = useState(null);
   const [deleting, setDeleting] = useState(null);
   const [slowUntil, setSlowUntil] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
   const dmBurstRef = useRef(new Map());
   const endRef = useRef();
   useEffect(() => {
@@ -1257,13 +1276,6 @@ function DirectMessagesPage({
     () => Object.fromEntries(messages.map((x) => [x.id, x])),
     [messages],
   );
-  const shownMessages = useMemo(
-    () =>
-      messages.filter((item) =>
-        item.content.toLowerCase().includes(messageQuery.toLowerCase()),
-      ),
-    [messages, messageQuery],
-  );
   async function respond(request, status) {
     try {
       const id = await respondToMessageRequest(
@@ -1302,12 +1314,15 @@ function DirectMessagesPage({
         setNotice(blocked);
         return false;
       }
-      await sendMessage(
+      const sent = await sendMessage(
         selected.id,
         user.id,
         selected.person.id,
         content,
         replying?.id || null,
+      );
+      setMessages((rows) =>
+        rows.some((row) => row.id === sent.id) ? rows : [...rows, sent],
       );
       const nextBurst = recordDirectMessageBurst(
         burst?.history || [],
@@ -1325,6 +1340,19 @@ function DirectMessagesPage({
     await deleteMessage(item.id, user.id);
     setMessages((rows) => rows.filter((x) => x.id !== item.id));
     setReplying((current) => (current?.id === item.id ? null : current));
+  }
+  async function refreshMessages() {
+    if (refreshing) return;
+    setRefreshing(true);
+    try {
+      await loadAll();
+      if (selected) setMessages(await getMessages(selected.id));
+      setNotice("Messages refreshed.");
+    } catch (exception) {
+      setNotice(exception.message);
+    } finally {
+      setRefreshing(false);
+    }
   }
   if (loading)
     return (
@@ -1346,6 +1374,15 @@ function DirectMessagesPage({
         description="Private conversations, requests, replies, editing, and voice calls."
         action={
           <div className="header-actions">
+            <button
+              className="icon-button refresh-button"
+              title="Refresh messages"
+              onClick={refreshMessages}
+              disabled={refreshing}
+              aria-busy={refreshing}
+            >
+              <RefreshCw className={refreshing ? "spin" : ""} />
+            </button>
             <button
               className="button ghost"
               onClick={() => markAllConversationsRead(conversations, false)}
@@ -1463,14 +1500,6 @@ function DirectMessagesPage({
                   </div>
                 </div>
                 <div className="chat-header-actions">
-                  <label className="conversation-search message-search">
-                    <Search />
-                    <input
-                      placeholder="Search messages"
-                      value={messageQuery}
-                      onChange={(event) => setMessageQuery(event.target.value)}
-                    />
-                  </label>
                   <button
                     className="icon-button"
                     title={
@@ -1498,7 +1527,7 @@ function DirectMessagesPage({
                 </div>
               </header>
               <div className="message-stream">
-                {shownMessages.map((item) => {
+                {messages.map((item) => {
                   const quoted = item.reply_to_id
                     ? byId[item.reply_to_id]
                     : null;
@@ -1752,11 +1781,20 @@ function CreateGroupButton({ user, profile, onCreated, onNotice }) {
   );
 }
 
-function ManageGroupButton({ group, user, onChanged, onNotice }) {
+function ManageGroupButton({
+  group,
+  user,
+  onChanged,
+  onNotice,
+  menuItem = false,
+  label = "Manage group",
+  onOpen,
+}) {
   const [open, setOpen] = useState(false);
   const [people, setPeople] = useState([]);
   const [busy, setBusy] = useState("");
   async function show() {
+    onOpen?.();
     setOpen(true);
     try {
       setPeople(await getProfiles("id,username,avatar,rank"));
@@ -1826,41 +1864,54 @@ function ManageGroupButton({ group, user, onChanged, onNotice }) {
       setBusy("");
     }
   }
-  const myRole = group.members.find((member) => member.id === user.id)?.groupRole || (group.owner_id === user.id ? "owner" : "member");
+  const myRole =
+    group.members.find((member) => member.id === user.id)?.groupRole ||
+    (group.owner_id === user.id ? "owner" : "member");
   const memberIds = new Set(group.members.map((member) => member.id));
   const invitees = people.filter((person) => !memberIds.has(person.id));
   const removable = group.members.filter((member) => member.id !== user.id);
   return (
     <>
-      <button className="button secondary compact-button" onClick={show}>
-        Manage group
+      <button
+        className={
+          menuItem
+            ? "group-actions-menu-item"
+            : "button secondary compact-button"
+        }
+        onClick={show}
+      >
+        {label}
       </button>
       {open && (
         <Modal title="Manage group" onClose={() => setOpen(false)}>
-          {myRole === "owner" && <form className="stack-form" onSubmit={rename}>
-            <Field label="Group name">
-              <input
-                name="name"
-                maxLength="50"
-                defaultValue={group.name}
-                required
-              />
-            </Field>
-            <button className="button secondary" disabled={busy === "name"}>
-              {busy === "name" ? "Saving…" : "Change group name"}
-            </button>
-          </form>}
-          {myRole === "owner" && <div className="group-manage-section">
-            <h3>Group picture</h3>
-            <Field label="PNG, JPG, or WebP under 5 MB">
-              <input
-                type="file"
-                accept="image/png,image/jpeg,image/webp"
-                onChange={picture}
-                disabled={busy === "picture"}
-              />
-            </Field>
-          </div>}
+          {myRole === "owner" && (
+            <form className="stack-form" onSubmit={rename}>
+              <Field label="Group name">
+                <input
+                  name="name"
+                  maxLength="50"
+                  defaultValue={group.name}
+                  required
+                />
+              </Field>
+              <button className="button secondary" disabled={busy === "name"}>
+                {busy === "name" ? "Saving…" : "Change group name"}
+              </button>
+            </form>
+          )}
+          {myRole === "owner" && (
+            <div className="group-manage-section">
+              <h3>Group picture</h3>
+              <Field label="PNG, JPG, or WebP under 5 MB">
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  onChange={picture}
+                  disabled={busy === "picture"}
+                />
+              </Field>
+            </div>
+          )}
           <div className="group-manage-section">
             <h3>Invite member</h3>
             <div className="crew-picker">
@@ -1892,18 +1943,30 @@ function ManageGroupButton({ group, user, onChanged, onNotice }) {
           {myRole === "owner" && (
             <div className="group-manage-section">
               <h3>Member roles</h3>
-              <p className="micro-copy">Moderators can invite and remove members. Only the owner can change roles and group details.</p>
+              <p className="micro-copy">
+                Moderators can invite and remove members. Only the owner can
+                change roles and group details.
+              </p>
               <div className="crew-picker group-role-picker">
-                {group.members.filter((person) => person.id !== user.id).map((person) => (
-                  <div className="group-role-row" key={person.id}>
-                    <Avatar profile={person} />
-                    <span><strong>{person.username}</strong><small>{person.groupRole || "member"}</small></span>
-                    <select disabled={busy === `role-${person.id}`} value={person.groupRole || "member"} onChange={(event) => role(person, event.target.value)}>
-                      <option value="member">Member</option>
-                      <option value="moderator">Moderator</option>
-                    </select>
-                  </div>
-                ))}
+                {group.members
+                  .filter((person) => person.id !== user.id)
+                  .map((person) => (
+                    <div className="group-role-row" key={person.id}>
+                      <Avatar profile={person} />
+                      <span>
+                        <strong>{person.username}</strong>
+                        <small>{person.groupRole || "member"}</small>
+                      </span>
+                      <select
+                        disabled={busy === `role-${person.id}`}
+                        value={person.groupRole || "member"}
+                        onChange={(event) => role(person, event.target.value)}
+                      >
+                        <option value="member">Member</option>
+                        <option value="moderator">Moderator</option>
+                      </select>
+                    </div>
+                  ))}
               </div>
             </div>
           )}
@@ -1939,6 +2002,66 @@ function ManageGroupButton({ group, user, onChanged, onNotice }) {
   );
 }
 
+function GroupActionsMenu({ group, user, role, onChanged, onNotice, onLeave }) {
+  const [open, setOpen] = useState(false);
+  const [pollsOpen, setPollsOpen] = useState(false);
+  const canManage = role === "owner" || role === "moderator";
+  return (
+    <div className="group-actions-menu-wrap">
+      <button
+        className="icon-button"
+        title="Group options"
+        aria-label="Group options"
+        aria-expanded={open}
+        onClick={() => setOpen((value) => !value)}
+      >
+        <MoreVertical />
+      </button>
+      {open && (
+        <div className="group-actions-menu" role="menu">
+          <button
+            className="group-actions-menu-item"
+            onClick={() => {
+              setOpen(false);
+              setPollsOpen(true);
+            }}
+          >
+            <BarChart3 /> Polls
+          </button>
+          {canManage && (
+            <ManageGroupButton
+              group={group}
+              user={user}
+              onChanged={onChanged}
+              onNotice={onNotice}
+              menuItem
+              label="Manage group & roles"
+              onOpen={() => setOpen(false)}
+            />
+          )}
+          <button
+            className="group-actions-menu-item danger"
+            onClick={() => {
+              setOpen(false);
+              onLeave();
+            }}
+          >
+            <Trash2 /> Leave group
+          </button>
+        </div>
+      )}
+      <GroupPolls
+        group={group}
+        user={user}
+        role={role}
+        onNotice={onNotice}
+        open={pollsOpen}
+        onClose={() => setPollsOpen(false)}
+      />
+    </div>
+  );
+}
+
 function GroupMessagesPage({
   user,
   profile,
@@ -1954,11 +2077,11 @@ function GroupMessagesPage({
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [query, setQuery] = useState("");
-  const [messageQuery, setMessageQuery] = useState("");
   const [, setReadRevision] = useState(0);
   const [replying, setReplying] = useState(null);
   const [call, setCall] = useState(null);
   const [deleting, setDeleting] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
   const endRef = useRef();
   useEffect(() => {
     const refresh = () => setReadRevision((value) => value + 1);
@@ -2071,17 +2194,12 @@ function GroupMessagesPage({
       ),
     [details],
   );
-  const myGroupRole = details?.members.find((member) => member.id === user.id)?.groupRole || (details?.owner_id === user.id ? "owner" : "member");
+  const myGroupRole =
+    details?.members.find((member) => member.id === user.id)?.groupRole ||
+    (details?.owner_id === user.id ? "owner" : "member");
   const byId = useMemo(
     () => Object.fromEntries(messages.map((item) => [item.id, item])),
     [messages],
-  );
-  const shownMessages = useMemo(
-    () =>
-      messages.filter((item) =>
-        item.content.toLowerCase().includes(messageQuery.toLowerCase()),
-      ),
-    [messages, messageQuery],
   );
   const visible = groups.filter((item) =>
     item.name?.toLowerCase().includes(query.toLowerCase()),
@@ -2094,11 +2212,14 @@ function GroupMessagesPage({
     try {
       const blocked = await restrictionMessage(user.id, "messaging");
       if (blocked) throw new Error(blocked);
-      await sendGroupMessage(
+      const sent = await sendGroupMessage(
         selected.id,
         user.id,
         content,
         replying?.id || null,
+      );
+      setMessages((rows) =>
+        rows.some((row) => row.id === sent.id) ? rows : [...rows, sent],
       );
       setReplying(null);
     } catch (exception) {
@@ -2110,6 +2231,26 @@ function GroupMessagesPage({
     await deleteGroupMessage(item.id, user.id);
     setMessages((rows) => rows.filter((row) => row.id !== item.id));
     setReplying((current) => (current?.id === item.id ? null : current));
+  }
+  async function refreshMessages() {
+    if (refreshing) return;
+    setRefreshing(true);
+    try {
+      await loadGroups(selected?.id);
+      if (selected) {
+        const [group, rows] = await Promise.all([
+          getGroupDetails(selected.id),
+          getGroupMessages(selected.id),
+        ]);
+        setDetails(group);
+        setMessages(rows);
+      }
+      setNotice("Group messages refreshed.");
+    } catch (exception) {
+      setNotice(exception.message);
+    } finally {
+      setRefreshing(false);
+    }
   }
   async function leave() {
     try {
@@ -2194,6 +2335,15 @@ function GroupMessagesPage({
         action={
           <div className="header-actions">
             <button
+              className="icon-button refresh-button"
+              title="Refresh group messages"
+              onClick={refreshMessages}
+              disabled={refreshing}
+              aria-busy={refreshing}
+            >
+              <RefreshCw className={refreshing ? "spin" : ""} />
+            </button>
+            <button
               className="button ghost"
               onClick={() => markAllConversationsRead(groups, true)}
             >
@@ -2267,14 +2417,6 @@ function GroupMessagesPage({
                   </div>
                 </div>
                 <div className="group-chat-actions">
-                  <label className="conversation-search message-search">
-                    <Search />
-                    <input
-                      placeholder="Search messages"
-                      value={messageQuery}
-                      onChange={(event) => setMessageQuery(event.target.value)}
-                    />
-                  </label>
                   <button
                     className="icon-button"
                     title={
@@ -2298,34 +2440,22 @@ function GroupMessagesPage({
                   >
                     <Phone />
                   </button>
-                  {myGroupRole !== "member" && (
-                    <ManageGroupButton
-                      group={details}
-                      user={user}
-                      onNotice={setNotice}
-                      onChanged={async () => {
-                        const group = await getGroupDetails(selected.id);
-                        setDetails(group);
-                        await loadGroups(selected.id);
-                      }}
-                    />
-                  )}
-                  <button
-                    className="button danger compact-button"
-                    onClick={leave}
-                  >
-                    Leave group
-                  </button>
+                  <GroupActionsMenu
+                    group={details}
+                    user={user}
+                    role={myGroupRole}
+                    onNotice={setNotice}
+                    onLeave={leave}
+                    onChanged={async () => {
+                      const group = await getGroupDetails(selected.id);
+                      setDetails(group);
+                      await loadGroups(selected.id);
+                    }}
+                  />
                 </div>
               </header>
               <div className="message-stream">
-                <GroupPolls
-                  group={details}
-                  user={user}
-                  role={myGroupRole}
-                  onNotice={setNotice}
-                />
-                {shownMessages.map((item) => {
+                {messages.map((item) => {
                   const sender = profiles[item.sender_id];
                   const quoted = item.reply_to_id
                     ? byId[item.reply_to_id]
@@ -2445,7 +2575,11 @@ function GroupMessagesPage({
                     className={`presence-chip ${online ? "online" : "offline"}`}
                   >
                     <i />
-                    {member.groupRole === "owner" ? "Owner · " : member.groupRole === "moderator" ? "Moderator · " : ""}
+                    {member.groupRole === "owner"
+                      ? "Owner · "
+                      : member.groupRole === "moderator"
+                        ? "Moderator · "
+                        : ""}
                     {online ? "Online" : "Offline"}
                   </small>
                 </span>

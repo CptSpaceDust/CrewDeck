@@ -190,7 +190,9 @@ function AudioDevices({ preferences, preference }) {
           <input
             type="checkbox"
             checked={preferences.noiseSuppression !== false}
-            onChange={(event) => preference("noiseSuppression", event.target.checked)}
+            onChange={(event) =>
+              preference("noiseSuppression", event.target.checked)
+            }
           />
           <span>Reduce background noise</span>
         </label>
@@ -198,7 +200,9 @@ function AudioDevices({ preferences, preference }) {
           <input
             type="checkbox"
             checked={preferences.echoCancellation !== false}
-            onChange={(event) => preference("echoCancellation", event.target.checked)}
+            onChange={(event) =>
+              preference("echoCancellation", event.target.checked)
+            }
           />
           <span>Cancel speaker echo</span>
         </label>
@@ -206,7 +210,9 @@ function AudioDevices({ preferences, preference }) {
           <input
             type="checkbox"
             checked={preferences.autoGainControl !== false}
-            onChange={(event) => preference("autoGainControl", event.target.checked)}
+            onChange={(event) =>
+              preference("autoGainControl", event.target.checked)
+            }
           />
           <span>Automatically balance microphone volume</span>
         </label>
@@ -281,13 +287,20 @@ export default function AppSettings({ user }) {
     setStartup(Boolean(result.enabled));
   }
   return (
-    <div className="page">
+    <div className="page settings-page">
       <PageHeader
         eyebrow="Desktop settings"
         title="Settings that matter"
-        description="Control appearance, audio devices, privacy, Windows alerts, and updates."
+        description="Personalize CrewDeck, choose how calls sound, and manage privacy and desktop behavior."
       />
       <div className="settings-grid">
+        <div className="settings-group-heading">
+          <span>01</span>
+          <div>
+            <h2>Look & privacy</h2>
+            <p>How CrewDeck feels and how it protects your session.</p>
+          </div>
+        </div>
         <section className="panel settings-panel">
           <div className="section-icon">
             <SlidersHorizontal />
@@ -485,8 +498,22 @@ export default function AppSettings({ user }) {
           </button>
           {message && <p className="form-message">{message}</p>}
         </section>
+        <div className="settings-group-heading">
+          <span>02</span>
+          <div>
+            <h2>Calls & account</h2>
+            <p>Audio hardware, voice processing, and moderation history.</p>
+          </div>
+        </div>
         <AudioDevices preferences={preferences} preference={preference} />
         {user && <MyModerationAppeals user={user} />}
+        <div className="settings-group-heading">
+          <span>03</span>
+          <div>
+            <h2>Alerts & desktop</h2>
+            <p>Notification behavior, startup, and app updates.</p>
+          </div>
+        </div>
         <section className="panel settings-panel settings-panel-wide">
           <div className="section-icon">
             <Bell />

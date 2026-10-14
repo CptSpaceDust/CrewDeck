@@ -7,6 +7,7 @@ import Sidebar from "./components/Sidebar";
 import AppSettings from "./components/AppSettings";
 import { MayuLoader } from "./components/MayuLoader";
 import StartupScreen from "./components/StartupScreen";
+import PageErrorBoundary from "./components/PageErrorBoundary";
 import { getActiveRestrictions, getProfile, updatePresence } from "./lib/data";
 import { supabase } from "./lib/supabase";
 import {
@@ -618,7 +619,9 @@ export default function App() {
             </button>
           </div>
         </header>
-        <div className="content-shell">{content}</div>
+        <div className="content-shell">
+          <PageErrorBoundary page={page}>{content}</PageErrorBoundary>
+        </div>
       </main>
       {toast && !incomingCall && (
         <button
