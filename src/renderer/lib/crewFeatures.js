@@ -87,6 +87,146 @@ export async function deleteClosedGroupPoll(pollId) {
   );
 }
 
+export async function getConversationFeatures(kind, conversationId, userId) {
+  const [preferences, pins, reactions, receipts] = await Promise.all([
+    supabase
+      .from("conversation_preferences")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("conversation_kind", kind)
+      .eq("conversation_id", conversationId)
+      .maybeSingle(),
+    supabase
+      .from("message_pins")
+      .select("*")
+      .eq("conversation_kind", kind)
+      .eq("conversation_id", conversationId)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("message_reactions")
+      .select("*")
+      .eq("conversation_kind", kind)
+      .eq("conversation_id", conversationId),
+    supabase
+      .from("message_read_receipts")
+      .select("*")
+      .eq("conversation_kind", kind)
+      .eq("conversation_id", conversationId),
+  ]);
+  if (preferences.error) throw preferences.error;
+  if (pins.error) throw pins.error;
+  if (reactions.error) throw reactions.error;
+  if (receipts.error) throw receipts.error;
+  return {
+    preferences: preferences.data,
+    pins: pins.data || [],
+    reactions: reactions.data || [],
+    receipts: receipts.data || [],
+  };
+}
+
+export async function saveConversationPreference(
+  userId,
+  kind,
+  conversationId,
+  changes,
+) {
+  return unwrap(
+    await supabase
+      .from("conversation_preferences")
+      .upsert(
+        {
+          user_id: userId,
+          conversation_kind: kind,
+          conversation_id: conversationId,
+          ...changes,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "user_id,conversation_kind,conversation_id" },
+      )
+      .select()
+      .single(),
+  );
+}
+
+export async function toggleMessageReaction(
+  kind,
+  conversationId,
+  messageId,
+  userId,
+  emoji,
+  active,
+) {
+  const query = supabase.from("message_reactions");
+  return unwrap(
+    active
+      ? await query
+          .delete()
+          .eq("conversation_kind", kind)
+          .eq("message_id", messageId)
+          .eq("user_id", userId)
+          .eq("emoji", emoji)
+      : await query.insert({
+          conversation_kind: kind,
+          conversation_id: conversationId,
+          message_id: messageId,
+          user_id: userId,
+          emoji,
+        }),
+  );
+}
+
+export async function pinGroupMessage(conversationId, message, userId) {
+  return unwrap(
+    await supabase.from("message_pins").insert({
+      conversation_kind: "group",
+      conversation_id: conversationId,
+      message_id: message.id,
+      message_excerpt: String(message.content || "").slice(0, 900),
+      sender_id: message.sender_id,
+      pinned_by: userId,
+    }),
+  );
+}
+
+export async function unpinGroupMessage(pinId) {
+  return unwrap(await supabase.from("message_pins").delete().eq("id", pinId));
+}
+
+export async function remindAboutMessage(
+  userId,
+  kind,
+  conversationId,
+  message,
+  remindAt,
+) {
+  return unwrap(
+    await supabase.from("message_reminders").insert({
+      user_id: userId,
+      conversation_kind: kind,
+      conversation_id: conversationId,
+      message_id: message.id,
+      message_excerpt: String(message.content || "").slice(0, 900),
+      remind_at: remindAt,
+    }),
+  );
+}
+
+export async function markMessageRead(kind, conversationId, messageId, userId) {
+  return unwrap(
+    await supabase.from("message_read_receipts").upsert(
+      {
+        conversation_kind: kind,
+        conversation_id: conversationId,
+        message_id: messageId,
+        user_id: userId,
+        read_at: new Date().toISOString(),
+      },
+      { onConflict: "conversation_kind,message_id,user_id" },
+    ),
+  );
+}
+
 export async function changeGroupRole(groupId, userId, role) {
   return unwrap(
     await supabase.rpc("set_group_member_role", {

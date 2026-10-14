@@ -6,6 +6,75 @@ import { playNotificationSound } from "../lib/sounds";
 import { meetupInstant } from "../lib/time";
 import { getMeetupParticipantSettings } from "../lib/crewFeatures";
 import BrandMark from "./BrandMark";
+import { supabase } from "../lib/supabase";
+
+export function CommunityStatus() {
+  const [state, setState] = useState(null);
+  const [announcements, setAnnouncements] = useState([]);
+  useEffect(() => {
+    let alive = true;
+    const load = async () => {
+      const [system, notices] = await Promise.all([
+        supabase
+          .from("community_system_state")
+          .select("*")
+          .eq("id", true)
+          .maybeSingle(),
+        supabase
+          .from("community_announcements")
+          .select("id,title,body,target,publish_at,expires_at")
+          .in("target", ["all", "app"])
+          .lte("publish_at", new Date().toISOString())
+          .order("publish_at", { ascending: false })
+          .limit(3),
+      ]);
+      if (alive) {
+        setState(system.data);
+        setAnnouncements(
+          (notices.data || []).filter(
+            (item) =>
+              !item.expires_at || new Date(item.expires_at) > new Date(),
+          ),
+        );
+      }
+    };
+    load();
+    const channel = supabase
+      .channel("crewdeck-community-status")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "community_announcements" },
+        load,
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "community_system_state" },
+        load,
+      )
+      .subscribe();
+    return () => {
+      alive = false;
+      supabase.removeChannel(channel);
+    };
+  }, []);
+  if (!state?.maintenance_enabled && !announcements.length) return null;
+  return (
+    <div className="community-status-stack">
+      {state?.maintenance_enabled && (
+        <aside className="community-status maintenance">
+          <strong>Maintenance mode</strong>
+          <span>{state.maintenance_message}</span>
+        </aside>
+      )}
+      {announcements.map((item) => (
+        <details className="community-status" key={item.id}>
+          <summary>{item.title}</summary>
+          <p>{item.body}</p>
+        </details>
+      ))}
+    </div>
+  );
+}
 
 export function ConnectivityBanner() {
   const [online, setOnline] = useState(navigator.onLine);
@@ -83,6 +152,54 @@ export function useMeetupReminders(userId) {
     }
     check();
     const timer = setInterval(() => alive && check(), 60000);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+    };
+  }, [userId]);
+}
+
+export function useMessageReminders(userId) {
+  useEffect(() => {
+    if (!userId) return;
+    let alive = true;
+    async function check() {
+      const now = new Date().toISOString();
+      const { data: reminders } = await supabase
+        .from("message_reminders")
+        .select("id,message_excerpt,conversation_kind,conversation_id")
+        .eq("user_id", userId)
+        .is("delivered_at", null)
+        .lte("remind_at", now)
+        .limit(20);
+      for (const reminder of reminders || []) {
+        if (!alive) return;
+        const link =
+          reminder.conversation_kind === "group"
+            ? `Conversation.html?group=${reminder.conversation_id}`
+            : `Conversation.html?id=${reminder.conversation_id}`;
+        await supabase.rpc("create_notification", {
+          target_user_id: userId,
+          notification_type: "message_reminder",
+          notification_title: "Message reminder",
+          notification_message: reminder.message_excerpt,
+          notification_link: link,
+        });
+        await supabase
+          .from("message_reminders")
+          .update({ delivered_at: now })
+          .eq("id", reminder.id)
+          .eq("user_id", userId);
+        playNotificationSound();
+        window.desktop.notify(
+          "Message reminder",
+          reminder.message_excerpt,
+          link,
+        );
+      }
+    }
+    check();
+    const timer = setInterval(check, 60000);
     return () => {
       alive = false;
       clearInterval(timer);

@@ -3,6 +3,7 @@ import { supabase } from "../lib/supabase";
 import { Loading } from "../components/ui";
 import { read, requireCaptain } from "../lib/captain";
 import CaptainControls from "../components/CaptainControls";
+import CaptainOperations from "../components/CaptainOperations";
 import "../captain-shared.css";
 import "../captain.css";
 import "../captain-desktop.css";
@@ -209,16 +210,19 @@ export default function CaptainPage({ user, profile }) {
       </div>
     );
   return (
-    <CaptainControls
-      data={data}
-      user={user}
-      run={run}
-      busy={busy}
-      onNotice={setNotice}
-      notice={notice}
-      onRefresh={refresh}
-      refreshing={refreshing}
-      refreshVersion={refreshVersion}
-    />
+    <>
+      <CaptainControls
+        data={data}
+        user={user}
+        run={run}
+        busy={busy}
+        onNotice={setNotice}
+        notice={notice}
+        onRefresh={refresh}
+        refreshing={refreshing}
+        refreshVersion={refreshVersion}
+      />
+      <CaptainOperations user={user} />
+    </>
   );
 }

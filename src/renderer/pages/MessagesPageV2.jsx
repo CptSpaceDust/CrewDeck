@@ -10,6 +10,9 @@ import {
   Maximize2,
   Mic,
   MicOff,
+  Hand,
+  Headphones,
+  MessageCircle,
   Monitor,
   MonitorUp,
   MoreVertical,
@@ -30,6 +33,12 @@ import {
 } from "lucide-react";
 import EditMessageButton from "../components/EditMessageButton";
 import GroupPolls from "../components/GroupPolls";
+import {
+  ConversationNotificationControl,
+  MessageFeatureBar,
+  PinnedMessages,
+  useConversationFeatures,
+} from "../components/ConversationFeatures";
 import { confirmInApp, promptInApp } from "../components/InAppDialog";
 import MessageComposer, {
   FormattedMessage,
@@ -44,6 +53,7 @@ import { Room, RoomEvent, Track } from "livekit-client";
 import {
   changeGroupAvatar,
   createGroupConversation,
+  deleteDirectConversation,
   deleteGroupMessage,
   deleteMessage,
   editGroupMessage,
@@ -59,6 +69,7 @@ import {
   manageGroupMember,
   requestConversation,
   renameGroupConversation,
+  updateGroupConversationSettings,
   respondToMessageRequest,
   restrictionMessage,
   sendGroupMessage,
@@ -66,7 +77,7 @@ import {
 } from "../lib/data";
 import { supabase } from "../lib/supabase";
 import { playCallEventSound, startRingtone, stopRingtone } from "../lib/sounds";
-import { changeGroupRole } from "../lib/crewFeatures";
+import { changeGroupRole, markMessageRead } from "../lib/crewFeatures";
 import {
   conversationUnreadCount,
   getPreferences,
@@ -241,6 +252,11 @@ function DeleteMessageDialog({ message, onClose, onDelete }) {
 
 function VoiceCall({ conversation, user, onClose, requestedCallId }) {
   const callPreferences = getPreferences();
+  const pushToTalkCode = callPreferences.pushToTalkKey || "Space";
+  const pushToTalkLabel =
+    { Space: "Space", KeyV: "V", Backquote: "`", CapsLock: "Caps Lock" }[
+      pushToTalkCode
+    ] || "Space";
   const [status, setStatus] = useState("Preparing your secure voice room…");
   const [connected, setConnected] = useState(false);
   const [muted, setMuted] = useState(false);
@@ -266,10 +282,17 @@ function VoiceCall({ conversation, user, onClose, requestedCallId }) {
     message: "Test your microphone before joining.",
   });
   const [qualities, setQualities] = useState({});
+  const [activeCallId, setActiveCallId] = useState("");
+  const [deafened, setDeafened] = useState(false);
+  const [handRaised, setHandRaised] = useState(false);
+  const [callChatOpen, setCallChatOpen] = useState(false);
+  const [callMessages, setCallMessages] = useState([]);
+  const [participantControls, setParticipantControls] = useState([]);
   const roomRef = useRef();
   const callRef = useRef();
   const startedAtRef = useRef(0);
   const audioElementsRef = useRef(new Map());
+  const mutedBeforeDeafenRef = useRef(false);
 
   const callTitle =
     conversation.type === "group"
@@ -376,6 +399,7 @@ function VoiceCall({ conversation, user, onClose, requestedCallId }) {
           if (error) throw error;
         }
         callRef.current = callId;
+        setActiveCallId(callId);
         const { data, error } = await supabase.functions.invoke(
           "livekit-voice-token",
           {
@@ -534,6 +558,14 @@ function VoiceCall({ conversation, user, onClose, requestedCallId }) {
         refresh();
         refreshScreens();
         setConnected(true);
+        const refreshCallStatus = () =>
+          supabase
+            .from("profiles")
+            .update({
+              in_call_until: new Date(Date.now() + 90000).toISOString(),
+            })
+            .eq("id", user.id);
+        refreshCallStatus();
         setStatus(
           room.remoteParticipants.size
             ? "Voice chat connected."
@@ -554,14 +586,13 @@ function VoiceCall({ conversation, user, onClose, requestedCallId }) {
               : `${String(minutes).padStart(2, "0")}:${String(rest).padStart(2, "0")}`,
           );
         }, 1000);
-        heartbeat = setInterval(
-          () =>
-            supabase
-              .from("active_voice_calls")
-              .update({ last_active_at: new Date().toISOString() })
-              .eq("call_id", callId),
-          15000,
-        );
+        heartbeat = setInterval(() => {
+          supabase
+            .from("active_voice_calls")
+            .update({ last_active_at: new Date().toISOString() })
+            .eq("call_id", callId);
+          refreshCallStatus();
+        }, 15000);
         if (!fresh) {
           const recipients = isGroup
             ? (conversation.members || [])
@@ -594,6 +625,18 @@ function VoiceCall({ conversation, user, onClose, requestedCallId }) {
       const room = roomRef.current;
       const wasOnlyParticipant = !room || room.remoteParticipants.size === 0;
       room?.disconnect();
+      supabase
+        .from("profiles")
+        .update({ in_call_until: null })
+        .eq("id", user.id)
+        .then(() => {});
+      if (callRef.current)
+        supabase
+          .from("call_participant_controls")
+          .delete()
+          .eq("call_id", callRef.current)
+          .eq("user_id", user.id)
+          .then(() => {});
       audioElementsRef.current.forEach((element) => element.remove());
       audioElementsRef.current.clear();
       if (wasOnlyParticipant && callRef.current)
@@ -609,25 +652,29 @@ function VoiceCall({ conversation, user, onClose, requestedCallId }) {
     if (!connected || !pushToTalk) return undefined;
     roomRef.current?.localParticipant.setMicrophoneEnabled(false).then(() => {
       setMuted(true);
-      setStatus("Push to talk is on. Hold Space to speak.");
+      setStatus(`Push to talk is on. Hold ${pushToTalkLabel} to speak.`);
     });
     const isTyping = (target) =>
       target instanceof HTMLElement &&
       (target.matches("input, textarea, select") || target.isContentEditable);
     const press = async (event) => {
-      if (event.code !== "Space" || event.repeat || isTyping(event.target))
+      if (
+        event.code !== pushToTalkCode ||
+        event.repeat ||
+        isTyping(event.target)
+      )
         return;
       event.preventDefault();
       await roomRef.current?.localParticipant.setMicrophoneEnabled(true);
       setMuted(false);
-      setStatus("Speaking — release Space to mute.");
+      setStatus(`Speaking — release ${pushToTalkLabel} to mute.`);
     };
     const release = async (event) => {
-      if (event.code !== "Space" || isTyping(event.target)) return;
+      if (event.code !== pushToTalkCode || isTyping(event.target)) return;
       event.preventDefault();
       await roomRef.current?.localParticipant.setMicrophoneEnabled(false);
       setMuted(true);
-      setStatus("Push to talk is on. Hold Space to speak.");
+      setStatus(`Push to talk is on. Hold ${pushToTalkLabel} to speak.`);
     };
     window.addEventListener("keydown", press);
     window.addEventListener("keyup", release);
@@ -635,7 +682,7 @@ function VoiceCall({ conversation, user, onClose, requestedCallId }) {
       window.removeEventListener("keydown", press);
       window.removeEventListener("keyup", release);
     };
-  }, [connected, pushToTalk]);
+  }, [connected, pushToTalk, pushToTalkCode, pushToTalkLabel]);
 
   async function changePushToTalk(enabled) {
     setPushToTalk(enabled);
@@ -644,7 +691,7 @@ function VoiceCall({ conversation, user, onClose, requestedCallId }) {
     setMuted(enabled);
     setStatus(
       enabled
-        ? "Push to talk is on. Hold Space to speak."
+        ? `Push to talk is on. Hold ${pushToTalkLabel} to speak.`
         : "Push to talk is off. Your microphone is on.",
     );
   }
@@ -759,6 +806,68 @@ function VoiceCall({ conversation, user, onClose, requestedCallId }) {
     onClose();
   }
 
+  useEffect(() => {
+    if (!activeCallId) return;
+    const load = async () => {
+      const [messagesResult, controlsResult] = await Promise.all([
+        supabase
+          .from("call_messages")
+          .select("id,sender_id,content,created_at")
+          .eq("call_id", activeCallId)
+          .order("created_at"),
+        supabase
+          .from("call_participant_controls")
+          .select("user_id,hand_raised,deafened,updated_at")
+          .eq("call_id", activeCallId),
+      ]);
+      setCallMessages(messagesResult.data || []);
+      setParticipantControls(controlsResult.data || []);
+    };
+    supabase.from("call_participant_controls").upsert({
+      call_id: activeCallId,
+      user_id: user.id,
+      hand_raised: handRaised,
+      deafened,
+      updated_at: new Date().toISOString(),
+    });
+    load();
+    const channel = supabase
+      .channel(`call-chat-${activeCallId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "call_messages",
+          filter: `call_id=eq.${activeCallId}`,
+        },
+        load,
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "call_participant_controls",
+          filter: `call_id=eq.${activeCallId}`,
+        },
+        load,
+      )
+      .subscribe();
+    return () => supabase.removeChannel(channel);
+  }, [activeCallId, user.id]);
+
+  async function updateCallControl(changes) {
+    await supabase.from("call_participant_controls").upsert({
+      call_id: activeCallId,
+      user_id: user.id,
+      hand_raised: handRaised,
+      deafened,
+      ...changes,
+      updated_at: new Date().toISOString(),
+    });
+  }
+
   if (!joinRequested) {
     return (
       <div className="call-overlay">
@@ -860,7 +969,7 @@ function VoiceCall({ conversation, user, onClose, requestedCallId }) {
                 onChange={(event) => changePushToTalk(event.target.checked)}
               />
               <span>Push to talk</span>
-              <small>Hold Space</small>
+              <small>Hold {pushToTalkLabel}</small>
             </label>
             <small>Audio devices can be changed in Settings.</small>
           </section>
@@ -887,6 +996,9 @@ function VoiceCall({ conversation, user, onClose, requestedCallId }) {
             const quality =
               qualities[participant.identity] ||
               (connected ? "good" : "unknown");
+            const callControl = participantControls.find(
+              (item) => item.user_id === participant.identity,
+            );
             return (
               <article
                 className={`call-participant${isSpeaking ? " speaking" : ""}${isMuted ? " muted" : ""}`}
@@ -898,6 +1010,11 @@ function VoiceCall({ conversation, user, onClose, requestedCallId }) {
                   {isMuted && (
                     <span className="call-mute-badge">
                       <MicOff />
+                    </span>
+                  )}
+                  {callControl?.hand_raised && (
+                    <span className="call-hand-badge" title="Hand raised">
+                      <Hand />
                     </span>
                   )}
                 </div>
@@ -924,6 +1041,11 @@ function VoiceCall({ conversation, user, onClose, requestedCallId }) {
                           ? "Connection lost"
                           : "Checking"}
                 </span>
+                {callControl?.deafened && (
+                  <small className="call-deafened-label">
+                    <Headphones /> Deafened
+                  </small>
+                )}
                 {!local && (
                   <label
                     className="call-volume"
@@ -958,6 +1080,52 @@ function VoiceCall({ conversation, user, onClose, requestedCallId }) {
         </div>
         <footer className="call-actions">
           <button
+            className={deafened ? "call-button active" : "call-button"}
+            disabled={!connected}
+            onClick={async () => {
+              const next = !deafened;
+              if (next) mutedBeforeDeafenRef.current = muted;
+              setDeafened(next);
+              audioElementsRef.current.forEach((audio) => {
+                audio.muted = next;
+              });
+              const microphoneEnabled = next
+                ? false
+                : !mutedBeforeDeafenRef.current;
+              await roomRef.current?.localParticipant.setMicrophoneEnabled(
+                microphoneEnabled,
+              );
+              setMuted(!microphoneEnabled);
+              await updateCallControl({ deafened: next });
+            }}
+            title="Deafen incoming call audio"
+          >
+            <Headphones />
+            <span>{deafened ? "Undeafen" : "Deafen"}</span>
+          </button>
+          <button
+            className={handRaised ? "call-button active" : "call-button"}
+            disabled={!connected}
+            onClick={async () => {
+              const next = !handRaised;
+              setHandRaised(next);
+              await updateCallControl({ hand_raised: next });
+            }}
+            title="Raise your hand"
+          >
+            <Hand />
+            <span>{handRaised ? "Lower hand" : "Raise hand"}</span>
+          </button>
+          <button
+            className="call-button"
+            disabled={!connected}
+            onClick={() => setCallChatOpen((value) => !value)}
+            title="Open call chat"
+          >
+            <MessageCircle />
+            <span>Call chat</span>
+          </button>
+          <button
             className={muted ? "call-button active" : "call-button"}
             disabled={!connected || Boolean(busyControl) || pushToTalk}
             onClick={toggleMic}
@@ -984,6 +1152,52 @@ function VoiceCall({ conversation, user, onClose, requestedCallId }) {
             <span>Leave</span>
           </button>
         </footer>
+        {callChatOpen && (
+          <aside className="call-chat-panel">
+            <header>
+              <strong>Call chat</strong>
+              <button onClick={() => setCallChatOpen(false)}>
+                <X />
+              </button>
+            </header>
+            <div>
+              {callMessages.map((item) => (
+                <p key={item.id}>
+                  <strong>
+                    {participants.find(
+                      (person) => person.identity === item.sender_id,
+                    )?.profile?.username ||
+                      (item.sender_id === user.id ? "You" : "Crew member")}
+                  </strong>
+                  <span>{item.content}</span>
+                </p>
+              ))}
+            </div>
+            <form
+              onSubmit={async (event) => {
+                event.preventDefault();
+                const input = event.currentTarget.elements.callMessage;
+                const content = input.value.trim();
+                if (!content) return;
+                await supabase.from("call_messages").insert({
+                  call_id: activeCallId,
+                  sender_id: user.id,
+                  content,
+                });
+                input.value = "";
+              }}
+            >
+              <input
+                name="callMessage"
+                maxLength="700"
+                placeholder="Message everyone in this call"
+              />
+              <button>
+                <Send />
+              </button>
+            </form>
+          </aside>
+        )}
       </section>
 
       {sources && (
@@ -1150,6 +1364,8 @@ function DirectMessagesPage({
   const [refreshing, setRefreshing] = useState(false);
   const dmBurstRef = useRef(new Map());
   const endRef = useRef();
+  const [conversationFeatures, reloadConversationFeatures] =
+    useConversationFeatures("dm", selected?.id, user.id);
   useEffect(() => {
     setSlowUntil(
       selected ? dmBurstRef.current.get(selected.id)?.blockedUntil || 0 : 0,
@@ -1170,7 +1386,7 @@ function DirectMessagesPage({
       setRequests(pending);
       setSelected((current) =>
         current
-          ? items.find((x) => x.id === current.id) || current
+          ? items.find((x) => x.id === current.id) || items[0] || null
           : items[0] || null,
       );
       setError("");
@@ -1221,6 +1437,27 @@ function DirectMessagesPage({
       }
     })();
   }, [initialPerson?.id]);
+  async function removeConversation() {
+    if (!selected) return;
+    const approved = await confirmInApp(
+      `This permanently deletes your conversation with ${selected.person?.username || "this crew member"} and all of its messages for both people.`,
+      {
+        title: "Delete this conversation?",
+        confirmLabel: "Delete conversation",
+      },
+    );
+    if (!approved) return;
+    try {
+      await deleteDirectConversation(selected.id);
+      setSelected(null);
+      setMessages([]);
+      setReplying(null);
+      await loadAll();
+      setNotice("Conversation deleted.");
+    } catch (exception) {
+      setNotice(exception.message || "The conversation could not be deleted.");
+    }
+  }
   useEffect(() => {
     if (!route?.conversation || !conversations.length) return;
     const found = conversations.find((x) => x.id === route.conversation);
@@ -1266,6 +1503,11 @@ function DirectMessagesPage({
   useEffect(() => {
     scrollMessageStream(endRef);
   }, [messages.length]);
+  useEffect(() => {
+    const last = messages.at(-1);
+    if (selected?.id && last)
+      markMessageRead("dm", selected.id, last.id, user.id).catch(() => {});
+  }, [selected?.id, messages.at(-1)?.id, user.id]);
   const visible = useMemo(
     () =>
       conversations.filter((x) =>
@@ -1501,6 +1743,13 @@ function DirectMessagesPage({
                   </div>
                 </div>
                 <div className="chat-header-actions">
+                  <ConversationNotificationControl
+                    kind="dm"
+                    conversationId={selected.id}
+                    userId={user.id}
+                    preference={conversationFeatures.preferences}
+                    onChanged={reloadConversationFeatures}
+                  />
                   <button
                     className="icon-button"
                     title={
@@ -1525,9 +1774,14 @@ function DirectMessagesPage({
                   >
                     <Phone />
                   </button>
+                  <DirectActionsMenu onDelete={removeConversation} />
                 </div>
               </header>
               <div className="message-stream">
+                <PinnedMessages
+                  pins={conversationFeatures.pins}
+                  onChanged={reloadConversationFeatures}
+                />
                 {messages.map((item) => {
                   const quoted = item.reply_to_id
                     ? byId[item.reply_to_id]
@@ -1545,6 +1799,14 @@ function DirectMessagesPage({
                         messages={messages}
                         people={[profile, selected.person]}
                       />
+                      {item.forwarded_from_kind && (
+                        <small className="forwarded-message-label">
+                          Forwarded from{" "}
+                          {item.forwarded_from_kind === "group"
+                            ? "a group"
+                            : "a direct message"}
+                        </small>
+                      )}
                       <p>
                         <FormattedMessage>{item.content}</FormattedMessage>
                       </p>
@@ -1588,6 +1850,16 @@ function DirectMessagesPage({
                           )}
                         </div>
                       </div>
+                      <MessageFeatureBar
+                        kind="dm"
+                        conversationId={selected.id}
+                        message={item}
+                        userId={user.id}
+                        reactions={conversationFeatures.reactions}
+                        receipts={conversationFeatures.receipts}
+                        onChanged={reloadConversationFeatures}
+                        onNotice={setNotice}
+                      />
                     </div>
                   );
                 })}
@@ -1813,6 +2085,10 @@ function ManageGroupButton({
     try {
       const form = new FormData(event.currentTarget);
       await renameGroupConversation(group.id, user.id, form.get("name"));
+      await updateGroupConversationSettings(group.id, user.id, {
+        description: form.get("description"),
+        slow_mode_seconds: form.get("slow_mode_seconds"),
+      });
       await onChanged();
       close();
     } catch (error) {
@@ -1899,6 +2175,27 @@ function ManageGroupButton({
                   defaultValue={group.name}
                   required
                 />
+              </Field>
+              <Field label="Description or group rules">
+                <textarea
+                  name="description"
+                  maxLength="500"
+                  rows="3"
+                  defaultValue={group.description || ""}
+                />
+              </Field>
+              <Field label="Slow mode">
+                <select
+                  name="slow_mode_seconds"
+                  defaultValue={group.slow_mode_seconds || 0}
+                >
+                  <option value="0">Off</option>
+                  <option value="5">5 seconds</option>
+                  <option value="10">10 seconds</option>
+                  <option value="30">30 seconds</option>
+                  <option value="60">1 minute</option>
+                  <option value="300">5 minutes</option>
+                </select>
               </Field>
               <button className="button secondary" disabled={busy === "name"}>
                 {busy === "name" ? "Saving…" : "Change group name"}
@@ -2006,6 +2303,68 @@ function ManageGroupButton({
   );
 }
 
+function DirectActionsMenu({ onDelete }) {
+  const [open, setOpen] = useState(false);
+  const [menuPosition, setMenuPosition] = useState(null);
+  const buttonRef = useRef(null);
+  function toggleMenu() {
+    if (open) return setOpen(false);
+    const bounds = buttonRef.current?.getBoundingClientRect();
+    setMenuPosition(
+      bounds
+        ? {
+            top: Math.min(bounds.bottom + 8, window.innerHeight - 110),
+            right: Math.max(12, window.innerWidth - bounds.right),
+          }
+        : { top: 80, right: 20 },
+    );
+    setOpen(true);
+  }
+  return (
+    <div className="group-actions-menu-wrap">
+      <button
+        ref={buttonRef}
+        type="button"
+        className="icon-button"
+        title="Conversation options"
+        aria-label="Conversation options"
+        aria-expanded={open}
+        onClick={toggleMenu}
+      >
+        <MoreVertical />
+      </button>
+      {open &&
+        createPortal(
+          <div
+            className="group-actions-menu-layer"
+            onMouseDown={(event) =>
+              event.target === event.currentTarget && setOpen(false)
+            }
+          >
+            <div
+              className="group-actions-menu group-actions-menu-portal"
+              role="menu"
+              style={menuPosition || undefined}
+              onMouseDown={(event) => event.stopPropagation()}
+            >
+              <button
+                type="button"
+                className="group-actions-menu-item danger"
+                onClick={() => {
+                  setOpen(false);
+                  onDelete();
+                }}
+              >
+                <Trash2 /> Delete conversation
+              </button>
+            </div>
+          </div>,
+          document.body,
+        )}
+    </div>
+  );
+}
+
 function GroupActionsMenu({ group, user, role, onChanged, onNotice, onLeave }) {
   const [open, setOpen] = useState(false);
   const [pollsOpen, setPollsOpen] = useState(false);
@@ -2084,7 +2443,8 @@ function GroupActionsMenu({ group, user, role, onChanged, onNotice, onLeave }) {
                   onLeave();
                 }}
               >
-                <Trash2 /> Leave group
+                <Trash2 />{" "}
+                {role === "owner" ? "Delete or leave group" : "Leave group"}
               </button>
             </div>
           </div>,
@@ -2113,6 +2473,8 @@ function GroupMessagesPage({
   const [selected, setSelected] = useState(null);
   const [details, setDetails] = useState(null);
   const [messages, setMessages] = useState([]);
+  const [conversationFeatures, reloadConversationFeatures] =
+    useConversationFeatures("group", selected?.id, user.id);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -2227,6 +2589,11 @@ function GroupMessagesPage({
   useEffect(() => {
     scrollMessageStream(endRef);
   }, [messages.length]);
+  useEffect(() => {
+    const last = messages.at(-1);
+    if (selected?.id && last)
+      markMessageRead("group", selected.id, last.id, user.id).catch(() => {});
+  }, [selected?.id, messages.at(-1)?.id, user.id]);
   const profiles = useMemo(
     () =>
       Object.fromEntries(
@@ -2346,7 +2713,11 @@ function GroupMessagesPage({
       await leaveGroupConversation(selected.id, newOwner);
       setSelected(null);
       await loadGroups();
-      setNotice("You left the group.");
+      setNotice(
+        myGroupRole === "owner" && !newOwner
+          ? "Group conversation deleted."
+          : "You left the group.",
+      );
     } catch (exception) {
       setNotice(exception.message);
     }
@@ -2455,9 +2826,21 @@ function GroupMessagesPage({
                   />
                   <div>
                     <h3>{details.name}</h3>
+                    {details.description && (
+                      <small className="group-description">
+                        {details.description}
+                      </small>
+                    )}
                   </div>
                 </div>
                 <div className="group-chat-actions">
+                  <ConversationNotificationControl
+                    kind="group"
+                    conversationId={selected.id}
+                    userId={user.id}
+                    preference={conversationFeatures.preferences}
+                    onChanged={reloadConversationFeatures}
+                  />
                   <button
                     className="icon-button"
                     title={
@@ -2496,6 +2879,13 @@ function GroupMessagesPage({
                 </div>
               </header>
               <div className="message-stream">
+                <PinnedMessages
+                  pins={conversationFeatures.pins}
+                  canManage={
+                    myGroupRole === "owner" || myGroupRole === "moderator"
+                  }
+                  onChanged={reloadConversationFeatures}
+                />
                 {messages.map((item) => {
                   const sender = profiles[item.sender_id];
                   const quoted = item.reply_to_id
@@ -2519,6 +2909,14 @@ function GroupMessagesPage({
                         messages={messages}
                         people={Object.values(profiles)}
                       />
+                      {item.forwarded_from_kind && (
+                        <small className="forwarded-message-label">
+                          Forwarded from{" "}
+                          {item.forwarded_from_kind === "group"
+                            ? "a group"
+                            : "a direct message"}
+                        </small>
+                      )}
                       <p>
                         <FormattedMessage>{item.content}</FormattedMessage>
                       </p>
@@ -2568,6 +2966,19 @@ function GroupMessagesPage({
                           )}
                         </div>
                       </div>
+                      <MessageFeatureBar
+                        kind="group"
+                        conversationId={selected.id}
+                        message={item}
+                        userId={user.id}
+                        reactions={conversationFeatures.reactions}
+                        receipts={conversationFeatures.receipts}
+                        canPin={
+                          myGroupRole === "owner" || myGroupRole === "moderator"
+                        }
+                        onChanged={reloadConversationFeatures}
+                        onNotice={setNotice}
+                      />
                     </div>
                   );
                 })}

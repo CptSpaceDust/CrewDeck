@@ -2,6 +2,26 @@
 
 Every published CrewDeck release is documented here and copied into its GitHub release notes.
 
+## [1.8.0] - 2026-10-14
+
+### Added
+
+- Direct conversations can now be permanently deleted from the conversation options menu, including their messages and active call data.
+- Added message reactions, pins, mentions, read receipts, reminders, forwarding, notification controls, folders, and per-conversation sounds.
+- Added group descriptions, slow mode, role-aware controls, Crew Hub friends and favorites, temporary party rooms, and Looking for Group posts.
+- Added group meetup participants, waitlists, suggested availability tools, Captain evidence and audit tools, community announcements, safety controls, and account diagnostics.
+- Calls now include chat, raise hand, deafen, configurable push to talk, host controls, and visible call status.
+
+### Changed
+
+- Group owners now see a clear delete or leave action while moderators and members keep the standard leave action.
+- Conversation lists recover immediately when a selected conversation is removed.
+- Community, meetup, notification, profile, account, and Captain tools now share their latest data across the website and desktop app.
+
+### Security
+
+- Direct conversation deletion verifies membership on the server and removes linked conversation preferences, reactions, receipts, reminders, pins, and call records in one protected operation.
+
 ## [1.7.2] - 2026-10-14
 
 ### Added

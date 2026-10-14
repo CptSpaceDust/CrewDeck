@@ -19,6 +19,7 @@ import {
 } from "../lib/preferences";
 import { playNotificationSound } from "../lib/sounds";
 import { MyModerationAppeals } from "./ModerationAppeals";
+import { supabase } from "../lib/supabase";
 
 function AudioDevices({ preferences, preference }) {
   const [inputs, setInputs] = useState([]);
@@ -185,6 +186,17 @@ function AudioDevices({ preferences, preference }) {
         />
         <span>Start calls with push to talk enabled</span>
       </label>
+      <Field label="Push to talk key">
+        <select
+          value={preferences.pushToTalkKey || "Space"}
+          onChange={(event) => preference("pushToTalkKey", event.target.value)}
+        >
+          <option value="Space">Space</option>
+          <option value="KeyV">V</option>
+          <option value="Backquote">`</option>
+          <option value="CapsLock">Caps Lock</option>
+        </select>
+      </Field>
       <div className="settings-audio-processing">
         <label className="check-field">
           <input
@@ -223,6 +235,7 @@ function AudioDevices({ preferences, preference }) {
 }
 
 export default function AppSettings({ user }) {
+  const [accountMessage, setAccountMessage] = useState("");
   const [settings, setSettings] = useState({
     enabled: false,
     timeoutMinutes: 5,
@@ -322,6 +335,19 @@ export default function AppSettings({ user }) {
               <option value="deep">Deep</option>
             </select>
           </Field>
+          <Field label="Space Glass accent">
+            <select
+              value={preferences.accent || "blue"}
+              onChange={(event) => preference("accent", event.target.value)}
+            >
+              <option value="blue">Orbit blue</option>
+              <option value="violet">Nebula violet</option>
+              <option value="cyan">Comet cyan</option>
+              <option value="green">Aurora green</option>
+              <option value="amber">Solar amber</option>
+              <option value="rose">Supernova rose</option>
+            </select>
+          </Field>
           <Field label="Interface size">
             <select
               value={preferences.interfaceScale}
@@ -335,6 +361,16 @@ export default function AppSettings({ user }) {
               <option value="120">Extra large · 120%</option>
             </select>
           </Field>
+          <label className="check-field">
+            <input
+              type="checkbox"
+              checked={Boolean(preferences.reducedEffects)}
+              onChange={(event) =>
+                preference("reducedEffects", event.target.checked)
+              }
+            />
+            <span>Reduce glass blur and visual effects</span>
+          </label>
           <label className="check-field">
             <input
               type="checkbox"
@@ -686,6 +722,87 @@ export default function AppSettings({ user }) {
         </section>
         <section className="panel settings-panel">
           <div className="section-icon">
+            <LockKeyhole />
+          </div>
+          <h2>Connection & account center</h2>
+          <p>
+            Test CrewDeck services or download a private copy of your profile,
+            meetups, and notifications.
+          </p>
+          <div className="button-row">
+            <button
+              className="button secondary"
+              onClick={async () => {
+                const started = performance.now();
+                const result = await supabase
+                  .from("community_system_state")
+                  .select("messaging_status,calls_status,notifications_status")
+                  .eq("id", true)
+                  .maybeSingle();
+                setAccountMessage(
+                  result.error
+                    ? result.error.message
+                    : `Connected in ${Math.round(performance.now() - started)} ms · Messaging ${result.data?.messaging_status || "operational"} · Calls ${result.data?.calls_status || "operational"}`,
+                );
+              }}
+            >
+              <RefreshCw /> Run diagnostics
+            </button>
+            <button
+              className="button secondary"
+              onClick={async () => {
+                const [profile, meetups, notifications] = await Promise.all([
+                  supabase
+                    .from("profiles")
+                    .select("*")
+                    .eq("id", user.id)
+                    .maybeSingle(),
+                  supabase
+                    .from("meetup_requests")
+                    .select("*")
+                    .or(`user_id.eq.${user.id},with_user_id.eq.${user.id}`),
+                  supabase
+                    .from("notifications")
+                    .select("*")
+                    .eq("user_id", user.id),
+                ]);
+                const blob = new Blob(
+                  [
+                    JSON.stringify(
+                      {
+                        exported_at: new Date().toISOString(),
+                        profile: profile.data,
+                        meetups: meetups.data || [],
+                        notifications: notifications.data || [],
+                      },
+                      null,
+                      2,
+                    ),
+                  ],
+                  { type: "application/json" },
+                );
+                const link = document.createElement("a");
+                link.href = URL.createObjectURL(blob);
+                link.download = "crewdeck-account-export.json";
+                link.click();
+                setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+              }}
+            >
+              <Download /> Export my data
+            </button>
+          </div>
+          {accountMessage && <p className="form-message">{accountMessage}</p>}
+          <details className="settings-danger-details">
+            <summary>Account deletion center</summary>
+            <p>
+              Account deletion permanently removes your profile, messages,
+              uploads, and sign-in access. Submit a Captain ticket when you are
+              ready to request it.
+            </p>
+          </details>
+        </section>
+        <section className="panel settings-panel">
+          <div className="section-icon">
             <Power />
           </div>
           <h2>Windows startup</h2>
@@ -703,6 +820,30 @@ export default function AppSettings({ user }) {
             notification area so messages and alerts can still arrive. Use the
             tray icon’s Quit option to close it completely.
           </p>
+        </section>
+        <section className="panel settings-panel settings-panel-wide">
+          <div className="section-icon">
+            <Bell />
+          </div>
+          <h2>What’s New history</h2>
+          <p>Reopen a summary of recent CrewDeck improvements at any time.</p>
+          <div className="whats-new-history">
+            <details open>
+              <summary>Social, meetup, and moderation tools</summary>
+              <p>
+                Added message reactions, pins, mentions, reminders, read
+                receipts, conversation controls, group meetup tools, the Crew
+                Hub, moderation evidence, and Captain operations.
+              </p>
+            </details>
+            <details>
+              <summary>Calls and accessibility</summary>
+              <p>
+                Added call chat, raise hand, deafen, configurable push to talk,
+                microphone diagnostics, accent choices, and reduced effects.
+              </p>
+            </details>
+          </div>
         </section>
         <section className="panel settings-panel">
           <div className="section-icon">

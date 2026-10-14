@@ -173,6 +173,135 @@ export function MeetupTools({
   );
 }
 
+export function MeetupGroupTools({ meetup, userId, profiles = [] }) {
+  const [participants, setParticipants] = useState([]);
+  const [waitlist, setWaitlist] = useState([]);
+  const [open, setOpen] = useState(false);
+  const load = useCallback(async () => {
+    const [members, waiting] = await Promise.all([
+      supabase
+        .from("meetup_participants")
+        .select("*")
+        .eq("meetup_id", meetup.id),
+      supabase
+        .from("meetup_waitlist")
+        .select("*")
+        .eq("meetup_id", meetup.id)
+        .order("position"),
+    ]);
+    setParticipants(members.data || []);
+    setWaitlist(waiting.data || []);
+  }, [meetup.id]);
+  useEffect(() => {
+    load();
+    const channel = supabase
+      .channel(`meetup-group-${meetup.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "meetup_participants",
+          filter: `meetup_id=eq.${meetup.id}`,
+        },
+        load,
+      )
+      .subscribe();
+    return () => supabase.removeChannel(channel);
+  }, [meetup.id, load]);
+  const isOrganizer = participants.some(
+    (item) => item.user_id === userId && item.role === "organizer",
+  );
+  const invitedIds = new Set(participants.map((item) => item.user_id));
+  const accepted = participants.filter(
+    (item) => item.invitation_status === "accepted",
+  );
+  return (
+    <details
+      className="meetup-group-tools"
+      open={open}
+      onToggle={(event) => setOpen(event.currentTarget.open)}
+    >
+      <summary>
+        Group meetup · {accepted.length}/{meetup.capacity || 2} attending
+      </summary>
+      <div className="meetup-participant-list">
+        {participants.map((item) => {
+          const person = profiles.find((row) => row.id === item.user_id);
+          return (
+            <span key={item.user_id}>
+              <strong>{person?.username || "Crew member"}</strong>
+              <small>
+                {item.role} · {item.invitation_status} ·{" "}
+                {item.attendance_status}
+              </small>
+            </span>
+          );
+        })}
+      </div>
+      {isOrganizer && (
+        <div className="meetup-invite-grid">
+          {profiles
+            .filter((person) => !invitedIds.has(person.id))
+            .slice(0, 20)
+            .map((person) => (
+              <button
+                key={person.id}
+                disabled={participants.length >= (meetup.capacity || 2)}
+                onClick={async () => {
+                  await supabase.from("meetup_participants").insert({
+                    meetup_id: meetup.id,
+                    user_id: person.id,
+                    role: "participant",
+                    invitation_status: "pending",
+                  });
+                  load();
+                }}
+              >
+                {person.username}
+              </button>
+            ))}
+        </div>
+      )}
+      <div className="meetup-timezone-preview">
+        <strong>Time zone preview</strong>
+        {participants.map((item) => {
+          const person = profiles.find((row) => row.id === item.user_id);
+          return (
+            <span key={item.user_id}>
+              {person?.username || "Crew member"}:{" "}
+              {meetupInstant(meetup).toLocaleString()}
+            </span>
+          );
+        })}
+      </div>
+      {waitlist.length > 0 && (
+        <small>{waitlist.length} crew member(s) waiting for a place.</small>
+      )}
+    </details>
+  );
+}
+
+export function MeetupAttendanceSummary({ meetups, userId }) {
+  const completed = (meetups || []).filter(
+    (item) =>
+      [item.user_id, item.with_user_id].includes(userId) &&
+      meetupInstant(item).getTime() < Date.now(),
+  );
+  if (!completed.length) return null;
+  return (
+    <section className="panel attendance-summary">
+      <strong>Attendance history</strong>
+      <span>
+        {completed.length} past meetup{completed.length === 1 ? "" : "s"}
+      </span>
+      <small>
+        Your check-ins stay private to you and the meetup organizer.
+      </small>
+    </section>
+  );
+}
+
 export function useMeetupSettings(meetups) {
   const [settings, setSettings] = useState([]);
   const ids = (Array.isArray(meetups) ? meetups : []).map((item) => item.id);

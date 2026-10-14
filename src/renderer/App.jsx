@@ -37,12 +37,15 @@ import { shouldAlertForMessage } from "./lib/messageBehavior.mjs";
 import { claimConversationAlert } from "./lib/alertDelivery.mjs";
 import CaptainPage from "./pages/CaptainPage";
 import ControlCenterPage from "./pages/ControlCenterPage";
+import CrewHubPage from "./pages/CrewHubPage";
 import UpdateOverlay from "./components/UpdateVisual";
 import { InAppDialogHost } from "./components/InAppDialog";
 import {
   ConnectivityBanner,
+  CommunityStatus,
   InactivityLock,
   useMeetupReminders,
+  useMessageReminders,
   WhatsNew,
 } from "./components/DesktopEnhancements";
 import {
@@ -136,6 +139,7 @@ export default function App() {
   const incomingCallRef = useRef(null);
   useMessageAlerts(mfaRequired ? null : session?.user?.id);
   useMeetupReminders(mfaRequired ? null : session?.user?.id);
+  useMessageReminders(mfaRequired ? null : session?.user?.id);
   useEffect(() => {
     const timer = window.setTimeout(() => setStartupMinimumElapsed(true), 2600);
     return () => window.clearTimeout(timer);
@@ -512,6 +516,8 @@ export default function App() {
         return <CollabsPage {...props} />;
       case "crew":
         return <CrewPage onViewProfile={viewPerson} />;
+      case "crew-hub":
+        return <CrewHubPage {...props} />;
       case "crew-profile":
         return (
           <CrewProfilePage
@@ -594,6 +600,7 @@ export default function App() {
       />
       <main className="main-shell">
         <ConnectivityBanner />
+        <CommunityStatus />
         <header className="topbar">
           <div className="desktop-drag-region" />
           <div className="topbar-actions">

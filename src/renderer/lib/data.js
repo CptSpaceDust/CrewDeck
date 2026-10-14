@@ -18,7 +18,7 @@ export async function getProfile(userId) {
 }
 
 export async function getProfiles(
-  columns = "id,username,avatar,rank,badges,bio,favorite_game,birthday,show_birthday,joined,last_seen,online,support_active",
+  columns = "id,username,avatar,rank,badges,bio,favorite_game,birthday,show_birthday,joined,last_seen,online,support_active,in_call_until",
 ) {
   return unwrap(
     await supabase
@@ -460,7 +460,10 @@ export async function createMeetup(userId, fields) {
   )
     throw new Error("You already requested a meetup at this time.");
   const recurrenceRule = fields.recurrence_rule || "none";
-  const recurrenceCount = Math.min(12, Math.max(1, Number(fields.recurrence_count) || 1));
+  const recurrenceCount = Math.min(
+    12,
+    Math.max(1, Number(fields.recurrence_count) || 1),
+  );
   const seriesId = recurrenceRule === "none" ? null : crypto.randomUUID();
   const addMonths = (key, count) => {
     const [year, month, day] = key.split("-").map(Number);
@@ -499,6 +502,47 @@ export async function createMeetup(userId, fields) {
     ? createdResult
     : [createdResult];
   const created = createdRows[0];
+  const extraNames = String(fields.additional_participants || "")
+    .split(/[\n,]/)
+    .map((name) => name.trim().replace(/^@/, ""))
+    .filter(Boolean);
+  if (extraNames.length) {
+    const { data: extraProfiles, error: profileError } = await supabase
+      .from("profiles")
+      .select("id,username")
+      .in("username", [...new Set(extraNames)]);
+    if (profileError) throw profileError;
+    const participantRows = createdRows.flatMap((meetup) =>
+      (extraProfiles || [])
+        .filter(
+          (person) => person.id !== userId && person.id !== fields.with_user_id,
+        )
+        .map((person) => ({
+          meetup_id: meetup.id,
+          user_id: person.id,
+          role: "participant",
+          invitation_status: "pending",
+        })),
+    );
+    if (participantRows.length) {
+      const { error: participantError } = await supabase
+        .from("meetup_participants")
+        .upsert(participantRows, { onConflict: "meetup_id,user_id" });
+      if (participantError) throw participantError;
+      await Promise.allSettled(
+        [...new Set(participantRows.map((row) => row.user_id))].map(
+          (targetUserId) =>
+            supabase.rpc("create_notification", {
+              target_user_id: targetUserId,
+              notification_type: "meetup",
+              notification_title: "Group meetup invitation",
+              notification_message: "You were invited to a crew meetup.",
+              notification_link: "MyMeetups.html",
+            }),
+        ),
+      );
+    }
+  }
   const { error } = await supabase.functions.invoke("send-meetup-email", {
     body: { meetupId: created.id, status: "pending" },
   });
@@ -614,7 +658,7 @@ export async function getMessages(conversationId) {
     await supabase
       .from("dm_messages")
       .select(
-        "id,conversation_id,sender_id,content,created_at,reply_to_id,is_reply",
+        "id,conversation_id,sender_id,content,created_at,reply_to_id,is_reply,forwarded_from_kind,forwarded_from_message_id,forwarded_from_sender_id,forwarded_excerpt",
       )
       .eq("conversation_id", conversationId)
       .gte("created_at", fiveDaysAgo)
@@ -805,7 +849,9 @@ export async function getGroupConversations(userId) {
   return unwrap(
     await supabase
       .from("group_conversations")
-      .select("id,name,avatar_url,owner_id,updated_at")
+      .select(
+        "id,name,avatar_url,owner_id,description,slow_mode_seconds,call_locked,updated_at",
+      )
       .in("id", ids)
       .order("updated_at", { ascending: false }),
   );
@@ -815,7 +861,9 @@ export async function getGroupDetails(groupId) {
   const group = unwrap(
     await supabase
       .from("group_conversations")
-      .select("id,name,avatar_url,owner_id")
+      .select(
+        "id,name,avatar_url,owner_id,description,slow_mode_seconds,call_locked",
+      )
       .eq("id", groupId)
       .maybeSingle(),
   );
@@ -836,8 +884,19 @@ export async function getGroupDetails(groupId) {
           .in("id", ids),
       )
     : [];
-  const roles = Object.fromEntries((rows || []).map((row) => [row.user_id, row.role || (row.user_id === group.owner_id ? "owner" : "member")]));
-  return { ...group, members: (people || []).map((person) => ({ ...person, groupRole: roles[person.id] || "member" })) };
+  const roles = Object.fromEntries(
+    (rows || []).map((row) => [
+      row.user_id,
+      row.role || (row.user_id === group.owner_id ? "owner" : "member"),
+    ]),
+  );
+  return {
+    ...group,
+    members: (people || []).map((person) => ({
+      ...person,
+      groupRole: roles[person.id] || "member",
+    })),
+  };
 }
 
 export async function getGroupMessages(groupId) {
@@ -845,7 +904,7 @@ export async function getGroupMessages(groupId) {
     await supabase
       .from("group_messages")
       .select(
-        "id,group_id,sender_id,content,created_at,edited_at,reply_to_id,is_reply",
+        "id,group_id,sender_id,content,created_at,edited_at,reply_to_id,is_reply,forwarded_from_kind,forwarded_from_message_id,forwarded_from_sender_id,forwarded_excerpt",
       )
       .eq("group_id", groupId)
       .order("created_at", { ascending: false })
@@ -871,31 +930,73 @@ export async function sendGroupMessage(
       .select()
       .single(),
   );
-  const [{ data: group }, { data: memberships }, { data: sender }] =
-    await Promise.all([
-      supabase
-        .from("group_conversations")
-        .select("name")
-        .eq("id", groupId)
-        .maybeSingle(),
-      supabase
-        .from("group_members")
-        .select("user_id")
-        .eq("group_id", groupId)
-        .neq("user_id", userId),
-      supabase
-        .from("profiles")
-        .select("username")
-        .eq("id", userId)
-        .maybeSingle(),
-    ]);
+  const [
+    { data: group },
+    { data: memberships },
+    { data: sender },
+    { data: senderMembership },
+  ] = await Promise.all([
+    supabase
+      .from("group_conversations")
+      .select("name")
+      .eq("id", groupId)
+      .maybeSingle(),
+    supabase
+      .from("group_members")
+      .select("user_id")
+      .eq("group_id", groupId)
+      .neq("user_id", userId),
+    supabase.from("profiles").select("username").eq("id", userId).maybeSingle(),
+    supabase
+      .from("group_members")
+      .select("role")
+      .eq("group_id", groupId)
+      .eq("user_id", userId)
+      .maybeSingle(),
+  ]);
+  const targetIds = (memberships || []).map((item) => item.user_id);
+  const [{ data: targets }, { data: preferences }] = await Promise.all([
+    targetIds.length
+      ? supabase.from("profiles").select("id,username").in("id", targetIds)
+      : { data: [] },
+    targetIds.length
+      ? supabase
+          .from("conversation_preferences")
+          .select("user_id,notification_level,muted_until")
+          .eq("conversation_kind", "group")
+          .eq("conversation_id", groupId)
+          .in("user_id", targetIds)
+      : { data: [] },
+  ]);
+  const preferenceByUser = Object.fromEntries(
+    (preferences || []).map((item) => [item.user_id, item]),
+  );
+  const mentionsEveryone =
+    ["owner", "moderator"].includes(senderMembership?.role) &&
+    /(^|\s)@everyone\b/i.test(content);
+  const notified = (targets || []).filter((target) => {
+    const preference = preferenceByUser[target.id];
+    if (
+      preference?.notification_level === "none" ||
+      (preference?.muted_until && new Date(preference.muted_until) > new Date())
+    )
+      return false;
+    if (preference?.notification_level !== "mentions") return true;
+    return (
+      mentionsEveryone ||
+      new RegExp(
+        `(^|\\s)@${String(target.username || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`,
+        "i",
+      ).test(content)
+    );
+  });
   await Promise.allSettled(
-    (memberships || []).map(({ user_id: targetUserId }) =>
+    notified.map(({ id: targetUserId }) =>
       supabase.rpc("create_notification", {
         target_user_id: targetUserId,
         notification_type: "message",
         notification_title: `New group message in ${group?.name || "your group"}`,
-        notification_message: `${sender?.username || "A member"} sent a message.`,
+        notification_message: `${sender?.username || "A member"}${mentionsEveryone || /@\w+/.test(content) ? " mentioned someone" : " sent a message"}.`,
         notification_link: `Conversation.html?group=${encodeURIComponent(groupId)}`,
       }),
     ),
@@ -984,6 +1085,14 @@ export async function leaveGroupConversation(groupId, newOwner = null) {
   );
 }
 
+export async function deleteDirectConversation(conversationId) {
+  return unwrap(
+    await supabase.rpc("delete_dm_conversation", {
+      conversation_key: conversationId,
+    }),
+  );
+}
+
 export async function renameGroupConversation(groupId, userId, name) {
   const value = String(name || "")
     .trim()
@@ -997,6 +1106,28 @@ export async function renameGroupConversation(groupId, userId, name) {
       .eq("owner_id", userId)
       .select("id,name")
       .maybeSingle(),
+  );
+}
+
+export async function updateGroupConversationSettings(
+  groupId,
+  userId,
+  changes,
+) {
+  return unwrap(
+    await supabase
+      .from("group_conversations")
+      .update({
+        description:
+          String(changes.description || "")
+            .trim()
+            .slice(0, 500) || null,
+        slow_mode_seconds: Number(changes.slow_mode_seconds || 0),
+      })
+      .eq("id", groupId)
+      .eq("owner_id", userId)
+      .select("id,description,slow_mode_seconds")
+      .single(),
   );
 }
 

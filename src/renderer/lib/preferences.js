@@ -6,6 +6,8 @@ const DRAFT_PREFIX = "cptspacedust.desktop.draft.";
 
 export const defaultPreferences = Object.freeze({
   glassIntensity: "balanced",
+  accent: "blue",
+  reducedEffects: false,
   compactLayout: false,
   reduceMotion: false,
   interfaceScale: 100,
@@ -28,6 +30,7 @@ export const defaultPreferences = Object.freeze({
   audioInputDeviceId: "",
   audioOutputDeviceId: "",
   pushToTalkDefault: false,
+  pushToTalkKey: "Space",
   noiseSuppression: true,
   echoCancellation: true,
   autoGainControl: true,
@@ -37,6 +40,8 @@ export const defaultPreferences = Object.freeze({
 export function applyPreferences(settings = getPreferences()) {
   const root = document.documentElement;
   root.dataset.glass = settings.glassIntensity || "balanced";
+  root.dataset.accent = settings.accent || "blue";
+  root.dataset.effects = settings.reducedEffects ? "reduced" : "full";
   root.dataset.density = settings.compactLayout ? "compact" : "comfortable";
   root.dataset.motion = settings.reduceMotion ? "reduced" : "full";
   root.dataset.contrast = settings.highContrast ? "high" : "standard";

@@ -7,6 +7,9 @@ import {
   ChevronRight,
   ExternalLink,
   Flag,
+  Heart,
+  UserPlus,
+  ShieldBan,
   RefreshCw,
   UserRound,
 } from "lucide-react";
@@ -30,6 +33,7 @@ import {
   restrictionMessage,
 } from "../lib/data";
 import { useLoader } from "../lib/hooks";
+import { supabase } from "../lib/supabase";
 import { formatMeetupLocal, localTimeZoneName } from "../lib/time";
 
 const isOnline = (person) =>
@@ -86,6 +90,9 @@ export function CrewPage({ onViewProfile }) {
         <div className="crew-grid">
           {rows.map((person) => {
             const online = isOnline(person);
+            const inCall =
+              person.in_call_until &&
+              new Date(person.in_call_until).getTime() > Date.now();
             let badges = Array.isArray(person.badges) ? person.badges : [];
             if (person.support_active && !badges.includes("Supporter"))
               badges = [...badges, "Supporter"];
@@ -102,6 +109,7 @@ export function CrewPage({ onViewProfile }) {
                 </div>
                 <h3>{person.username}</h3>
                 <span className="rank">{person.rank || "Crew"}</span>
+                {inCall && <span className="crew-call-status">In a call</span>}
                 {!online && (
                   <small>
                     {person.last_seen
@@ -158,6 +166,9 @@ export function CrewProfilePage({ person, user, onBack }) {
       </div>
     );
   const online = isOnline(profile);
+  const inCall =
+    profile.in_call_until &&
+    new Date(profile.in_call_until).getTime() > Date.now();
   const socials = [
     ["Discord", profile.discord],
     ["VRChat", profile.vrchat],
@@ -190,6 +201,7 @@ export function CrewProfilePage({ person, user, onBack }) {
             </span>
             <h2>{profile.username}</h2>
             <span className="rank">{profile.rank || "Crew Member"}</span>
+            {inCall && <span className="crew-call-status">In a call</span>}
             <div className="tag-row">
               {(Array.isArray(profile.badges) ? profile.badges : []).map(
                 (badge) => (
@@ -211,11 +223,13 @@ export function CrewProfilePage({ person, user, onBack }) {
           <div>
             <small>Status</small>
             <strong>
-              {online
-                ? "Online"
-                : profile.last_seen
-                  ? `Last seen ${new Date(profile.last_seen).toLocaleString()}`
-                  : "Offline"}
+              {inCall
+                ? "In a call"
+                : online
+                  ? "Online"
+                  : profile.last_seen
+                    ? `Last seen ${new Date(profile.last_seen).toLocaleString()}`
+                    : "Offline"}
             </strong>
           </div>
         </div>
@@ -236,6 +250,53 @@ export function CrewProfilePage({ person, user, onBack }) {
         )}
         {user?.id !== profile.id && (
           <div className="profile-safety-actions">
+            <button
+              className="button secondary"
+              onClick={async () => {
+                await supabase
+                  .from("favorite_crew")
+                  .upsert({ user_id: user.id, favorite_user_id: profile.id });
+                setReportMessage(
+                  `${profile.username} was added to your favorites.`,
+                );
+              }}
+            >
+              <Heart /> Favorite
+            </button>
+            <button
+              className="button secondary"
+              onClick={async () => {
+                const result = await supabase
+                  .from("friendships")
+                  .insert({ requester_id: user.id, addressee_id: profile.id });
+                setReportMessage(
+                  result.error?.message || "Friend request sent.",
+                );
+              }}
+            >
+              <UserPlus /> Add friend
+            </button>
+            <button
+              className="button ghost"
+              onClick={async () => {
+                const approved = await confirmInApp(
+                  `Block ${profile.username}? You will no longer be able to contact each other.`,
+                  {
+                    title: "Block crew member?",
+                    confirmLabel: "Block",
+                    danger: true,
+                  },
+                );
+                if (approved) {
+                  await supabase
+                    .from("user_blocks")
+                    .upsert({ blocker_id: user.id, blocked_id: profile.id });
+                  setReportMessage(`${profile.username} is blocked.`);
+                }
+              }}
+            >
+              <ShieldBan /> Block
+            </button>
             <button className="button ghost" onClick={() => setReporting(true)}>
               <Flag /> Report a concern
             </button>

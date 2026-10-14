@@ -1,4 +1,5 @@
 import { Bell, CheckCheck } from "lucide-react";
+import { useState } from "react";
 import {
   clearNotifications,
   getNotifications,
@@ -15,6 +16,7 @@ import {
 import { confirmInApp } from "../components/InAppDialog";
 
 export default function NotificationsPage({ user, onNavigate }) {
+  const [filter, setFilter] = useState("all");
   const { data, loading, error, reload } = useLoader(
     () => getNotifications(user.id),
     [user.id],
@@ -46,6 +48,21 @@ export default function NotificationsPage({ user, onNavigate }) {
     await reload();
     refreshBadge();
   }
+  const filtered = (data || []).filter((item) => {
+    if (filter === "all") return true;
+    const type = String(
+      item.type || item.notification_type || "",
+    ).toLowerCase();
+    return filter === "messages"
+      ? type.includes("message")
+      : filter === "calls"
+        ? type.includes("call")
+        : filter === "meetups"
+          ? type.includes("meetup")
+          : filter === "moderation"
+            ? /moderation|restriction|warning|appeal/.test(type)
+            : true;
+  });
 
   return (
     <div className="page">
@@ -61,13 +78,24 @@ export default function NotificationsPage({ user, onNavigate }) {
           ) : null
         }
       />
+      <div className="notification-filters">
+        {["all", "messages", "calls", "meetups", "moderation"].map((value) => (
+          <button
+            className={filter === value ? "active" : ""}
+            onClick={() => setFilter(value)}
+            key={value}
+          >
+            {value}
+          </button>
+        ))}
+      </div>
       {loading ? (
         <Loading />
       ) : error ? (
         <ErrorState message={error} retry={reload} />
       ) : data?.length ? (
         <div className="notification-list">
-          {data.map((item) => (
+          {filtered.map((item) => (
             <button
               className={
                 item.is_read

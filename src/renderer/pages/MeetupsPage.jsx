@@ -35,6 +35,8 @@ import { confirmInApp } from "../components/InAppDialog";
 import {
   MeetupCountdown,
   MeetupTools,
+  MeetupGroupTools,
+  MeetupAttendanceSummary,
   useMeetupSettings,
 } from "../components/MeetupExtras";
 import {
@@ -658,6 +660,7 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
                 userId={user.id}
                 profiles={profiles}
               />
+              <MeetupAttendanceSummary meetups={myMeetups} userId={user.id} />
               <h2 className="section-title">My Meetups & Invitations</h2>
               {myMeetups.length ? (
                 <div className="timeline">
@@ -741,13 +744,20 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
                             <p className="meetup-denial">{item.admin_reason}</p>
                           )}
                           {item.status === "approved" && (
-                            <MeetupTools
-                              meetup={item}
-                              userId={user.id}
-                              otherName={personName(profiles, otherId)}
-                              settings={participantSettings}
-                              onChanged={reloadParticipantSettings}
-                            />
+                            <>
+                              <MeetupTools
+                                meetup={item}
+                                userId={user.id}
+                                otherName={personName(profiles, otherId)}
+                                settings={participantSettings}
+                                onChanged={reloadParticipantSettings}
+                              />
+                              <MeetupGroupTools
+                                meetup={item}
+                                userId={user.id}
+                                profiles={profiles}
+                              />
+                            </>
                           )}
                         </div>
                       </article>
