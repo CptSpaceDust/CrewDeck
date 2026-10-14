@@ -111,7 +111,6 @@ function AvailabilityModal({ user, rows = [], onClose, onSaved }) {
   const [busy, setBusy] = useState(false);
   const [longTermBusy, setLongTermBusy] = useState(false);
   const [message, setMessage] = useState("");
-  const [recurrence, setRecurrence] = useState("none");
   const mine = (Array.isArray(rows) ? rows : []).filter(
     (item) => item?.user_id === user.id,
   );
@@ -280,6 +279,7 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
   const [availabilityOpen, setAvailabilityOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [recurrence, setRecurrence] = useState("none");
   const formHeadingRef = useRef(null);
   const meetups = Array.isArray(meetupLoader.data) ? meetupLoader.data : [];
   const profiles = Array.isArray(profileLoader.data) ? profileLoader.data : [];
@@ -325,6 +325,7 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
 
   useEffect(() => {
     setSelected(null);
+    setRecurrence("none");
     setShowFormHint(false);
   }, [selectedPerson]);
   useEffect(() => {
@@ -411,6 +412,7 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
           : `Invitation sent. The meetup will be confirmed when ${selectedProfile?.username || "they"} accepts.`,
       );
       setSelected(null);
+      setRecurrence("none");
       await reloadAll();
     } catch (error) {
       setMessage(error.message);
@@ -904,7 +906,10 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
                 <button
                   type="button"
                   className="button ghost"
-                  onClick={() => setSelected(null)}
+                  onClick={() => {
+                    setSelected(null);
+                    setRecurrence("none");
+                  }}
                 >
                   Cancel
                 </button>

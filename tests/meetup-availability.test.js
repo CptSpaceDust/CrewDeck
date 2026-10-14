@@ -163,3 +163,20 @@ test("meetup screens skip malformed saved dates instead of crashing", () => {
   assert.match(extras, /Number\.isFinite\(instant\.getTime\(\)\)/);
   assert.match(desktop, /if \(!Number\.isFinite\(start\)\) continue/);
 });
+
+test("meetup recurrence state belongs to the calendar form", () => {
+  const source = fs.readFileSync(
+    require.resolve("../src/renderer/pages/MeetupsPage.jsx"),
+    "utf8",
+  );
+  const availabilityStart = source.indexOf("function AvailabilityModal");
+  const calendarStart = source.indexOf("export default function MeetupsPage");
+  const availabilitySource = source.slice(availabilityStart, calendarStart);
+  const calendarSource = source.slice(calendarStart);
+  assert.doesNotMatch(availabilitySource, /\[recurrence, setRecurrence\]/);
+  assert.match(
+    calendarSource,
+    /const \[recurrence, setRecurrence\] = useState\("none"\)/,
+  );
+  assert.match(calendarSource, /value=\{recurrence\}/);
+});
