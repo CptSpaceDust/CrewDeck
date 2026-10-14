@@ -47,7 +47,8 @@ export function useMeetupReminders(userId) {
       const now = Date.now();
       for (const item of mine) {
         const custom = participantSettings.find(
-          (setting) => setting.meetup_id === item.id && setting.user_id === userId,
+          (setting) =>
+            setting.meetup_id === item.id && setting.user_id === userId,
         );
         const reminderMinutes = Number(
           custom?.reminder_minutes || settings.reminderMinutes,
@@ -156,8 +157,9 @@ export function WhatsNew() {
             <div>
               <strong>Added</strong>
               <p>
-                Page recovery keeps a broken screen from turning the whole app
-                blank, and message views now include reliable refresh controls.
+                New group polls now appear as realtime conversation messages and
+                alert the other members so everyone knows when it is time to
+                vote.
               </p>
             </div>
           </article>
@@ -166,10 +168,9 @@ export function WhatsNew() {
             <div>
               <strong>Changed</strong>
               <p>
-                Messages appear immediately after sending. Group polls, roles,
-                and management now live in one cleaner options menu. Settings,
-                Meetup Calendar, Control Center, and startup visuals are also
-                more reliable and organized.
+                The group options and Manage Group panels now stay fully
+                interactive, and group pages safely handle incomplete member,
+                poll, or vote updates.
               </p>
             </div>
           </article>
@@ -178,8 +179,8 @@ export function WhatsNew() {
             <div>
               <strong>Removed</strong>
               <p>
-                Removed the unused message search boxes and repeated connected
-                device labels from Control Center.
+                Removed the menu behavior that closed group management as soon
+                as it opened.
               </p>
             </div>
           </article>

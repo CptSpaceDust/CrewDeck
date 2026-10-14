@@ -2,6 +2,21 @@
 
 Every published CrewDeck release is documented here and copied into its GitHub release notes.
 
+## [1.7.2] - 2026-10-14
+
+### Added
+
+- Creating a group poll now posts a realtime message in the conversation and alerts the other group members.
+
+### Changed
+
+- The group options menu and Manage Group panel now stay interactive while group controls are open.
+- Group conversations safely handle incomplete member, poll, and vote updates without breaking the page.
+
+### Removed
+
+- Removed the menu behavior that closed the Manage Group panel as soon as it opened.
+
 ## [1.7.1] - 2026-10-14
 
 ### Added
