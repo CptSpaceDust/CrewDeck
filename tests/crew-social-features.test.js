@@ -81,13 +81,16 @@ test("website and desktop ship matching community operations surfaces", () => {
     "components",
     "CaptainOperations.jsx",
   );
-  const hub = read("src", "renderer", "pages", "CrewHubPage.jsx");
+  const friends = read("src", "renderer", "pages", "FriendsPage.jsx");
   const meetup = read("src", "renderer", "components", "MeetupExtras.jsx");
   const settings = read("src", "renderer", "components", "AppSettings.jsx");
   assert.match(captain, /Evidence inbox/);
   assert.match(captain, /Maintenance mode/);
-  assert.match(hub, /Looking for group/);
-  assert.match(hub, /Temporary party rooms/);
+  assert.match(friends, /Your crew friends/);
+  assert.doesNotMatch(
+    friends,
+    /Looking for group|Temporary party rooms|favorite_crew/,
+  );
   assert.match(meetup, /meetup_waitlist/);
   assert.match(settings, /Run diagnostics/);
   assert.match(settings, /Export my data/);

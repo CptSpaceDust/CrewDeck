@@ -12,7 +12,15 @@ import { supabase } from "../lib/supabase";
 import { confirmInApp } from "./InAppDialog";
 import { Field, Modal } from "./ui";
 
-function PollCard({ poll, user, canModerate, isOwner, onChanged, onNotice }) {
+export function PollCard({
+  poll,
+  user,
+  canModerate,
+  isOwner,
+  onChanged,
+  onNotice,
+  inline = false,
+}) {
   const pollOptions = Array.isArray(poll?.options) ? poll.options : [];
   const total = pollOptions.reduce(
     (sum, option) =>
@@ -57,7 +65,7 @@ function PollCard({ poll, user, canModerate, isOwner, onChanged, onNotice }) {
     }
   }
   return (
-    <article className="group-poll-card">
+    <article className={`group-poll-card${inline ? " inline-group-poll" : ""}`}>
       <header>
         <div>
           <BarChart3 />
@@ -118,6 +126,57 @@ function PollCard({ poll, user, canModerate, isOwner, onChanged, onNotice }) {
   );
 }
 
+export function InlineGroupPoll({ pollId, groupId, user, role, onNotice }) {
+  const [poll, setPoll] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const load = async () => {
+    const rows = await getGroupPolls(groupId);
+    setPoll(rows.find((item) => item.id === pollId) || null);
+    setLoading(false);
+  };
+  useEffect(() => {
+    load().catch(() => setLoading(false));
+    const channel = supabase
+      .channel(`inline-poll-${pollId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "group_polls",
+          filter: `id=eq.${pollId}`,
+        },
+        load,
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "group_poll_votes",
+          filter: `poll_id=eq.${pollId}`,
+        },
+        load,
+      )
+      .subscribe();
+    return () => supabase.removeChannel(channel);
+  }, [pollId, groupId]);
+  if (loading) return <div className="inline-poll-loading">Loading poll…</div>;
+  if (!poll)
+    return <div className="inline-poll-removed">This poll was removed.</div>;
+  return (
+    <PollCard
+      poll={poll}
+      user={user}
+      canModerate={role !== "member"}
+      isOwner={role === "owner"}
+      onChanged={load}
+      onNotice={onNotice}
+      inline
+    />
+  );
+}
+
 export default function GroupPolls({
   group,
   user,
@@ -165,18 +224,14 @@ export default function GroupPolls({
     try {
       const form = new FormData(event.currentTarget);
       const question = String(form.get("question") || "").trim();
-      await createGroupPoll(
+      const pollId = await createGroupPoll(
         group.id,
         user.id,
         question,
         options,
         form.get("duration"),
       );
-      await sendGroupMessage(
-        group.id,
-        user.id,
-        `New poll: ${question}\nOpen Group options and choose Polls to vote.`,
-      );
+      await sendGroupMessage(group.id, user.id, `[[crewdeck-poll:${pollId}]]`);
       setCreating(false);
       setOptions(["", ""]);
       await load();

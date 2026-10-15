@@ -37,7 +37,7 @@ import { shouldAlertForMessage } from "./lib/messageBehavior.mjs";
 import { claimConversationAlert } from "./lib/alertDelivery.mjs";
 import CaptainPage from "./pages/CaptainPage";
 import ControlCenterPage from "./pages/ControlCenterPage";
-import CrewHubPage from "./pages/CrewHubPage";
+import FriendsPage from "./pages/FriendsPage";
 import UpdateOverlay from "./components/UpdateVisual";
 import { InAppDialogHost } from "./components/InAppDialog";
 import {
@@ -516,8 +516,8 @@ export default function App() {
         return <CollabsPage {...props} />;
       case "crew":
         return <CrewPage onViewProfile={viewPerson} />;
-      case "crew-hub":
-        return <CrewHubPage {...props} />;
+      case "friends":
+        return <FriendsPage {...props} />;
       case "crew-profile":
         return (
           <CrewProfilePage

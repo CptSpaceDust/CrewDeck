@@ -68,7 +68,8 @@ test("group polls announce themselves and group menus stay interactive", () => {
   const messages = read("pages/MessagesPageV2.jsx");
   const pollApi = read("lib/crewFeatures.js");
   assert.match(polls, /await sendGroupMessage\(/);
-  assert.match(polls, /New poll:/);
+  assert.match(polls, /crewdeck-poll:/);
+  assert.match(polls, /InlineGroupPoll/);
   assert.match(polls, /isOwner &&/);
   assert.match(polls, /deleteClosedGroupPoll\(poll\.id\)/);
   assert.match(pollApi, /rpc\("delete_closed_group_poll"/);

@@ -7,7 +7,6 @@ import {
   ChevronRight,
   ExternalLink,
   Flag,
-  Heart,
   UserPlus,
   ShieldBan,
   RefreshCw,
@@ -253,19 +252,6 @@ export function CrewProfilePage({ person, user, onBack }) {
             <button
               className="button secondary"
               onClick={async () => {
-                await supabase
-                  .from("favorite_crew")
-                  .upsert({ user_id: user.id, favorite_user_id: profile.id });
-                setReportMessage(
-                  `${profile.username} was added to your favorites.`,
-                );
-              }}
-            >
-              <Heart /> Favorite
-            </button>
-            <button
-              className="button secondary"
-              onClick={async () => {
                 const result = await supabase
                   .from("friendships")
                   .insert({ requester_id: user.id, addressee_id: profile.id });
@@ -277,7 +263,7 @@ export function CrewProfilePage({ person, user, onBack }) {
               <UserPlus /> Add friend
             </button>
             <button
-              className="button ghost"
+              className="button ghost danger-action"
               onClick={async () => {
                 const approved = await confirmInApp(
                   `Block ${profile.username}? You will no longer be able to contact each other.`,
@@ -297,7 +283,10 @@ export function CrewProfilePage({ person, user, onBack }) {
             >
               <ShieldBan /> Block
             </button>
-            <button className="button ghost" onClick={() => setReporting(true)}>
+            <button
+              className="button ghost danger-action"
+              onClick={() => setReporting(true)}
+            >
               <Flag /> Report a concern
             </button>
             {reportMessage && (

@@ -2,6 +2,27 @@
 
 Every published CrewDeck release is documented here and copied into its GitHub release notes.
 
+## [1.8.1] - 2026-10-14
+
+### Added
+
+- Group polls now appear as interactive cards inside the message stream and update votes in real time.
+- Friends now have a focused app page with incoming request actions and live updates.
+
+### Changed
+
+- Removed Crew Hub, favorite crew, Looking for Group posts, and temporary party rooms from the website and app.
+- Conversation reactions stay hidden until a message is hovered or focused, while notification folder and sound controls now live in the conversation menu.
+- Community Operations is now a collapsible Captain Panel section near the top of the page.
+- Blocked members' introductions, ideas, collaborations, and comments are strongly blurred.
+- Space Glass accent choices now visibly affect primary controls, navigation, icons, and panel borders, and Settings uses a calmer single-column layout.
+- The meetup calendar keeps recurrence state inside the calendar form, preventing the date-selection rendering crash.
+
+### Fixed
+
+- Friend actions use the normal accent color instead of appearing as destructive red buttons.
+- Captain audit records older than seven days are removed by a verified daily Supabase Cron job.
+
 ## [1.8.0] - 2026-10-14
 
 ### Added

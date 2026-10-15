@@ -53,7 +53,7 @@ test("What’s Changed contains Added, Changed, and Removed summaries", () => {
   assert.match(source, /<strong>Added<\/strong>/);
   assert.match(source, /<strong>Changed<\/strong>/);
   assert.match(source, /<strong>Removed<\/strong>/);
-  assert.match(source, /New group polls now appear as realtime conversation messages/);
-  assert.match(source, /Manage Group panels now stay fully/);
-  assert.match(source, /Removed the menu behavior that closed group management/);
+  assert.match(source, /Polls now appear as interactive cards inside group messages/);
+  assert.match(source, /Message reactions stay tucked away until you hover or focus/);
+  assert.match(source, /Crew Hub, favorite crew, Looking for Group/);
 });

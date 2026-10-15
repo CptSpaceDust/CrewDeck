@@ -280,9 +280,9 @@ export function WhatsNew() {
             <div>
               <strong>Added</strong>
               <p>
-                New group polls now appear as realtime conversation messages and
-                alert the other members so everyone knows when it is time to
-                vote.
+                Polls now appear as interactive cards inside group messages,
+                and Friends has its own focused page for connections and
+                requests.
               </p>
             </div>
           </article>
@@ -291,9 +291,9 @@ export function WhatsNew() {
             <div>
               <strong>Changed</strong>
               <p>
-                The group options and Manage Group panels now stay fully
-                interactive, and group pages safely handle incomplete member,
-                poll, or vote updates.
+                Message reactions stay tucked away until you hover or focus a
+                message. Conversation alerts live in the options menu, Settings
+                is cleaner, and accent colors now visibly update the app.
               </p>
             </div>
           </article>
@@ -302,8 +302,8 @@ export function WhatsNew() {
             <div>
               <strong>Removed</strong>
               <p>
-                Removed the menu behavior that closed group management as soon
-                as it opened.
+                Crew Hub, favorite crew, Looking for Group, and temporary party
+                rooms have been removed.
               </p>
             </div>
           </article>

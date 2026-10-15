@@ -11,7 +11,7 @@ import {
   Sparkles,
   UserRound,
   Users,
-  RadioTower,
+  UserPlus,
 } from "lucide-react";
 import { Avatar } from "./ui";
 import BrandMark from "./BrandMark";
@@ -42,7 +42,7 @@ const groups = [
     items: [
       ["guidelines", "Guidelines", ScrollText],
       ["crew", "Crew Directory", UserRound],
-      ["crew-hub", "Crew Hub", RadioTower],
+      ["friends", "Friends", UserPlus],
       ["introductions", "Introductions", Sparkles],
       ["collabs", "Collab Board", Users],
       ["ideas", "Ideas Board", Lightbulb],

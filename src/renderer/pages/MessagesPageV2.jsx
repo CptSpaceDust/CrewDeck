@@ -32,7 +32,7 @@ import {
   X,
 } from "lucide-react";
 import EditMessageButton from "../components/EditMessageButton";
-import GroupPolls from "../components/GroupPolls";
+import GroupPolls, { InlineGroupPoll } from "../components/GroupPolls";
 import {
   ConversationNotificationControl,
   MessageFeatureBar,
@@ -1743,13 +1743,6 @@ function DirectMessagesPage({
                   </div>
                 </div>
                 <div className="chat-header-actions">
-                  <ConversationNotificationControl
-                    kind="dm"
-                    conversationId={selected.id}
-                    userId={user.id}
-                    preference={conversationFeatures.preferences}
-                    onChanged={reloadConversationFeatures}
-                  />
                   <button
                     className="icon-button"
                     title={
@@ -1774,7 +1767,13 @@ function DirectMessagesPage({
                   >
                     <Phone />
                   </button>
-                  <DirectActionsMenu onDelete={removeConversation} />
+                  <DirectActionsMenu
+                    onDelete={removeConversation}
+                    user={user}
+                    conversationId={selected.id}
+                    preference={conversationFeatures.preferences}
+                    onPreferenceChanged={reloadConversationFeatures}
+                  />
                 </div>
               </header>
               <div className="message-stream">
@@ -2303,8 +2302,15 @@ function ManageGroupButton({
   );
 }
 
-function DirectActionsMenu({ onDelete }) {
+function DirectActionsMenu({
+  onDelete,
+  user,
+  conversationId,
+  preference,
+  onPreferenceChanged,
+}) {
   const [open, setOpen] = useState(false);
+  const [preferencesOpen, setPreferencesOpen] = useState(false);
   const [menuPosition, setMenuPosition] = useState(null);
   const buttonRef = useRef(null);
   function toggleMenu() {
@@ -2349,6 +2355,16 @@ function DirectActionsMenu({ onDelete }) {
             >
               <button
                 type="button"
+                className="group-actions-menu-item"
+                onClick={() => {
+                  setOpen(false);
+                  setPreferencesOpen(true);
+                }}
+              >
+                <BellRing /> Notifications & sound
+              </button>
+              <button
+                type="button"
                 className="group-actions-menu-item danger"
                 onClick={() => {
                   setOpen(false);
@@ -2361,13 +2377,38 @@ function DirectActionsMenu({ onDelete }) {
           </div>,
           document.body,
         )}
+      {preferencesOpen && (
+        <Modal
+          title="Conversation notifications"
+          onClose={() => setPreferencesOpen(false)}
+        >
+          <ConversationNotificationControl
+            kind="dm"
+            conversationId={conversationId}
+            userId={user.id}
+            preference={preference}
+            onChanged={onPreferenceChanged}
+            expanded
+          />
+        </Modal>
+      )}
     </div>
   );
 }
 
-function GroupActionsMenu({ group, user, role, onChanged, onNotice, onLeave }) {
+function GroupActionsMenu({
+  group,
+  user,
+  role,
+  onChanged,
+  onNotice,
+  onLeave,
+  preference,
+  onPreferenceChanged,
+}) {
   const [open, setOpen] = useState(false);
   const [pollsOpen, setPollsOpen] = useState(false);
+  const [preferencesOpen, setPreferencesOpen] = useState(false);
   const [menuPosition, setMenuPosition] = useState(null);
   const buttonRef = useRef(null);
   const canManage = role === "owner" || role === "moderator";
@@ -2419,6 +2460,16 @@ function GroupActionsMenu({ group, user, role, onChanged, onNotice, onLeave }) {
                 className="group-actions-menu-item"
                 onClick={() => {
                   setOpen(false);
+                  setPreferencesOpen(true);
+                }}
+              >
+                <BellRing /> Notifications & sound
+              </button>
+              <button
+                type="button"
+                className="group-actions-menu-item"
+                onClick={() => {
+                  setOpen(false);
                   setPollsOpen(true);
                 }}
               >
@@ -2458,6 +2509,21 @@ function GroupActionsMenu({ group, user, role, onChanged, onNotice, onLeave }) {
         open={pollsOpen}
         onClose={() => setPollsOpen(false)}
       />
+      {preferencesOpen && (
+        <Modal
+          title="Group notifications"
+          onClose={() => setPreferencesOpen(false)}
+        >
+          <ConversationNotificationControl
+            kind="group"
+            conversationId={group.id}
+            userId={user.id}
+            preference={preference}
+            onChanged={onPreferenceChanged}
+            expanded
+          />
+        </Modal>
+      )}
     </div>
   );
 }
@@ -2834,13 +2900,6 @@ function GroupMessagesPage({
                   </div>
                 </div>
                 <div className="group-chat-actions">
-                  <ConversationNotificationControl
-                    kind="group"
-                    conversationId={selected.id}
-                    userId={user.id}
-                    preference={conversationFeatures.preferences}
-                    onChanged={reloadConversationFeatures}
-                  />
                   <button
                     className="icon-button"
                     title={
@@ -2870,6 +2929,8 @@ function GroupMessagesPage({
                     role={myGroupRole}
                     onNotice={setNotice}
                     onLeave={leave}
+                    preference={conversationFeatures.preferences}
+                    onPreferenceChanged={reloadConversationFeatures}
                     onChanged={async () => {
                       const group = await getGroupDetails(selected.id);
                       setDetails(group);
@@ -2917,9 +2978,21 @@ function GroupMessagesPage({
                             : "a direct message"}
                         </small>
                       )}
-                      <p>
-                        <FormattedMessage>{item.content}</FormattedMessage>
-                      </p>
+                      {/^\[\[crewdeck-poll:[0-9a-f-]{36}\]\]$/i.test(
+                        item.content,
+                      ) ? (
+                        <InlineGroupPoll
+                          pollId={item.content.slice(17, -2)}
+                          groupId={selected.id}
+                          user={user}
+                          role={myGroupRole}
+                          onNotice={setNotice}
+                        />
+                      ) : (
+                        <p>
+                          <FormattedMessage>{item.content}</FormattedMessage>
+                        </p>
+                      )}
                       <div className="message-footer">
                         <time>
                           {new Date(item.created_at).toLocaleTimeString([], {

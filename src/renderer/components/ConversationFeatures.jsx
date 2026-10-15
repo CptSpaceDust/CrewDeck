@@ -258,10 +258,19 @@ export function ConversationNotificationControl({
   userId,
   preference,
   onChanged,
+  expanded = false,
 }) {
   const level = preference?.notification_level || "all";
   return (
-    <div className="conversation-preference-controls">
+    <div
+      className={`conversation-preference-controls${expanded ? " expanded" : ""}`}
+    >
+      {expanded && (
+        <p>
+          Choose when this conversation alerts you, where it appears, and which
+          sound it uses.
+        </p>
+      )}
       <button
         className="icon-button"
         title={`Notifications: ${level}`}
@@ -280,40 +289,47 @@ export function ConversationNotificationControl({
         }}
       >
         {level === "none" ? <BellOff /> : <BellRing />}
+        {expanded && <span>Notifications: {level}</span>}
       </button>
-      <select
-        aria-label="Conversation folder"
-        title="Conversation folder"
-        value={preference?.folder || "inbox"}
-        onChange={async (event) => {
-          await saveConversationPreference(userId, kind, conversationId, {
-            folder: event.target.value,
-          });
-          onChanged();
-        }}
-      >
-        <option value="inbox">Inbox</option>
-        <option value="friends">Friends</option>
-        <option value="meetups">Meetups</option>
-        <option value="important">Important</option>
-        <option value="muted">Muted</option>
-      </select>
-      <select
-        aria-label="Conversation sound"
-        title="Conversation sound"
-        value={preference?.sound_key || "default"}
-        onChange={async (event) => {
-          await saveConversationPreference(userId, kind, conversationId, {
-            sound_key: event.target.value,
-          });
-          onChanged();
-        }}
-      >
-        <option value="default">Default sound</option>
-        <option value="soft">Soft sound</option>
-        <option value="bright">Bright sound</option>
-        <option value="silent">Silent</option>
-      </select>
+      <label>
+        <span>Folder</span>
+        <select
+          aria-label="Conversation folder"
+          title="Conversation folder"
+          value={preference?.folder || "inbox"}
+          onChange={async (event) => {
+            await saveConversationPreference(userId, kind, conversationId, {
+              folder: event.target.value,
+            });
+            onChanged();
+          }}
+        >
+          <option value="inbox">Inbox</option>
+          <option value="friends">Friends</option>
+          <option value="meetups">Meetups</option>
+          <option value="important">Important</option>
+          <option value="muted">Muted</option>
+        </select>
+      </label>
+      <label>
+        <span>Sound</span>
+        <select
+          aria-label="Conversation sound"
+          title="Conversation sound"
+          value={preference?.sound_key || "default"}
+          onChange={async (event) => {
+            await saveConversationPreference(userId, kind, conversationId, {
+              sound_key: event.target.value,
+            });
+            onChanged();
+          }}
+        >
+          <option value="default">Default sound</option>
+          <option value="soft">Soft sound</option>
+          <option value="bright">Bright sound</option>
+          <option value="silent">Silent</option>
+        </select>
+      </label>
     </div>
   );
 }

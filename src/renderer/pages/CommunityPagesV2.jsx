@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Cake,
   CalendarDays,
@@ -54,11 +54,27 @@ import {
 } from "../components/ui";
 import { confirmInApp, promptInApp } from "../components/InAppDialog";
 import { useFormDraft } from "../lib/formDrafts";
+import { supabase } from "../lib/supabase";
 
 const captain = (profile) =>
   String(profile?.rank || "")
     .trim()
     .toLowerCase() === "captain";
+
+function useBlockedIds(userId) {
+  const [blockedIds, setBlockedIds] = useState(new Set());
+  useEffect(() => {
+    if (!userId) return;
+    supabase
+      .from("user_blocks")
+      .select("blocked_id")
+      .eq("blocker_id", userId)
+      .then(({ data }) =>
+        setBlockedIds(new Set((data || []).map((row) => row.blocked_id))),
+      );
+  }, [userId]);
+  return blockedIds;
+}
 
 function SubmitModal({ kind, onClose, onSaved, user, profile, initial }) {
   const [busy, setBusy] = useState(false);
@@ -243,6 +259,7 @@ function SubmitModal({ kind, onClose, onSaved, user, profile, initial }) {
 }
 
 export function IntroductionsPage({ user, profile }) {
+  const blockedIds = useBlockedIds(user.id);
   const { data, loading, error, reload } = useLoader(getIntroductions, []);
   const [editing, setEditing] = useState(false);
   const [sort, setSort] = useState("newest");
@@ -340,7 +357,10 @@ export function IntroductionsPage({ user, profile }) {
       ) : (
         <div className="card-grid introductions-grid">
           {items.map((item) => (
-            <article className="panel intro-card" key={item.id}>
+            <article
+              className={`panel intro-card${blockedIds.has(item.user_id) ? " blocked-community-content" : ""}`}
+              key={item.id}
+            >
               <div className="card-person">
                 <Avatar profile={item.profile} />
                 <div>
@@ -427,6 +447,7 @@ export function IntroductionsPage({ user, profile }) {
 }
 
 export function IdeasPage({ user, profile }) {
+  const blockedIds = useBlockedIds(user.id);
   const { data, loading, error, reload } = useLoader(getIdeas, []);
   const { data: remaining, reload: reloadLimit } = useLoader(
     () => getIdeaLimit(user.id),
@@ -557,7 +578,7 @@ export function IdeasPage({ user, profile }) {
               .replaceAll(" ", "-");
             return (
               <article
-                className={`panel idea-card idea-card-${statusClass}`}
+                className={`panel idea-card idea-card-${statusClass}${blockedIds.has(item.user_id) ? " blocked-community-content" : ""}`}
                 key={item.id}
               >
                 <div className="idea-vote-rail">
@@ -642,7 +663,7 @@ export function IdeasPage({ user, profile }) {
   );
 }
 
-function Comments({ item, user, profile, reload, setMessage }) {
+function Comments({ item, user, profile, reload, setMessage, blockedIds }) {
   const [open, setOpen] = useState(false);
   async function add(e) {
     e.preventDefault();
@@ -701,7 +722,10 @@ function Comments({ item, user, profile, reload, setMessage }) {
       {open && (
         <div className="comment-list">
           {item.comments.map((comment) => (
-            <div className="comment" key={comment.id}>
+            <div
+              className={`comment${blockedIds.has(comment.user_id) ? " blocked-community-content" : ""}`}
+              key={comment.id}
+            >
               <Avatar profile={comment.profile} size={30} />
               <div>
                 <strong>{comment.profile?.username || "Crew member"}</strong>
@@ -731,6 +755,7 @@ function Comments({ item, user, profile, reload, setMessage }) {
   );
 }
 export function CollabsPage({ user, profile }) {
+  const blockedIds = useBlockedIds(user.id);
   const { data, loading, error, reload } = useLoader(getCollabs, []);
   const [modal, setModal] = useState(null);
   const [message, setMessage] = useState("");
@@ -779,7 +804,10 @@ export function CollabsPage({ user, profile }) {
       ) : (
         <div className="card-grid">
           {data?.map((item) => (
-            <article className="panel collab-card" key={item.id}>
+            <article
+              className={`panel collab-card${blockedIds.has(item.user_id) ? " blocked-community-content" : ""}`}
+              key={item.id}
+            >
               <div className="card-meta">
                 <span className="status open">{item.status}</span>
                 <span>{item.category}</span>
@@ -823,6 +851,7 @@ export function CollabsPage({ user, profile }) {
                 profile={profile}
                 reload={reload}
                 setMessage={setMessage}
+                blockedIds={blockedIds}
               />
             </article>
           ))}
