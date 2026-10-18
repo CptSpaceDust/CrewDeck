@@ -15,9 +15,12 @@ import {
   createMeetup,
   deleteMeetupAvailability,
   getMeetupAvailability,
+  getMyMeetupMemberships,
   getMeetups,
   getProfiles,
+  leaveMeetup,
   respondToMeetup,
+  respondToGroupMeetup,
   restrictionMessage,
   setLongTermMeetupAvailability,
 } from "../lib/data";
@@ -61,6 +64,49 @@ const personName = (profiles, id) =>
 const involves = (item, ids) =>
   ids.some((id) => id && (item.user_id === id || item.with_user_id === id));
 const overlaps = (startA, endA, startB, endB) => startA < endB && endA > startB;
+function SpaceTimePicker({ name, defaultValue = "18:00" }) {
+  const [initialHours, initialMinutes] = defaultValue.split(":").map(Number);
+  const [hour, setHour] = useState(initialHours % 12 || 12);
+  const [minute, setMinute] = useState(
+    (Math.round(initialMinutes / 5) * 5) % 60,
+  );
+  const [period, setPeriod] = useState(initialHours >= 12 ? "PM" : "AM");
+  const value = `${String((Number(hour) % 12) + (period === "PM" ? 12 : 0)).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+  return (
+    <div className="space-time-picker">
+      <select
+        aria-label="Hour"
+        value={hour}
+        onChange={(event) => setHour(event.target.value)}
+      >
+        {Array.from({ length: 12 }, (_, index) => index + 1).map((value) => (
+          <option key={value}>{value}</option>
+        ))}
+      </select>
+      <span>:</span>
+      <select
+        aria-label="Minute"
+        value={minute}
+        onChange={(event) => setMinute(event.target.value)}
+      >
+        {Array.from({ length: 12 }, (_, index) => index * 5).map((value) => (
+          <option key={value} value={value}>
+            {String(value).padStart(2, "0")}
+          </option>
+        ))}
+      </select>
+      <select
+        aria-label="AM or PM"
+        value={period}
+        onChange={(event) => setPeriod(event.target.value)}
+      >
+        <option>AM</option>
+        <option>PM</option>
+      </select>
+      <input type="hidden" name={name} value={value} />
+    </div>
+  );
+}
 const availabilityOverlapsDay = (item, key) => {
   try {
     const [blockStart, blockEnd] = availabilityInstantRange(item);
@@ -212,10 +258,10 @@ function AvailabilityModal({ user, rows = [], onClose, onSaved }) {
               {!allDay && (
                 <div className="form-grid">
                   <Field label="Unavailable from">
-                    <input name="start" type="time" required />
+                    <SpaceTimePicker name="start" defaultValue="18:00" />
                   </Field>
                   <Field label="Until">
-                    <input name="end" type="time" required />
+                    <SpaceTimePicker name="end" defaultValue="22:00" />
                   </Field>
                 </div>
               )}
@@ -279,6 +325,10 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
     }
   });
   const meetupLoader = useLoader(getMeetups, []);
+  const membershipLoader = useLoader(
+    () => getMyMeetupMemberships(user.id),
+    [user.id],
+  );
   const profileLoader = useLoader(getProfiles, []);
   const availabilityLoader = useLoader(getMeetupAvailability, []);
   const [currentMonth, setCurrentMonth] = useState(
@@ -299,6 +349,10 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
   const availability = Array.isArray(availabilityLoader.data)
     ? availabilityLoader.data
     : [];
+  const memberships = Array.isArray(membershipLoader.data)
+    ? membershipLoader.data
+    : [];
+  const membershipIds = new Set(memberships.map((item) => item.meetup_id));
   const people = profiles.filter((person) => person.id !== user.id);
   const selectedProfile = profiles.find(
     (person) => person.id === selectedPerson,
@@ -306,7 +360,12 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
   const captainApprovalRequired =
     selectedProfile?.rank?.toLowerCase() === "captain";
   const myMeetups = meetups.filter((item) => {
-    if (item.user_id !== user.id && item.with_user_id !== user.id) return false;
+    if (
+      item.user_id !== user.id &&
+      item.with_user_id !== user.id &&
+      !membershipIds.has(item.id)
+    )
+      return false;
     try {
       return Number.isFinite(meetupInstant(item).getTime());
     } catch {
@@ -323,14 +382,32 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
       item.user_id === selectedPerson &&
       availabilityOverlapsDay(item, selected),
   );
+  const selectedBusyMeetups = approved.filter((item) => {
+    try {
+      return (
+        selected &&
+        meetupLocalDateKey(item) === selected &&
+        involves(item, selectedIds)
+      );
+    } catch {
+      return false;
+    }
+  });
   const loading =
-    meetupLoader.loading || profileLoader.loading || availabilityLoader.loading;
+    meetupLoader.loading ||
+    membershipLoader.loading ||
+    profileLoader.loading ||
+    availabilityLoader.loading;
   const error =
-    meetupLoader.error || profileLoader.error || availabilityLoader.error;
+    meetupLoader.error ||
+    membershipLoader.error ||
+    profileLoader.error ||
+    availabilityLoader.error;
 
   async function reloadAll() {
     await Promise.all([
       meetupLoader.reload(),
+      membershipLoader.reload(),
       profileLoader.reload(),
       availabilityLoader.reload(),
     ]);
@@ -358,7 +435,9 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
     );
     const scheduled = approved.some((item) => {
       try {
-        return meetupLocalDateKey(item) === key && involves(item, selectedIds);
+        return (
+          meetupLocalDateKey(item) === key && involves(item, [selectedPerson])
+        );
       } catch {
         return false;
       }
@@ -376,7 +455,7 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
     setMessage("");
     try {
       if (!selectedPerson) throw new Error("Choose a crew member first.");
-      if (!selected || ["offline", "scheduled"].includes(dayState(selected)))
+      if (!selected || dayState(selected) === "offline")
         throw new Error("Please select an open day.");
       const start = minutes(form.get("time"));
       const end = start + Number(form.get("duration")) * 60;
@@ -402,6 +481,23 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
       if (overlap)
         throw new Error(
           "That time overlaps unavailable hours. Choose another time.",
+        );
+      const meetupConflict = approved.some((item) => {
+        if (!involves(item, selectedIds)) return false;
+        const existingStart = meetupInstant(item);
+        const existingEnd = new Date(
+          existingStart.getTime() + Number(item.duration || 1) * 3600000,
+        );
+        return overlaps(
+          requestedStart,
+          requestedEnd,
+          existingStart,
+          existingEnd,
+        );
+      });
+      if (meetupConflict)
+        throw new Error(
+          "That time overlaps another meetup. Choose a different start time.",
         );
       const blocked = await restrictionMessage(user.id, "meetups");
       if (blocked) throw new Error(blocked);
@@ -447,14 +543,43 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
     await reloadAll();
   }
 
-  async function respond(item, response) {
+  async function backOut(item) {
+    if (
+      !(await confirmInApp(
+        "Everyone in this meetup will be notified. If only one person remains, the meetup will be removed.",
+        {
+          title: "Back out of this meetup?",
+          confirmLabel: "Back out",
+        },
+      ))
+    )
+      return;
     setBusy(true);
     try {
-      const updated = await respondToMeetup(item.id, response);
+      const result = await leaveMeetup(item.id);
+      setMessage(
+        result?.deleted
+          ? "You backed out and the meetup was removed because only one person remained."
+          : "You backed out. Everyone else in the meetup was notified.",
+      );
+      await reloadAll();
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function respond(item, response, groupInvitation = false) {
+    setBusy(true);
+    try {
+      const updated = groupInvitation
+        ? await respondToGroupMeetup(item.id, response)
+        : await respondToMeetup(item.id, response);
       setMessage(
         response === "declined"
           ? "Invitation declined."
-          : updated.status === "approved"
+          : item.status === "approved" || updated.status === "approved"
             ? "Invitation accepted. Your meetup is confirmed."
             : "Invitation accepted. It is ready for Captain approval.",
       );
@@ -606,10 +731,7 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
                     const state = dayState(key);
                     const past = date < today;
                     const disabled =
-                      past ||
-                      !selectedPerson ||
-                      state === "offline" ||
-                      state === "scheduled";
+                      past || !selectedPerson || state === "offline";
                     const labels = {
                       offline: "Offline",
                       partial: "Partly off",
@@ -680,7 +802,14 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
               {myMeetups.length ? (
                 <div className="timeline">
                   {myMeetups.map((item) => {
+                    const membership = memberships.find(
+                      (row) => row.meetup_id === item.id,
+                    );
                     const invited = item.with_user_id === user.id;
+                    const groupInvitation =
+                      !invited &&
+                      membership?.role !== "organizer" &&
+                      membership?.invitation_status === "pending";
                     const otherId = invited ? item.user_id : item.with_user_id;
                     const localStart = meetupInstant(item);
                     return (
@@ -727,27 +856,32 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
                           {item.with_user_id && (
                             <small>Invitation: {item.invitee_status}</small>
                           )}
-                          {invited &&
+                          {((invited &&
                             item.status === "pending" &&
-                            item.invitee_status === "pending" && (
-                              <div className="button-row">
-                                <button
-                                  className="button primary"
-                                  disabled={busy}
-                                  onClick={() => respond(item, "accepted")}
-                                >
-                                  <Check /> Accept
-                                </button>
-                                <button
-                                  className="button danger"
-                                  disabled={busy}
-                                  onClick={() => respond(item, "declined")}
-                                >
-                                  <X /> Decline
-                                </button>
-                              </div>
-                            )}
-                          {!invited && item.status === "pending" && (
+                            item.invitee_status === "pending") ||
+                            groupInvitation) && (
+                            <div className="button-row">
+                              <button
+                                className="button primary"
+                                disabled={busy}
+                                onClick={() =>
+                                  respond(item, "accepted", groupInvitation)
+                                }
+                              >
+                                <Check /> Accept
+                              </button>
+                              <button
+                                className="button danger"
+                                disabled={busy}
+                                onClick={() =>
+                                  respond(item, "declined", groupInvitation)
+                                }
+                              >
+                                <X /> Decline
+                              </button>
+                            </div>
+                          )}
+                          {item.user_id === user.id && item.status === "pending" && (
                             <button
                               className="button danger compact-button"
                               onClick={() => cancel(item)}
@@ -772,6 +906,13 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
                                 userId={user.id}
                                 profiles={profiles}
                               />
+                              <button
+                                className="button danger compact-button meetup-backout"
+                                disabled={busy}
+                                onClick={() => backOut(item)}
+                              >
+                                Back out of meetup
+                              </button>
                             </>
                           )}
                         </div>
@@ -806,15 +947,36 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
                   </p>
                 </div>
               </div>
-              {selectedBlocks.length > 0 && (
+              {(selectedBlocks.length > 0 ||
+                selectedBusyMeetups.length > 0) && (
                 <div className="meetup-off-hours">
-                  <strong>Unavailable times that day</strong>
+                  <strong>Times to avoid that day</strong>
                   {selectedBlocks.map((item) => (
                     <span key={item.id}>
                       {personName(profiles, item.user_id)}:{" "}
                       {localAvailabilityLabel(item)}
                     </span>
                   ))}
+                  {selectedBusyMeetups.map((item) => {
+                    const start = meetupInstant(item);
+                    const end = new Date(
+                      start.getTime() + Number(item.duration || 1) * 3600000,
+                    );
+                    return (
+                      <span key={`busy-${item.id}`}>
+                        Meetup already scheduled:{" "}
+                        {start.toLocaleTimeString([], {
+                          hour: "numeric",
+                          minute: "2-digit",
+                        })}
+                        –
+                        {end.toLocaleTimeString([], {
+                          hour: "numeric",
+                          minute: "2-digit",
+                        })}
+                      </span>
+                    );
+                  })}
                 </div>
               )}
               <section>
@@ -824,13 +986,7 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
                     label="Preferred start time"
                     hint={`Your time · ${localTimeZoneName()}`}
                   >
-                    <input
-                      name="time"
-                      type="time"
-                      min="08:00"
-                      max="23:00"
-                      required
-                    />
+                    <SpaceTimePicker name="time" defaultValue="18:00" />
                   </Field>
                   <Field label="Duration">
                     <select

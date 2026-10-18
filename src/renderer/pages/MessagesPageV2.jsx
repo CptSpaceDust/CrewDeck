@@ -14,7 +14,6 @@ import {
   Hand,
   Hash,
   Headphones,
-  MessageCircle,
   Monitor,
   MonitorUp,
   MoreVertical,
@@ -24,7 +23,6 @@ import {
   Reply,
   RefreshCw,
   Search,
-  Send,
   Trash2,
   Users,
   Volume2,
@@ -292,8 +290,6 @@ export function VoiceCall({ conversation, user, onClose, requestedCallId }) {
   const [activeCallId, setActiveCallId] = useState("");
   const [deafened, setDeafened] = useState(false);
   const [handRaised, setHandRaised] = useState(false);
-  const [callChatOpen, setCallChatOpen] = useState(false);
-  const [callMessages, setCallMessages] = useState([]);
   const [participantControls, setParticipantControls] = useState([]);
   const [minimized, setMinimized] = useState(false);
   const [compactPosition, setCompactPosition] = useState(() => ({
@@ -850,18 +846,10 @@ export function VoiceCall({ conversation, user, onClose, requestedCallId }) {
   useEffect(() => {
     if (!activeCallId) return;
     const load = async () => {
-      const [messagesResult, controlsResult] = await Promise.all([
-        supabase
-          .from("call_messages")
-          .select("id,sender_id,content,created_at")
-          .eq("call_id", activeCallId)
-          .order("created_at"),
-        supabase
-          .from("call_participant_controls")
-          .select("user_id,hand_raised,deafened,updated_at")
-          .eq("call_id", activeCallId),
-      ]);
-      setCallMessages(messagesResult.data || []);
+      const controlsResult = await supabase
+        .from("call_participant_controls")
+        .select("user_id,hand_raised,deafened,updated_at")
+        .eq("call_id", activeCallId);
       setParticipantControls(controlsResult.data || []);
     };
     supabase.from("call_participant_controls").upsert({
@@ -873,17 +861,7 @@ export function VoiceCall({ conversation, user, onClose, requestedCallId }) {
     });
     load();
     const channel = supabase
-      .channel(`call-chat-${activeCallId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "call_messages",
-          filter: `call_id=eq.${activeCallId}`,
-        },
-        load,
-      )
+      .channel(`call-controls-${activeCallId}`)
       .on(
         "postgres_changes",
         {
@@ -1198,15 +1176,6 @@ export function VoiceCall({ conversation, user, onClose, requestedCallId }) {
             <span>{handRaised ? "Lower hand" : "Raise hand"}</span>
           </button>
           <button
-            className="call-button"
-            disabled={!connected}
-            onClick={() => setCallChatOpen((value) => !value)}
-            title="Open call chat"
-          >
-            <MessageCircle />
-            <span>Call chat</span>
-          </button>
-          <button
             className={muted ? "call-button active" : "call-button"}
             disabled={!connected || Boolean(busyControl) || pushToTalk}
             onClick={toggleMic}
@@ -1233,54 +1202,6 @@ export function VoiceCall({ conversation, user, onClose, requestedCallId }) {
             <span>Leave</span>
           </button>
         </footer>
-        {callChatOpen && (
-          <aside className="call-chat-panel">
-            <header>
-              <strong>Call chat</strong>
-              <button onClick={() => setCallChatOpen(false)}>
-                <X />
-              </button>
-            </header>
-            <div>
-              {callMessages.map((item) => (
-                <p key={item.id}>
-                  <strong>
-                    {participantProfile(
-                      participants.find(
-                        (person) => person.identity === item.sender_id,
-                      ),
-                    )?.username ||
-                      (item.sender_id === user.id ? "You" : "Crew member")}
-                  </strong>
-                  <span>{item.content}</span>
-                </p>
-              ))}
-            </div>
-            <form
-              onSubmit={async (event) => {
-                event.preventDefault();
-                const input = event.currentTarget.elements.callMessage;
-                const content = input.value.trim();
-                if (!content) return;
-                await supabase.from("call_messages").insert({
-                  call_id: activeCallId,
-                  sender_id: user.id,
-                  content,
-                });
-                input.value = "";
-              }}
-            >
-              <input
-                name="callMessage"
-                maxLength="700"
-                placeholder="Message everyone in this call"
-              />
-              <button>
-                <Send />
-              </button>
-            </form>
-          </aside>
-        )}
       </section>
 
       {sources && (

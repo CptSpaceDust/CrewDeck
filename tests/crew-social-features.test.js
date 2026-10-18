@@ -68,7 +68,7 @@ test("desktop messaging exposes the selected realtime conversation tools", () =>
   assert.match(features, /emoji-picker-popover/);
   assert.match(features, /ConversationDetails/);
   assert.match(crewFeatures, /deleteMessageReminder/);
-  assert.match(messages, /call_messages/);
+  assert.doesNotMatch(messages, /call_messages|Call chat/);
   assert.match(messages, /handRaised/);
   assert.match(messages, /deafened/);
   assert.match(messages, /Delete conversation/);

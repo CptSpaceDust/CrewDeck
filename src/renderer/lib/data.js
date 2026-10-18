@@ -1,10 +1,5 @@
 import { supabase } from "./supabase";
-import {
-  localDateKey,
-  meetupInstant,
-  meetupLocalDateKey,
-  zonedDateTime,
-} from "./time";
+import { localDateKey, meetupInstant, zonedDateTime } from "./time";
 
 function unwrap(result) {
   if (result.error) throw result.error;
@@ -310,6 +305,15 @@ export async function getMeetups() {
   );
 }
 
+export async function getMyMeetupMemberships(userId) {
+  return unwrap(
+    await supabase
+      .from("meetup_participants")
+      .select("meetup_id,user_id,role,invitation_status,attendance_status")
+      .eq("user_id", userId),
+  );
+}
+
 export async function getMeetupAvailability() {
   const earliestRelevantDay = new Date();
   earliestRelevantDay.setDate(earliestRelevantDay.getDate() - 2);
@@ -414,6 +418,15 @@ export async function respondToMeetup(meetupId, response) {
   return { ...updated, emailSent: !error };
 }
 
+export async function respondToGroupMeetup(meetupId, response) {
+  return unwrap(
+    await supabase.rpc("respond_to_group_meetup_invitation", {
+      target_meetup_id: meetupId,
+      response,
+    }),
+  );
+}
+
 export async function createMeetup(userId, fields) {
   if (!fields.meetup_date) throw new Error("Please select an available day.");
   const occupied = unwrap(
@@ -425,22 +438,31 @@ export async function createMeetup(userId, fields) {
       .eq("status", "approved")
       .limit(100),
   );
+  const requestedStart = zonedDateTime(
+    fields.meetup_date,
+    fields.start_time,
+    fields.time_zone,
+  );
+  const requestedEnd = new Date(
+    requestedStart.getTime() + Number(fields.duration || 1) * 3600000,
+  );
   if (
-    (!fields.with_user_id &&
-      occupied.some(
-        (item) => meetupLocalDateKey(item) === fields.meetup_date,
-      )) ||
-    occupied.some(
-      (item) =>
-        meetupLocalDateKey(item) === fields.meetup_date &&
-        ([item.user_id, item.with_user_id].includes(userId) ||
-          [item.user_id, item.with_user_id].includes(fields.with_user_id)),
-    )
+    occupied.some((item) => {
+      if (
+        ![item.user_id, item.with_user_id].some((id) =>
+          [userId, fields.with_user_id].includes(id),
+        )
+      )
+        return false;
+      const existingStart = meetupInstant(item);
+      const existingEnd = new Date(
+        existingStart.getTime() + Number(item.duration || 1) * 3600000,
+      );
+      return requestedStart < existingEnd && requestedEnd > existingStart;
+    })
   )
     throw new Error(
-      fields.with_user_id
-        ? "One of you already has an approved meetup that day."
-        : "That day is already occupied. Please choose another date.",
+      "That time overlaps another meetup. Choose a different start time.",
     );
   const duplicate = unwrap(
     await supabase
@@ -478,6 +500,10 @@ export async function createMeetup(userId, fields) {
     return localDateKey(date);
   };
   const { recurrence_count: _ignored, ...baseFields } = fields;
+  const extraNames = String(fields.additional_participants || "")
+    .split(/[\n,]/)
+    .map((name) => name.trim().replace(/^@/, ""))
+    .filter(Boolean);
   const rows = Array.from({ length: recurrenceCount }, (_, index) => ({
     user_id: userId,
     ...baseFields,
@@ -490,6 +516,13 @@ export async function createMeetup(userId, fields) {
     recurrence_rule: recurrenceRule,
     recurrence_series_id: seriesId,
     recurrence_index: index,
+    capacity: Math.min(
+      25,
+      Math.max(
+        2,
+        2 + new Set(extraNames.map((name) => name.toLowerCase())).size,
+      ),
+    ),
     status: "pending",
   }));
   const createdResult = unwrap(
@@ -502,10 +535,6 @@ export async function createMeetup(userId, fields) {
     ? createdResult
     : [createdResult];
   const created = createdRows[0];
-  const extraNames = String(fields.additional_participants || "")
-    .split(/[\n,]/)
-    .map((name) => name.trim().replace(/^@/, ""))
-    .filter(Boolean);
   if (extraNames.length) {
     const { data: extraProfiles, error: profileError } = await supabase
       .from("profiles")
@@ -558,6 +587,10 @@ export async function cancelMeetup(id, userId) {
       .eq("user_id", userId)
       .eq("status", "pending"),
   );
+}
+
+export async function leaveMeetup(id) {
+  return unwrap(await supabase.rpc("leave_meetup", { target_meetup_id: id }));
 }
 
 export async function createUserReport(

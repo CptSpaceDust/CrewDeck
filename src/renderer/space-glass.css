@@ -2476,63 +2476,19 @@ html[data-motion="reduced"] *::after {
     0 0 0 4px rgba(65, 224, 161, 0.16),
     0 20px 55px rgba(0, 0, 0, 0.55);
 }
-.call-chat-panel {
-  position: absolute;
-  z-index: 8;
-  right: 18px;
-  bottom: 86px;
-  display: grid;
-  grid-template-rows: auto minmax(120px, 1fr) auto;
-  width: min(360px, calc(100% - 36px));
-  max-height: min(440px, 65vh);
-  overflow: hidden;
-  border: 1px solid rgba(111, 199, 255, 0.3);
-  border-radius: 17px;
-  background: rgba(5, 17, 36, 0.97);
-  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.55);
-}
-.call-chat-panel > header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 13px 15px;
-  border-bottom: 1px solid rgba(112, 193, 255, 0.14);
-}
-.call-chat-panel > header button {
-  display: grid;
-  place-items: center;
-  width: 30px;
-  height: 30px;
-}
-.call-chat-panel > div {
-  display: grid;
-  align-content: start;
-  gap: 8px;
-  overflow-y: auto;
-  padding: 13px;
-}
-.call-chat-panel p {
-  display: grid;
-  gap: 3px;
-  margin: 0;
-  padding: 9px 11px;
-  border-radius: 11px;
-  background: rgba(73, 151, 218, 0.1);
-}
-.call-chat-panel p span {
-  color: #e3eff9;
-  overflow-wrap: anywhere;
-}
-.call-chat-panel form {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 8px;
-  padding: 12px;
-  border-top: 1px solid rgba(112, 193, 255, 0.14);
-}
-.call-chat-panel form input {
+.field .space-time-picker select {
+  width: 100%;
   min-width: 0;
+  min-height: 36px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 8px;
+  color: #eef7ff;
+  background: rgba(77, 163, 255, 0.1);
+  box-shadow: none;
+  text-align: center;
 }
-.call-chat-panel form button {
-  width: 40px;
+.field .space-time-picker select:focus {
+  border: 0;
+  box-shadow: none;
 }

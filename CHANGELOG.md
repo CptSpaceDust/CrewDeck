@@ -2,6 +2,26 @@
 
 Every published CrewDeck release is documented here and copied into its GitHub release notes.
 
+## [1.8.6] - 2026-10-18
+
+### Added
+
+- Meetups can now share a date when their times do not overlap.
+- Confirmed participants can back out while notifying the remaining crew, and the meetup is removed when only one person remains.
+- Meetup and availability forms use a custom Space Glass time picker.
+
+### Changed
+
+- The website Friends page now uses a clearer responsive crew list and settings layout.
+- My Meetups shows synchronized invitation and check-in details for every participant.
+- Call Chat was removed from voice calls.
+
+### Fixed
+
+- Selecting another crew member no longer marks unrelated dates as occupied.
+- Accepted invitations and “I’m here” check-ins now update group attendance immediately.
+- Group meetup capacity now includes every invited participant.
+
 ## [1.8.5] - 2026-10-18
 
 ### Added

@@ -216,6 +216,18 @@ export function MeetupGroupTools({ meetup, userId, profiles = [] }) {
   const accepted = participants.filter(
     (item) => item.invitation_status === "accepted",
   );
+  const invitationLabels = {
+    pending: "Awaiting response",
+    accepted: "Accepted",
+    declined: "Declined",
+  };
+  const attendanceLabels = {
+    pending: "Not checked in",
+    attended: "Here",
+    late: "Running late",
+    cancelled: "Can’t attend",
+    missed: "Missed",
+  };
   return (
     <details
       className="meetup-group-tools"
@@ -232,8 +244,10 @@ export function MeetupGroupTools({ meetup, userId, profiles = [] }) {
             <span key={item.user_id}>
               <strong>{person?.username || "Crew member"}</strong>
               <small>
-                {item.role} · {item.invitation_status} ·{" "}
-                {item.attendance_status}
+                {item.role === "organizer" ? "Organizer" : "Participant"} ·{" "}
+                {invitationLabels[item.invitation_status] ||
+                  item.invitation_status}{" "}
+                · {attendanceLabels[item.attendance_status] || "Not checked in"}
               </small>
             </span>
           );

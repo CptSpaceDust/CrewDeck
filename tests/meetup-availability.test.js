@@ -71,7 +71,7 @@ function loadData(availability) {
     inserted: () => inserted,
   };
 }
-test("meetup submission rejects occupied dates before inserting", async () => {
+test("meetup submission rejects overlapping times before inserting", async () => {
   const data = loadData({
     data: [
       {
@@ -79,21 +79,47 @@ test("meetup submission rejects occupied dates before inserting", async () => {
         user_id: "crew",
         meetup_date: "2026-10-28",
         start_time: "18:00",
+        duration: 2,
+        with_user_id: "friend",
       },
     ],
   });
   await assert.rejects(
     data.create("crew", {
       meetup_date: "2026-10-28",
-      start_time: "19:00",
+      start_time: "19:30",
       time_zone: "America/Denver",
+      duration: 1,
+      with_user_id: "friend",
     }),
-    /already occupied/,
+    /overlaps another meetup/,
   );
   assert.equal(data.inserted(), false);
   assert.deepEqual(JSON.parse(JSON.stringify(data.calls[0].filters)), [
     ["status", "approved"],
   ]);
+});
+test("meetups can share a date when their times do not overlap", async () => {
+  const data = loadData({
+    data: [
+      {
+        id: "earlier",
+        user_id: "crew",
+        with_user_id: "friend",
+        meetup_date: "2026-10-28",
+        start_time: "18:00",
+        duration: 1,
+      },
+    ],
+  });
+  await data.create("crew", {
+    meetup_date: "2026-10-28",
+    start_time: "19:00",
+    time_zone: "America/Denver",
+    duration: 1,
+    with_user_id: "friend",
+  });
+  assert.equal(data.inserted(), true);
 });
 test("meetup availability errors fail closed without inserting", async () => {
   const data = loadData({ error: new Error("Unable to check availability") });

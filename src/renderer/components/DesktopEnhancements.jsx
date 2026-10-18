@@ -280,8 +280,8 @@ export function WhatsNew() {
             <div>
               <strong>Added</strong>
               <p>
-                Calls can stay connected across pages in a draggable compact
-                tile, and the microphone check can be enabled in Settings.
+                Meetups can share a date when times do not overlap, use a new
+                time picker, and let confirmed members back out cleanly.
               </p>
             </div>
           </article>
@@ -290,8 +290,8 @@ export function WhatsNew() {
             <div>
               <strong>Changed</strong>
               <p>
-                Friends, meetup presets, polls, Evidence Inbox, call chat, and
-                message reminders now have clearer Space Glass layouts.
+                My Meetups now keeps invitation, attendance, and check-in
+                details synchronized. Call Chat has been removed.
               </p>
             </div>
           </article>
@@ -300,8 +300,8 @@ export function WhatsNew() {
             <div>
               <strong>Fixed</strong>
               <p>
-                Meetup requests submit reliably, poll deletion cleans up its
-                message, reminder text stays clean, and the sidebar is stable.
+                The calendar no longer marks unrelated crew members as busy, and
+                the website Friends page has a stable responsive layout.
               </p>
             </div>
           </article>
