@@ -41,7 +41,7 @@ test("Space Glass covers every major app surface", () => {
   assert.match(css, /prefers-reduced-transparency/);
 });
 
-test("What’s Changed contains Added, Changed, and Removed summaries", () => {
+test("What’s Changed contains Added, Changed, and Fixed summaries", () => {
   const source = read(
     "src",
     "renderer",
@@ -52,8 +52,8 @@ test("What’s Changed contains Added, Changed, and Removed summaries", () => {
   assert.equal((source.match(/className="change-card /g) || []).length, 3);
   assert.match(source, /<strong>Added<\/strong>/);
   assert.match(source, /<strong>Changed<\/strong>/);
-  assert.match(source, /<strong>Removed<\/strong>/);
-  assert.match(source, /Group invitations now wait for each person to accept/);
-  assert.match(source, /Notification controls are easier to understand/);
-  assert.match(source, /data export button or the old/);
+  assert.match(source, /<strong>Fixed<\/strong>/);
+  assert.match(source, /Friends now include private nicknames and notes/);
+  assert.match(source, /Friends sort online members first/);
+  assert.match(source, /Active polls load inside messages/);
 });

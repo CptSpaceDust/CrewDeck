@@ -1198,6 +1198,7 @@ export async function getNotifications(userId) {
       .from("notifications")
       .select("*")
       .eq("user_id", userId)
+      .order("priority", { ascending: false })
       .order("created_at", { ascending: false })
       .limit(80),
   );

@@ -11,6 +11,7 @@ import {
   Mic,
   MicOff,
   Hand,
+  Hash,
   Headphones,
   MessageCircle,
   Monitor,
@@ -34,6 +35,7 @@ import {
 import EditMessageButton from "../components/EditMessageButton";
 import GroupPolls, { InlineGroupPoll } from "../components/GroupPolls";
 import {
+  ConversationDetails,
   ConversationNotificationControl,
   MessageFeatureBar,
   PinnedMessages,
@@ -1501,12 +1503,12 @@ function DirectMessagesPage({
     const found = conversations.find((x) => x.id === route.conversation);
     if (found) {
       setSelected(found);
-      if (route.call) {
-        setCall({ conversation: found, callId: route.call });
+      if (route.call || route.startCall) {
+        setCall({ conversation: found, callId: route.call || crypto.randomUUID() });
         onRouteConsumed?.();
       }
     }
-  }, [route?.conversation, route?.call, conversations.length]);
+  }, [route?.conversation, route?.call, route?.startCall, conversations.length]);
   useEffect(() => {
     if (!selected) {
       setMessages([]);
@@ -1811,6 +1813,7 @@ function DirectMessagesPage({
                     conversationId={selected.id}
                     preference={conversationFeatures.preferences}
                     onPreferenceChanged={reloadConversationFeatures}
+                    onNotice={setNotice}
                   />
                 </div>
               </header>
@@ -2346,9 +2349,11 @@ function DirectActionsMenu({
   conversationId,
   preference,
   onPreferenceChanged,
+  onNotice,
 }) {
   const [open, setOpen] = useState(false);
   const [preferencesOpen, setPreferencesOpen] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const [menuPosition, setMenuPosition] = useState(null);
   const buttonRef = useRef(null);
   function toggleMenu() {
@@ -2403,6 +2408,16 @@ function DirectActionsMenu({
               </button>
               <button
                 type="button"
+                className="group-actions-menu-item"
+                onClick={() => {
+                  setOpen(false);
+                  setDetailsOpen(true);
+                }}
+              >
+                <Hash /> Conversation info & reminders
+              </button>
+              <button
+                type="button"
                 className="group-actions-menu-item danger"
                 onClick={() => {
                   setOpen(false);
@@ -2430,6 +2445,19 @@ function DirectActionsMenu({
           />
         </Modal>
       )}
+      {detailsOpen && (
+        <Modal
+          title="Conversation information"
+          onClose={() => setDetailsOpen(false)}
+        >
+          <ConversationDetails
+            kind="dm"
+            conversationId={conversationId}
+            userId={user.id}
+            onNotice={onNotice}
+          />
+        </Modal>
+      )}
     </div>
   );
 }
@@ -2447,6 +2475,7 @@ function GroupActionsMenu({
   const [open, setOpen] = useState(false);
   const [pollsOpen, setPollsOpen] = useState(false);
   const [preferencesOpen, setPreferencesOpen] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const [menuPosition, setMenuPosition] = useState(null);
   const buttonRef = useRef(null);
   const canManage = role === "owner" || role === "moderator";
@@ -2513,6 +2542,16 @@ function GroupActionsMenu({
               >
                 <BarChart3 /> Polls
               </button>
+              <button
+                type="button"
+                className="group-actions-menu-item"
+                onClick={() => {
+                  setOpen(false);
+                  setDetailsOpen(true);
+                }}
+              >
+                <Hash /> Group info & reminders
+              </button>
               {canManage && (
                 <ManageGroupButton
                   group={group}
@@ -2559,6 +2598,19 @@ function GroupActionsMenu({
             preference={preference}
             onChanged={onPreferenceChanged}
             expanded
+          />
+        </Modal>
+      )}
+      {detailsOpen && (
+        <Modal
+          title="Group conversation information"
+          onClose={() => setDetailsOpen(false)}
+        >
+          <ConversationDetails
+            kind="group"
+            conversationId={group.id}
+            userId={user.id}
+            onNotice={onNotice}
           />
         </Modal>
       )}
@@ -3059,6 +3111,9 @@ function GroupMessagesPage({
                   const quoted = item.reply_to_id
                     ? byId[item.reply_to_id]
                     : null;
+                  const pollMarker = item.content.match(
+                    /^\[\[crewdeck-poll:([0-9a-f-]{36})\]\]$/i,
+                  );
                   return (
                     <div
                       className={
@@ -3085,11 +3140,9 @@ function GroupMessagesPage({
                             : "a direct message"}
                         </small>
                       )}
-                      {/^\[\[crewdeck-poll:[0-9a-f-]{36}\]\]$/i.test(
-                        item.content,
-                      ) ? (
+                      {pollMarker ? (
                         <InlineGroupPoll
-                          pollId={item.content.slice(17, -2)}
+                          pollId={pollMarker[1]}
                           groupId={selected.id}
                           user={user}
                           role={myGroupRole}

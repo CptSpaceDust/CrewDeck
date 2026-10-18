@@ -97,11 +97,7 @@ export default function NotificationsPage({ user, onNavigate }) {
         <div className="notification-list">
           {filtered.map((item) => (
             <button
-              className={
-                item.is_read
-                  ? "panel notification-row"
-                  : "panel notification-row unread"
-              }
+              className={`${item.is_read ? "panel notification-row" : "panel notification-row unread"}${item.priority > 0 ? " priority" : ""}`}
               onClick={() => open(item)}
               key={item.id}
             >
@@ -110,6 +106,9 @@ export default function NotificationsPage({ user, onNavigate }) {
               </span>
               <span>
                 <strong>{item.title}</strong>
+                {item.priority > 0 && (
+                  <em className="notification-priority">Close friend</em>
+                )}
                 <p>{item.message}</p>
                 <small>
                   {formatDate(item.created_at, {

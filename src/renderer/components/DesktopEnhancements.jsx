@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { CheckCircle2, CloudOff, Minus, Wrench, X } from "lucide-react";
+import { CheckCircle2, CloudOff, Wrench, X } from "lucide-react";
 import { getMeetups } from "../lib/data";
 import { getPreferences, isQuietTime } from "../lib/preferences";
 import { playNotificationSound } from "../lib/sounds";
@@ -280,8 +280,9 @@ export function WhatsNew() {
             <div>
               <strong>Added</strong>
               <p>
-                Group invitations now wait for each person to accept, and
-                Settings can run a full connection and device diagnostic.
+                Friends now include private nicknames and notes, close-friend
+                alerts, mutual connections, quick actions, recommendations,
+                activity updates, and meetup presets.
               </p>
             </div>
           </article>
@@ -290,19 +291,19 @@ export function WhatsNew() {
             <div>
               <strong>Changed</strong>
               <p>
-                Notification controls are easier to understand, friends can
-                start conversations immediately, and Space Glass themes now
-                match website profile themes.
+                Friends sort online members first, settings stay synchronized
+                across CrewDeck, and speaking indicators fit each caller's
+                avatar.
               </p>
             </div>
           </article>
-          <article className="change-card removed">
-            <Minus />
+          <article className="change-card fixed">
+            <Wrench />
             <div>
-              <strong>Removed</strong>
+              <strong>Fixed</strong>
               <p>
-                Settings no longer includes the data export button or the old
-                What’s New history panel.
+                Active polls load inside messages, and reactions stay aligned
+                and visible after their controls close.
               </p>
             </div>
           </article>

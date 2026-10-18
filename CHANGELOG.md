@@ -2,6 +2,24 @@
 
 Every published CrewDeck release is documented here and copied into its GitHub release notes.
 
+## [1.8.3] - 2026-10-17
+
+### Added
+
+- Friends now support private nicknames and notes, close-friend priority alerts, friendship anniversaries, mutual friends and groups, profile highlights, recommendations, and an optional activity feed.
+- Friend cards now include quick actions for messages, calls, profiles, mutual connections, and meetup requests with an optional saved meetup preset.
+- Message reactions now include a full emoji picker, persistent reaction summaries, reminder management, and conversation details.
+
+### Changed
+
+- Friends sort online members first and synchronize friend feature settings across the website and desktop app.
+- Voice call speaking indicators now follow each member's avatar shape instead of stretching around the participant card.
+
+### Fixed
+
+- Group poll messages resolve their poll correctly and no longer show a removed-poll message for active polls.
+- Reaction controls stay aligned with message bubbles while saved reactions remain visible after the controls close.
+
 ## [1.8.2] - 2026-10-14
 
 ### Added

@@ -64,6 +64,10 @@ test("desktop messaging exposes the selected realtime conversation tools", () =>
     assert.match(combined, new RegExp(marker));
   assert.match(messages, /PinnedMessages/);
   assert.match(features, /Seen by/);
+  assert.match(features, /message-reaction-summary/);
+  assert.match(features, /emoji-picker-popover/);
+  assert.match(features, /ConversationDetails/);
+  assert.match(crewFeatures, /deleteMessageReminder/);
   assert.match(messages, /call_messages/);
   assert.match(messages, /handRaised/);
   assert.match(messages, /deafened/);
@@ -96,4 +100,53 @@ test("website and desktop ship matching community operations surfaces", () => {
   assert.match(settings, /Realtime updates/);
   assert.match(settings, /Open Discord support/);
   assert.doesNotMatch(settings, /Export my data|What’s New history/);
+});
+
+test("friend hub stays private, opt-in, and available on website and desktop", () => {
+  const siteRoot = path.join(root, "..");
+  const migration = fs.readFileSync(
+    path.join(
+      siteRoot,
+      "supabase",
+      "migrations",
+      "20261018024500_friend_hub.sql",
+    ),
+    "utf8",
+  );
+  const hardening = fs.readFileSync(
+    path.join(
+      siteRoot,
+      "supabase",
+      "migrations",
+      "20261018030000_harden_friend_hub.sql",
+    ),
+    "utf8",
+  );
+  const desktop = read("src", "renderer", "pages", "FriendsPage.jsx");
+  const website = fs.readFileSync(
+    path.join(siteRoot, "js", "friends.js"),
+    "utf8",
+  );
+  assert.match(migration, /create table if not exists public\.friend_details/);
+  assert.match(migration, /friend_details_owner/);
+  assert.match(
+    migration,
+    /recommendations_enabled boolean not null default false/,
+  );
+  assert.match(
+    migration,
+    /activity_feed_enabled boolean not null default false/,
+  );
+  assert.match(hardening, /security invoker/);
+  for (const marker of [
+    "Private nickname",
+    "Close friend",
+    "Mutual friends",
+    "Plan with preset",
+  ]) {
+    assert.match(desktop, new RegExp(marker));
+  }
+  assert.match(website, /get_friend_recommendations/);
+  assert.match(website, /get_friend_activity_feed/);
+  assert.match(website, /start_call=1/);
 });

@@ -267,13 +267,26 @@ function AvailabilityModal({ user, rows = [], onClose, onSaved }) {
 }
 
 export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
+  const [friendPrefill] = useState(() => {
+    try {
+      const value = JSON.parse(
+        localStorage.getItem("crewdeck.meetup.prefill") || "null",
+      );
+      localStorage.removeItem("crewdeck.meetup.prefill");
+      return value || {};
+    } catch {
+      return {};
+    }
+  });
   const meetupLoader = useLoader(getMeetups, []);
   const profileLoader = useLoader(getProfiles, []);
   const availabilityLoader = useLoader(getMeetupAvailability, []);
   const [currentMonth, setCurrentMonth] = useState(
     () => new Date(new Date().getFullYear(), new Date().getMonth(), 1),
   );
-  const [selectedPerson, setSelectedPerson] = useState("");
+  const [selectedPerson, setSelectedPerson] = useState(
+    friendPrefill.personId || "",
+  );
   const [selected, setSelected] = useState(null);
   const [showFormHint, setShowFormHint] = useState(false);
   const [availabilityOpen, setAvailabilityOpen] = useState(false);
@@ -820,7 +833,10 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
                     />
                   </Field>
                   <Field label="Duration">
-                    <select name="duration" defaultValue="1">
+                    <select
+                      name="duration"
+                      defaultValue={friendPrefill.preset?.duration || "1"}
+                    >
                       {[1, 2, 3, 4, 5].map((hours) => (
                         <option key={hours} value={hours}>
                           {hours} {hours === 1 ? "hour" : "hours"}
@@ -841,7 +857,11 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
                     />
                   </Field>
                   <Field label="Meetup type">
-                    <select name="type" defaultValue="" required>
+                    <select
+                      name="type"
+                      defaultValue={friendPrefill.preset?.meetup_type || ""}
+                      required
+                    >
                       <option value="" disabled>
                         Choose a meetup type…
                       </option>
@@ -861,14 +881,23 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
                   <textarea name="participants" rows="3" />
                 </Field>
                 <Field label="Scheduling flexibility">
-                  <select name="flexibility" defaultValue="exact">
+                  <select
+                    name="flexibility"
+                    defaultValue={
+                      friendPrefill.preset?.time_flexibility || "exact"
+                    }
+                  >
                     <option value="exact">Exact time only</option>
                     <option value="30">±30 minutes is okay</option>
                     <option value="60">±1 hour is okay</option>
                   </select>
                 </Field>
                 <Field label="Message" hint="Optional">
-                  <textarea name="message" rows="4" />
+                  <textarea
+                    name="message"
+                    rows="4"
+                    defaultValue={friendPrefill.preset?.message || ""}
+                  />
                 </Field>
                 <div className="form-grid">
                   <Field label="Repeat meetup">

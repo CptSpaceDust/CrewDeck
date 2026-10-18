@@ -8,6 +8,7 @@ import {
   Power,
   RefreshCw,
   SlidersHorizontal,
+  UserPlus,
   Volume2,
 } from "lucide-react";
 import { Field, PageHeader } from "./ui";
@@ -247,6 +248,16 @@ export default function AppSettings({ user }) {
   const [confirm, setConfirm] = useState("");
   const [message, setMessage] = useState("");
   const [preferences, setPreferences] = useState(defaultPreferences);
+  const [friendSettings, setFriendSettings] = useState({
+    recommendations_enabled: false,
+    activity_feed_enabled: false,
+    one_click_meetup_enabled: false,
+    meetup_preset: {},
+    show_badges: true,
+    show_interests: true,
+    show_favorite_games: true,
+  });
+  const [friendSettingsMessage, setFriendSettingsMessage] = useState("");
   const [notificationStatus, setNotificationStatus] = useState(null);
   const [notificationMessage, setNotificationMessage] = useState("");
   const [startup, setStartup] = useState(false);
@@ -262,9 +273,46 @@ export default function AppSettings({ user }) {
       .getStartup()
       .then((value) => setStartup(Boolean(value.enabled)));
     setPreferences(getPreferences());
+    if (user?.id) {
+      supabase
+        .from("friend_feature_settings")
+        .select("*")
+        .eq("user_id", user.id)
+        .maybeSingle()
+        .then(({ data }) => {
+          if (data)
+            setFriendSettings((current) => ({
+              ...current,
+              ...data,
+              meetup_preset: data.meetup_preset || {},
+            }));
+        });
+    }
   }, []);
   function preference(key, value) {
     setPreferences(updatePreferences({ [key]: value }));
+  }
+  async function saveFriendSettings(event) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const next = {
+      ...friendSettings,
+      user_id: user.id,
+      meetup_preset: {
+        duration: Number(form.get("duration") || 2),
+        meetup_type: String(
+          form.get("meetup_type") || "Hanging Out / Chatting",
+        ),
+        time_flexibility: String(form.get("time_flexibility") || "exact"),
+        message: String(form.get("message") || "").trim(),
+      },
+      updated_at: new Date().toISOString(),
+    };
+    const { error } = await supabase
+      .from("friend_feature_settings")
+      .upsert(next, { onConflict: "user_id" });
+    setFriendSettingsMessage(error?.message || "Friend settings saved.");
+    if (!error) setFriendSettings(next);
   }
   useEffect(() => {
     window.desktop.updater.getState().then(setUpdate);
@@ -450,6 +498,167 @@ export default function AppSettings({ user }) {
       <div className="settings-grid">
         <div className="settings-group-heading">
           <span>01</span>
+          <div>
+            <h2>Friends & discovery</h2>
+            <p>
+              Private connections, recommendations, activity, and meetup
+              shortcuts.
+            </p>
+          </div>
+        </div>
+        <section className="panel settings-panel settings-panel-wide friend-settings-panel">
+          <div className="section-icon">
+            <UserPlus />
+          </div>
+          <h2>Friends & discovery</h2>
+          <p>
+            Choose which friend features appear and set the defaults used when
+            you plan a meetup from the Friends page.
+          </p>
+          <form
+            className="stack-form"
+            onSubmit={saveFriendSettings}
+            key={JSON.stringify(friendSettings.meetup_preset || {})}
+          >
+            <div className="settings-toggle-grid">
+              <label className="check-field">
+                <input
+                  type="checkbox"
+                  checked={friendSettings.recommendations_enabled}
+                  onChange={(event) =>
+                    setFriendSettings((value) => ({
+                      ...value,
+                      recommendations_enabled: event.target.checked,
+                    }))
+                  }
+                />
+                <span>Show friend recommendations</span>
+              </label>
+              <label className="check-field">
+                <input
+                  type="checkbox"
+                  checked={friendSettings.activity_feed_enabled}
+                  onChange={(event) =>
+                    setFriendSettings((value) => ({
+                      ...value,
+                      activity_feed_enabled: event.target.checked,
+                    }))
+                  }
+                />
+                <span>Show friend activity</span>
+              </label>
+              <label className="check-field">
+                <input
+                  type="checkbox"
+                  checked={friendSettings.one_click_meetup_enabled}
+                  onChange={(event) =>
+                    setFriendSettings((value) => ({
+                      ...value,
+                      one_click_meetup_enabled: event.target.checked,
+                    }))
+                  }
+                />
+                <span>Use my meetup preset from Friends</span>
+              </label>
+            </div>
+            <h3>Profile highlights shared with friends</h3>
+            <div className="settings-toggle-grid">
+              <label className="check-field">
+                <input
+                  type="checkbox"
+                  checked={friendSettings.show_badges}
+                  onChange={(event) =>
+                    setFriendSettings((value) => ({
+                      ...value,
+                      show_badges: event.target.checked,
+                    }))
+                  }
+                />
+                <span>Badges</span>
+              </label>
+              <label className="check-field">
+                <input
+                  type="checkbox"
+                  checked={friendSettings.show_interests}
+                  onChange={(event) =>
+                    setFriendSettings((value) => ({
+                      ...value,
+                      show_interests: event.target.checked,
+                    }))
+                  }
+                />
+                <span>Interests</span>
+              </label>
+              <label className="check-field">
+                <input
+                  type="checkbox"
+                  checked={friendSettings.show_favorite_games}
+                  onChange={(event) =>
+                    setFriendSettings((value) => ({
+                      ...value,
+                      show_favorite_games: event.target.checked,
+                    }))
+                  }
+                />
+                <span>Favorite games</span>
+              </label>
+            </div>
+            <div className="form-grid friend-meetup-preset">
+              <Field label="Default duration">
+                <select
+                  name="duration"
+                  defaultValue={friendSettings.meetup_preset?.duration || 2}
+                >
+                  <option value="1">1 hour</option>
+                  <option value="2">2 hours</option>
+                  <option value="3">3 hours</option>
+                  <option value="4">4 hours</option>
+                </select>
+              </Field>
+              <Field label="Default meetup type">
+                <select
+                  name="meetup_type"
+                  defaultValue={
+                    friendSettings.meetup_preset?.meetup_type ||
+                    "Hanging Out / Chatting"
+                  }
+                >
+                  <option>Gaming</option>
+                  <option>World Exploration</option>
+                  <option>Hanging Out / Chatting</option>
+                  <option>Watching Something</option>
+                  <option>Working on a Project</option>
+                  <option>Other</option>
+                </select>
+              </Field>
+              <Field label="Scheduling flexibility">
+                <select
+                  name="time_flexibility"
+                  defaultValue={
+                    friendSettings.meetup_preset?.time_flexibility || "exact"
+                  }
+                >
+                  <option value="exact">Exact time only</option>
+                  <option value="30">±30 minutes</option>
+                  <option value="60">±1 hour</option>
+                </select>
+              </Field>
+              <Field label="Default note">
+                <input
+                  name="message"
+                  maxLength="700"
+                  defaultValue={friendSettings.meetup_preset?.message || ""}
+                />
+              </Field>
+            </div>
+            <button className="button primary">Save friend settings</button>
+            {friendSettingsMessage && (
+              <p className="form-message">{friendSettingsMessage}</p>
+            )}
+          </form>
+        </section>
+        <div className="settings-group-heading">
+          <span>02</span>
           <div>
             <h2>Look & privacy</h2>
             <p>How CrewDeck feels and how it protects your session.</p>
@@ -679,7 +888,7 @@ export default function AppSettings({ user }) {
           {message && <p className="form-message">{message}</p>}
         </section>
         <div className="settings-group-heading">
-          <span>02</span>
+          <span>03</span>
           <div>
             <h2>Calls & account</h2>
             <p>Audio hardware, voice processing, and moderation history.</p>
@@ -688,7 +897,7 @@ export default function AppSettings({ user }) {
         <AudioDevices preferences={preferences} preference={preference} />
         {user && <MyModerationAppeals user={user} />}
         <div className="settings-group-heading">
-          <span>03</span>
+          <span>04</span>
           <div>
             <h2>Alerts & desktop</h2>
             <p>Notification behavior, startup, and app updates.</p>

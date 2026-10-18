@@ -96,6 +96,7 @@ function parseNavigation(value) {
     group: url.searchParams.get("group"),
     view: url.searchParams.get("view"),
     call: url.searchParams.get("call"),
+    startCall: url.searchParams.get("start_call") === "1",
   };
 }
 
@@ -376,6 +377,7 @@ export default function App() {
         .from("notifications")
         .select("*")
         .eq("user_id", userId)
+        .order("priority", { ascending: false })
         .order("created_at", { ascending: false })
         .limit(80);
       if (!alive || error) return;
@@ -518,7 +520,13 @@ export default function App() {
       case "crew":
         return <CrewPage onViewProfile={viewPerson} />;
       case "friends":
-        return <FriendsPage {...props} />;
+        return (
+          <FriendsPage
+            {...props}
+            onNavigate={navigate}
+            onViewProfile={viewPerson}
+          />
+        );
       case "crew-profile":
         return (
           <CrewProfilePage
@@ -547,7 +555,9 @@ export default function App() {
             route={messageRoute}
             onRouteConsumed={() =>
               setMessageRoute((current) =>
-                current?.call ? { ...current, call: null } : current,
+                current
+                  ? { ...current, call: null, startCall: false }
+                  : current,
               )
             }
           />

@@ -129,13 +129,20 @@ export function PollCard({
 export function InlineGroupPoll({ pollId, groupId, user, role, onNotice }) {
   const [poll, setPoll] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const load = async () => {
-    const rows = await getGroupPolls(groupId);
-    setPoll(rows.find((item) => item.id === pollId) || null);
-    setLoading(false);
+    try {
+      const rows = await getGroupPolls(groupId);
+      setPoll(rows.find((item) => item.id === pollId) || null);
+      setLoadError("");
+    } catch (error) {
+      setLoadError(error.message || "Poll could not be loaded.");
+    } finally {
+      setLoading(false);
+    }
   };
   useEffect(() => {
-    load().catch(() => setLoading(false));
+    load();
     const channel = supabase
       .channel(`inline-poll-${pollId}`)
       .on(
@@ -162,6 +169,8 @@ export function InlineGroupPoll({ pollId, groupId, user, role, onNotice }) {
     return () => supabase.removeChannel(channel);
   }, [pollId, groupId]);
   if (loading) return <div className="inline-poll-loading">Loading poll…</div>;
+  if (loadError)
+    return <div className="inline-poll-removed">Poll could not be loaded.</div>;
   if (!poll)
     return <div className="inline-poll-removed">This poll was removed.</div>;
   return (

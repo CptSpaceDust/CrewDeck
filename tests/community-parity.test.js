@@ -76,6 +76,8 @@ test("group polls announce themselves and group menus stay interactive", () => {
   assert.match(messages, /const members = Array\.isArray\(group\?\.members\)/);
   assert.match(messages, /createPortal\(/);
   assert.match(messages, /group-actions-menu-layer/);
+  assert.match(messages, /pollId=\{pollMarker\[1\]\}/);
+  assert.doesNotMatch(messages, /slice\(17, -2\)/);
   assert.doesNotMatch(messages, /onOpen=\{\(\) => setOpen\(false\)\}/);
   assert.match(messages, /onClosed=\{\(\) => setOpen\(false\)\}/);
 });

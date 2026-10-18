@@ -212,6 +212,28 @@ export async function remindAboutMessage(
   );
 }
 
+export async function getMessageReminders(userId, kind, conversationId) {
+  return unwrap(
+    await supabase
+      .from("message_reminders")
+      .select("id,message_id,message_excerpt,remind_at,delivered_at,created_at")
+      .eq("user_id", userId)
+      .eq("conversation_kind", kind)
+      .eq("conversation_id", conversationId)
+      .order("remind_at", { ascending: true }),
+  );
+}
+
+export async function deleteMessageReminder(reminderId, userId) {
+  return unwrap(
+    await supabase
+      .from("message_reminders")
+      .delete()
+      .eq("id", reminderId)
+      .eq("user_id", userId),
+  );
+}
+
 export async function markMessageRead(kind, conversationId, messageId, userId) {
   return unwrap(
     await supabase.from("message_read_receipts").upsert(
