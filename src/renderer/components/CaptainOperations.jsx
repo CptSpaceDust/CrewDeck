@@ -3,7 +3,7 @@ import { Flag, Megaphone, ShieldCheck, Wrench } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { Field } from "./ui";
 
-export default function CaptainOperations({ user }) {
+export default function CaptainOperations({ user, embedded = false }) {
   const [state, setState] = useState(null);
   const [audit, setAudit] = useState([]);
   const [profiles, setProfiles] = useState([]);
@@ -112,10 +112,12 @@ export default function CaptainOperations({ user }) {
   );
   return (
     <section className="captain-operations">
-      <header>
-        <span>Community operations</span>
-        <h2>Announcements, staff history & maintenance</h2>
-      </header>
+      {!embedded && (
+        <header>
+          <span>Community operations</span>
+          <h2>Announcements, staff history & maintenance</h2>
+        </header>
+      )}
       <div className="captain-operations-grid">
         <form className="panel stack-form" onSubmit={announce}>
           <Megaphone />

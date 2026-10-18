@@ -94,6 +94,7 @@ function parseNavigation(value) {
     conversation:
       url.searchParams.get("id") || url.searchParams.get("conversation"),
     group: url.searchParams.get("group"),
+    view: url.searchParams.get("view"),
     call: url.searchParams.get("call"),
   };
 }

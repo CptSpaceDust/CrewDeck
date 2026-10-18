@@ -92,6 +92,8 @@ test("website and desktop ship matching community operations surfaces", () => {
     /Looking for group|Temporary party rooms|favorite_crew/,
   );
   assert.match(meetup, /meetup_waitlist/);
-  assert.match(settings, /Run diagnostics/);
-  assert.match(settings, /Export my data/);
+  assert.match(settings, /Run full diagnostics/);
+  assert.match(settings, /Realtime updates/);
+  assert.match(settings, /Open Discord support/);
+  assert.doesNotMatch(settings, /Export my data|What’s New history/);
 });

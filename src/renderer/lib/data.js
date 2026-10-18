@@ -328,19 +328,19 @@ export async function getMeetupAvailability() {
 }
 
 export async function addMeetupAvailability(userId, fields) {
+  const allDay = Boolean(fields.all_day);
+  if (!allDay && (!fields.start_time || !fields.end_time))
+    throw new Error("Choose both a starting and ending time.");
+  if (!allDay && fields.start_time >= fields.end_time)
+    throw new Error("The ending time must be later than the starting time.");
   return unwrap(
-    await supabase
-      .from("meetup_availability_blocks")
-      .insert({
-        user_id: userId,
-        block_date: fields.block_date,
-        all_day: Boolean(fields.all_day),
-        start_time: fields.all_day ? null : fields.start_time,
-        end_time: fields.all_day ? null : fields.end_time,
-        time_zone: fields.time_zone,
-      })
-      .select()
-      .single(),
+    await supabase.rpc("save_meetup_availability", {
+      selected_date: fields.block_date,
+      unavailable_all_day: allDay,
+      unavailable_from: allDay ? null : fields.start_time,
+      unavailable_until: allDay ? null : fields.end_time,
+      selected_time_zone: fields.time_zone,
+    }),
   );
 }
 
@@ -707,7 +707,18 @@ export async function requestConversation(user, profile, other) {
       .maybeSingle(),
   );
   if (existing) return { conversationId: existing.id };
+  const friendship = unwrap(
+    await supabase
+      .from("friendships")
+      .select("requester_id,addressee_id,status")
+      .eq("status", "accepted")
+      .or(
+        `and(requester_id.eq.${userId},addressee_id.eq.${otherId}),and(requester_id.eq.${otherId},addressee_id.eq.${userId})`,
+      )
+      .maybeSingle(),
+  );
   if (
+    friendship ||
     String(profile?.rank || "")
       .trim()
       .toLowerCase() === "captain"
@@ -854,6 +865,19 @@ export async function getGroupConversations(userId) {
       )
       .in("id", ids)
       .order("updated_at", { ascending: false }),
+  );
+}
+
+export async function getPendingGroupInvites() {
+  return unwrap(await supabase.rpc("get_pending_group_invites"));
+}
+
+export async function respondToGroupInvite(groupId, response) {
+  return unwrap(
+    await supabase.rpc("respond_to_group_invite", {
+      group_key: groupId,
+      response,
+    }),
   );
 }
 
@@ -1067,9 +1091,9 @@ export async function createGroupConversation(
       supabase.rpc("create_notification", {
         target_user_id: target,
         notification_type: "message",
-        notification_title: "Added to a group conversation",
-        notification_message: `${profile?.username || "A crew member"} added you to ${name}.`,
-        notification_link: `Conversation.html?group=${encodeURIComponent(groupId)}`,
+        notification_title: "Group conversation invitation",
+        notification_message: `${profile?.username || "A crew member"} invited you to join ${name}.`,
+        notification_link: "Messages.html?view=groups",
       }),
     ),
   );
@@ -1161,9 +1185,9 @@ export async function manageGroupMember(
     await supabase.rpc("create_notification", {
       target_user_id: targetUserId,
       notification_type: "message",
-      notification_title: "Added to a group conversation",
-      notification_message: `You were invited to ${groupName}.`,
-      notification_link: `Conversation.html?group=${encodeURIComponent(groupId)}`,
+      notification_title: "Group conversation invitation",
+      notification_message: `You were invited to join ${groupName}.`,
+      notification_link: "Messages.html?view=groups",
     });
   return result;
 }

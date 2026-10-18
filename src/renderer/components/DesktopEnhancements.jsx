@@ -280,9 +280,8 @@ export function WhatsNew() {
             <div>
               <strong>Added</strong>
               <p>
-                Polls now appear as interactive cards inside group messages,
-                and Friends has its own focused page for connections and
-                requests.
+                Group invitations now wait for each person to accept, and
+                Settings can run a full connection and device diagnostic.
               </p>
             </div>
           </article>
@@ -291,9 +290,9 @@ export function WhatsNew() {
             <div>
               <strong>Changed</strong>
               <p>
-                Message reactions stay tucked away until you hover or focus a
-                message. Conversation alerts live in the options menu, Settings
-                is cleaner, and accent colors now visibly update the app.
+                Notification controls are easier to understand, friends can
+                start conversations immediately, and Space Glass themes now
+                match website profile themes.
               </p>
             </div>
           </article>
@@ -302,8 +301,8 @@ export function WhatsNew() {
             <div>
               <strong>Removed</strong>
               <p>
-                Crew Hub, favorite crew, Looking for Group, and temporary party
-                rooms have been removed.
+                Settings no longer includes the data export button or the old
+                What’s New history panel.
               </p>
             </div>
           </article>

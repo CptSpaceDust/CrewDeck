@@ -6,7 +6,7 @@ const DRAFT_PREFIX = "cptspacedust.desktop.draft.";
 
 export const defaultPreferences = Object.freeze({
   glassIntensity: "balanced",
-  accent: "blue",
+  accent: "default",
   reducedEffects: false,
   compactLayout: false,
   reduceMotion: false,
@@ -40,7 +40,7 @@ export const defaultPreferences = Object.freeze({
 export function applyPreferences(settings = getPreferences()) {
   const root = document.documentElement;
   root.dataset.glass = settings.glassIntensity || "balanced";
-  root.dataset.accent = settings.accent || "blue";
+  root.dataset.accent = settings.accent || "default";
   root.dataset.effects = settings.reducedEffects ? "reduced" : "full";
   root.dataset.density = settings.compactLayout ? "compact" : "comfortable";
   root.dataset.motion = settings.reduceMotion ? "reduced" : "full";

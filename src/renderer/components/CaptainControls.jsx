@@ -6,6 +6,7 @@ import { Modal, Field } from "./ui";
 import CaptainMusic from "./CaptainMusic";
 import CaptainMessages from "./CaptainMessages";
 import { meetupInstant } from "../lib/time";
+import { Megaphone } from "lucide-react";
 
 export const restrictionNames = {
   site: "Site access",
@@ -156,6 +157,7 @@ export default function CaptainControls({
   onRefresh,
   refreshing = false,
   refreshVersion = 0,
+  communityOperations,
 }) {
   const [question, setQuestion] = useState(null);
   const resolver = useRef(null);
@@ -350,6 +352,16 @@ export default function CaptainControls({
         </button>
       </section>
       <fieldset className="captain-controls" disabled={busy}>
+        <CaptainSection
+          id="community-operations"
+          icon={<Megaphone />}
+          title="Community Operations"
+          description="Publish announcements, review reports, inspect audit history, and manage maintenance."
+          status="Community tools"
+          tone="blue"
+        >
+          {communityOperations}
+        </CaptainSection>
         <CaptainSection
           id="meetup-management"
           icon="📅"
@@ -577,7 +589,10 @@ export default function CaptainControls({
         >
           <div className="captain-section">
             <h2>Moderation appeals</h2>
-            <p>Review the restriction, member explanation, and decision history together.</p>
+            <p>
+              Review the restriction, member explanation, and decision history
+              together.
+            </p>
             <CaptainAppeals
               appeals={data.appeals || []}
               user={user}

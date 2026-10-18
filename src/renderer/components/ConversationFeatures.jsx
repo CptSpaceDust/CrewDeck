@@ -261,75 +261,88 @@ export function ConversationNotificationControl({
   expanded = false,
 }) {
   const level = preference?.notification_level || "all";
+  async function save(changes) {
+    await saveConversationPreference(userId, kind, conversationId, changes);
+    onChanged();
+  }
   return (
     <div
       className={`conversation-preference-controls${expanded ? " expanded" : ""}`}
     >
-      {expanded && (
-        <p>
-          Choose when this conversation alerts you, where it appears, and which
-          sound it uses.
-        </p>
-      )}
-      <button
-        className="icon-button"
-        title={`Notifications: ${level}`}
-        onClick={async () => {
-          const next =
-            level === "all"
-              ? "mentions"
-              : level === "mentions"
-                ? "none"
-                : "all";
-          await saveConversationPreference(userId, kind, conversationId, {
-            notification_level: next,
-            folder: next === "none" ? "muted" : preference?.folder || "inbox",
-          });
-          onChanged();
-        }}
-      >
-        {level === "none" ? <BellOff /> : <BellRing />}
-        {expanded && <span>Notifications: {level}</span>}
-      </button>
-      <label>
-        <span>Folder</span>
-        <select
-          aria-label="Conversation folder"
-          title="Conversation folder"
-          value={preference?.folder || "inbox"}
-          onChange={async (event) => {
-            await saveConversationPreference(userId, kind, conversationId, {
-              folder: event.target.value,
-            });
-            onChanged();
-          }}
-        >
-          <option value="inbox">Inbox</option>
-          <option value="friends">Friends</option>
-          <option value="meetups">Meetups</option>
-          <option value="important">Important</option>
-          <option value="muted">Muted</option>
-        </select>
-      </label>
-      <label>
-        <span>Sound</span>
-        <select
-          aria-label="Conversation sound"
-          title="Conversation sound"
-          value={preference?.sound_key || "default"}
-          onChange={async (event) => {
-            await saveConversationPreference(userId, kind, conversationId, {
-              sound_key: event.target.value,
-            });
-            onChanged();
-          }}
-        >
-          <option value="default">Default sound</option>
-          <option value="soft">Soft sound</option>
-          <option value="bright">Bright sound</option>
-          <option value="silent">Silent</option>
-        </select>
-      </label>
+      <header>
+        <span className="conversation-preference-icon">
+          {level === "none" ? <BellOff /> : <BellRing />}
+        </span>
+        <div>
+          <strong>Choose your alerts</strong>
+          <p>
+            These settings only affect this{" "}
+            {kind === "group" ? "group" : "conversation"}.
+          </p>
+        </div>
+      </header>
+      <fieldset className="notification-level-options">
+        <legend>Notify me for</legend>
+        {[
+          ["all", "All messages", "Get an alert for every new message."],
+          [
+            "mentions",
+            "Mentions only",
+            "Alert me when someone uses my name or @everyone.",
+          ],
+          ["none", "Nothing", "Keep this conversation quiet."],
+        ].map(([value, title, detail]) => (
+          <label className={level === value ? "active" : ""} key={value}>
+            <input
+              type="radio"
+              name={`notification-level-${kind}-${conversationId}`}
+              checked={level === value}
+              onChange={() =>
+                save({
+                  notification_level: value,
+                  folder:
+                    value === "none" ? "muted" : preference?.folder || "inbox",
+                })
+              }
+            />
+            <span>
+              <strong>{title}</strong>
+              <small>{detail}</small>
+            </span>
+          </label>
+        ))}
+      </fieldset>
+      <div className="conversation-preference-selects">
+        <label>
+          <span>Organize in folder</span>
+          <select
+            aria-label="Conversation folder"
+            title="Conversation folder"
+            value={preference?.folder || "inbox"}
+            onChange={(event) => save({ folder: event.target.value })}
+          >
+            <option value="inbox">Inbox</option>
+            <option value="friends">Friends</option>
+            <option value="meetups">Meetups</option>
+            <option value="important">Important</option>
+            <option value="muted">Muted</option>
+          </select>
+        </label>
+        <label>
+          <span>Alert sound</span>
+          <select
+            aria-label="Conversation sound"
+            title="Conversation sound"
+            value={preference?.sound_key || "default"}
+            onChange={(event) => save({ sound_key: event.target.value })}
+          >
+            <option value="default">Default sound</option>
+            <option value="soft">Soft sound</option>
+            <option value="bright">Bright sound</option>
+            <option value="silent">Silent</option>
+          </select>
+        </label>
+      </div>
     </div>
   );
 }

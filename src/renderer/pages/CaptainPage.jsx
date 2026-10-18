@@ -210,25 +210,17 @@ export default function CaptainPage({ user, profile }) {
       </div>
     );
   return (
-    <>
-      <details className="captain-operations-disclosure">
-        <summary>
-          <span>Community operations</span>
-          <strong>Announcements, reports, audit history and maintenance</strong>
-        </summary>
-        <CaptainOperations user={user} />
-      </details>
-      <CaptainControls
-        data={data}
-        user={user}
-        run={run}
-        busy={busy}
-        onNotice={setNotice}
-        notice={notice}
-        onRefresh={refresh}
-        refreshing={refreshing}
-        refreshVersion={refreshVersion}
-      />
-    </>
+    <CaptainControls
+      data={data}
+      user={user}
+      run={run}
+      busy={busy}
+      onNotice={setNotice}
+      notice={notice}
+      onRefresh={refresh}
+      refreshing={refreshing}
+      refreshVersion={refreshVersion}
+      communityOperations={<CaptainOperations user={user} embedded />}
+    />
   );
 }

@@ -2,6 +2,29 @@
 
 Every published CrewDeck release is documented here and copied into its GitHub release notes.
 
+## [1.8.2] - 2026-10-14
+
+### Added
+
+- Group conversation invitations now require each invited member to accept before joining.
+- Settings diagnostics now check the account session, Supabase, messaging, calls, notifications, realtime updates, audio hardware, Windows alerts, and maintenance state.
+- Account deletion guidance now opens the community Discord support server directly.
+
+### Changed
+
+- Hidden reaction controls no longer reserve empty space inside message bubbles.
+- Conversation notification settings use clear alert choices with separate folder and sound controls.
+- The new conversation picker identifies existing conversations, pending requests, and friends.
+- Friends can start direct conversations immediately without a message request.
+- Friend profile actions update to Cancel request, Accept request, or Friends as appropriate.
+- Community Operations now matches the Captain Panel sections and sits directly above Meetup Management.
+- Space Glass themes now match the website profile themes and color more interface surfaces.
+
+### Fixed
+
+- Meetup availability validates time ranges, handles repeated saves safely, and no longer leaves a saved row behind after showing an error.
+- Sidebar navigation keeps a stable width and scroll gutter while changing pages.
+
 ## [1.8.1] - 2026-10-14
 
 ### Added

@@ -61,6 +61,7 @@ import {
   getConversations,
   getGroupConversations,
   getGroupDetails,
+  getPendingGroupInvites,
   getGroupMessages,
   getMessageRequests,
   getMessages,
@@ -71,6 +72,7 @@ import {
   renameGroupConversation,
   updateGroupConversationSettings,
   respondToMessageRequest,
+  respondToGroupInvite,
   restrictionMessage,
   sendGroupMessage,
   sendMessage,
@@ -1259,14 +1261,38 @@ function MessageRequestLauncher({ user, profile, onChanged, onNotice }) {
   const [people, setPeople] = useState([]);
   const [query, setQuery] = useState("");
   const [busy, setBusy] = useState("");
+  const [states, setStates] = useState({});
   async function show() {
     setOpen(true);
     try {
-      setPeople(
-        (await getProfiles("id,username,avatar,rank,last_seen")).filter(
-          (person) => person.id !== user.id,
-        ),
-      );
+      const [profiles, conversations, requests, friendships] =
+        await Promise.all([
+          getProfiles("id,username,avatar,rank,last_seen"),
+          getConversations(user.id),
+          supabase
+            .from("dm_requests")
+            .select("sender_id,recipient_id,status")
+            .eq("status", "Pending"),
+          supabase
+            .from("friendships")
+            .select("requester_id,addressee_id,status")
+            .eq("status", "accepted"),
+        ]);
+      setPeople(profiles.filter((person) => person.id !== user.id));
+      const next = {};
+      conversations.forEach((item) => {
+        next[item.person?.id] = "open";
+      });
+      (requests.data || []).forEach((item) => {
+        if (item.sender_id === user.id) next[item.recipient_id] = "outgoing";
+        if (item.recipient_id === user.id) next[item.sender_id] = "incoming";
+      });
+      (friendships.data || []).forEach((item) => {
+        const other =
+          item.requester_id === user.id ? item.addressee_id : item.requester_id;
+        if (!next[other]) next[other] = "friend";
+      });
+      setStates(next);
     } catch (error) {
       onNotice(error.message);
     }
@@ -1330,7 +1356,19 @@ function MessageRequestLauncher({ user, profile, onChanged, onNotice }) {
                   <strong>{person.username || "Crew member"}</strong>
                   <small>{person.rank || "Crew Member"}</small>
                 </span>
-                <em>{busy === person.id ? "Sending…" : "Request to DM"}</em>
+                <em>
+                  {busy === person.id
+                    ? "Opening…"
+                    : states[person.id] === "open"
+                      ? "Open conversation"
+                      : states[person.id] === "outgoing"
+                        ? "Request sent"
+                        : states[person.id] === "incoming"
+                          ? "Review request"
+                          : states[person.id] === "friend"
+                            ? "Message friend"
+                            : "Request to DM"}
+                </em>
               </button>
             ))}
           </div>
@@ -2536,6 +2574,7 @@ function GroupMessagesPage({
   onShowDms,
 }) {
   const [groups, setGroups] = useState([]);
+  const [invites, setInvites] = useState([]);
   const [selected, setSelected] = useState(null);
   const [details, setDetails] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -2563,8 +2602,12 @@ function GroupMessagesPage({
   }, [route?.group, groups.length]);
   async function loadGroups(targetId) {
     try {
-      const rows = await getGroupConversations(user.id);
+      const [rows, pendingInvites] = await Promise.all([
+        getGroupConversations(user.id),
+        getPendingGroupInvites(),
+      ]);
       setGroups(rows);
+      setInvites(pendingInvites || []);
       setSelected(
         (current) =>
           rows.find((item) => item.id === (targetId || current?.id)) ||
@@ -2590,6 +2633,11 @@ function GroupMessagesPage({
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "group_members" },
+        () => loadGroups(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "group_invites" },
         () => loadGroups(),
       )
       .subscribe();
@@ -2841,6 +2889,65 @@ function GroupMessagesPage({
         <button className="active">Group Messages</button>
       </div>
       {notice && <p className="form-message">{notice}</p>}
+      {invites.length > 0 && (
+        <section className="panel group-invite-panel">
+          <header>
+            <Users />
+            <div>
+              <h2>Group invitations</h2>
+              <p>Join only the group conversations you want.</p>
+            </div>
+          </header>
+          <div className="group-invite-list">
+            {invites.map((invite) => (
+              <article key={invite.group_id}>
+                <Avatar
+                  profile={{
+                    avatar: invite.avatar_url,
+                    username: invite.group_name,
+                  }}
+                />
+                <span>
+                  <strong>{invite.group_name}</strong>
+                  <small>
+                    Invited by {invite.inviter_name || "a crew member"}
+                  </small>
+                </span>
+                <div>
+                  <button
+                    className="button primary"
+                    onClick={async () => {
+                      try {
+                        await respondToGroupInvite(invite.group_id, "accepted");
+                        await loadGroups(invite.group_id);
+                        setNotice(`Joined ${invite.group_name}.`);
+                      } catch (exception) {
+                        setNotice(exception.message);
+                      }
+                    }}
+                  >
+                    Accept
+                  </button>
+                  <button
+                    className="button ghost"
+                    onClick={async () => {
+                      try {
+                        await respondToGroupInvite(invite.group_id, "declined");
+                        await loadGroups();
+                        setNotice(`Declined ${invite.group_name}.`);
+                      } catch (exception) {
+                        setNotice(exception.message);
+                      }
+                    }}
+                  >
+                    Decline
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
       <div className="messages-layout group-messages-layout">
         <aside className="panel conversation-list">
           <div className="conversation-search">
@@ -3142,11 +3249,13 @@ function GroupMessagesPage({
 }
 
 export default function MessagesPage(props) {
-  const [mode, setMode] = useState(props.route?.group ? "group" : "dm");
+  const [mode, setMode] = useState(
+    props.route?.group || props.route?.view === "groups" ? "group" : "dm",
+  );
   useEffect(() => {
-    if (props.route?.group) setMode("group");
+    if (props.route?.group || props.route?.view === "groups") setMode("group");
     else if (props.route?.conversation) setMode("dm");
-  }, [props.route?.group, props.route?.conversation]);
+  }, [props.route?.group, props.route?.conversation, props.route?.view]);
   return (
     <>
       <MessageNotices />

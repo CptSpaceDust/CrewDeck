@@ -236,6 +236,8 @@ function AudioDevices({ preferences, preference }) {
 
 export default function AppSettings({ user }) {
   const [accountMessage, setAccountMessage] = useState("");
+  const [diagnostics, setDiagnostics] = useState([]);
+  const [diagnosing, setDiagnosing] = useState(false);
   const [settings, setSettings] = useState({
     enabled: false,
     timeoutMinutes: 5,
@@ -299,6 +301,145 @@ export default function AppSettings({ user }) {
     const result = await window.desktop.system.setStartup(enabled);
     setStartup(Boolean(result.enabled));
   }
+  async function runDiagnostics() {
+    if (diagnosing) return;
+    setDiagnosing(true);
+    setDiagnostics([]);
+    const started = performance.now();
+    const checks = [];
+    try {
+      checks.push({
+        name: "Internet connection",
+        ok: navigator.onLine,
+        detail: navigator.onLine ? "Online" : "CrewDeck is offline",
+      });
+      const session = await supabase.auth.getSession();
+      checks.push({
+        name: "Account session",
+        ok: Boolean(session.data.session) && !session.error,
+        detail:
+          session.error?.message ||
+          (session.data.session ? "Signed in securely" : "No active session"),
+      });
+      const databaseStarted = performance.now();
+      const [profileCheck, services, notificationCheck] = await Promise.all([
+        supabase.from("profiles").select("id").eq("id", user.id).maybeSingle(),
+        supabase
+          .from("community_system_state")
+          .select(
+            "messaging_status,calls_status,notifications_status,maintenance_enabled",
+          )
+          .eq("id", true)
+          .maybeSingle(),
+        supabase
+          .from("notifications")
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", user.id),
+      ]);
+      checks.push({
+        name: "Supabase database",
+        ok: !profileCheck.error && Boolean(profileCheck.data),
+        detail:
+          profileCheck.error?.message ||
+          `${Math.round(performance.now() - databaseStarted)} ms response`,
+      });
+      checks.push({
+        name: "Messaging service",
+        ok: !services.error && services.data?.messaging_status !== "offline",
+        detail:
+          services.error?.message ||
+          services.data?.messaging_status ||
+          "Operational",
+      });
+      checks.push({
+        name: "Voice call service",
+        ok: !services.error && services.data?.calls_status !== "offline",
+        detail:
+          services.error?.message ||
+          services.data?.calls_status ||
+          "Operational",
+      });
+      checks.push({
+        name: "Notification database",
+        ok: !notificationCheck.error,
+        detail:
+          notificationCheck.error?.message ||
+          `${notificationCheck.count || 0} notifications reachable`,
+      });
+      const realtime = await new Promise((resolve) => {
+        const channel = supabase.channel(`diagnostic-${crypto.randomUUID()}`);
+        const timer = setTimeout(() => {
+          supabase.removeChannel(channel);
+          resolve({ ok: false, detail: "Connection timed out" });
+        }, 5000);
+        channel.subscribe((status) => {
+          if (status === "SUBSCRIBED") {
+            clearTimeout(timer);
+            supabase.removeChannel(channel);
+            resolve({ ok: true, detail: "Realtime connection established" });
+          }
+          if (["CHANNEL_ERROR", "TIMED_OUT"].includes(status)) {
+            clearTimeout(timer);
+            supabase.removeChannel(channel);
+            resolve({
+              ok: false,
+              detail: status.toLowerCase().replace("_", " "),
+            });
+          }
+        });
+      });
+      checks.push({ name: "Realtime updates", ...realtime });
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const microphones = devices.filter(
+          (item) => item.kind === "audioinput",
+        ).length;
+        const speakers = devices.filter(
+          (item) => item.kind === "audiooutput",
+        ).length;
+        checks.push({
+          name: "Call hardware",
+          ok: microphones > 0,
+          detail: `${microphones} microphone${microphones === 1 ? "" : "s"} · ${speakers} output${speakers === 1 ? "" : "s"}`,
+        });
+      } catch (error) {
+        checks.push({
+          name: "Call hardware",
+          ok: false,
+          detail: error.message,
+        });
+      }
+      const alerts = await window.desktop.notifications.getStatus();
+      checks.push({
+        name: "Windows alerts",
+        ok: Boolean(alerts.supported),
+        detail: alerts.supported
+          ? "Available"
+          : "Unavailable in Windows settings",
+      });
+      checks.push({
+        name: "Maintenance mode",
+        ok: !services.data?.maintenance_enabled,
+        detail: services.data?.maintenance_enabled
+          ? "Community actions are paused"
+          : "Normal operation",
+      });
+      setDiagnostics(checks);
+      setAccountMessage(
+        `${checks.filter((item) => item.ok).length} of ${checks.length} checks passed in ${Math.round(performance.now() - started)} ms.`,
+      );
+    } catch (error) {
+      checks.push({
+        name: "Diagnostics runner",
+        ok: false,
+        detail: error?.message || "The diagnostic check stopped unexpectedly.",
+      });
+      setDiagnostics(checks);
+      setAccountMessage("Diagnostics finished with an unexpected error.");
+    } finally {
+      setDiagnosing(false);
+    }
+  }
   return (
     <div className="page settings-page">
       <PageHeader
@@ -335,17 +476,20 @@ export default function AppSettings({ user }) {
               <option value="deep">Deep</option>
             </select>
           </Field>
-          <Field label="Space Glass accent">
+          <Field label="Space Glass theme">
             <select
-              value={preferences.accent || "blue"}
+              value={preferences.accent || "default"}
               onChange={(event) => preference("accent", event.target.value)}
             >
-              <option value="blue">Orbit blue</option>
-              <option value="violet">Nebula violet</option>
-              <option value="cyan">Comet cyan</option>
-              <option value="green">Aurora green</option>
-              <option value="amber">Solar amber</option>
-              <option value="rose">Supernova rose</option>
+              <option value="default">Space Default</option>
+              <option value="captain">Captain Blue</option>
+              <option value="nebula">Nebula Glow</option>
+              <option value="galaxy">Galaxy Core</option>
+              <option value="fire">Solar Flare</option>
+              <option value="ice">Frozen Planet</option>
+              <option value="alien">Alien World</option>
+              <option value="void">Void Protocol</option>
+              <option value="retro">Retro NASA</option>
             </select>
           </Field>
           <Field label="Interface size">
@@ -726,79 +870,49 @@ export default function AppSettings({ user }) {
           </div>
           <h2>Connection & account center</h2>
           <p>
-            Test CrewDeck services or download a private copy of your profile,
-            meetups, and notifications.
+            Check the services and device features CrewDeck needs, or contact
+            the Captain about your account.
           </p>
           <div className="button-row">
             <button
               className="button secondary"
-              onClick={async () => {
-                const started = performance.now();
-                const result = await supabase
-                  .from("community_system_state")
-                  .select("messaging_status,calls_status,notifications_status")
-                  .eq("id", true)
-                  .maybeSingle();
-                setAccountMessage(
-                  result.error
-                    ? result.error.message
-                    : `Connected in ${Math.round(performance.now() - started)} ms · Messaging ${result.data?.messaging_status || "operational"} · Calls ${result.data?.calls_status || "operational"}`,
-                );
-              }}
+              onClick={runDiagnostics}
+              disabled={diagnosing}
             >
-              <RefreshCw /> Run diagnostics
-            </button>
-            <button
-              className="button secondary"
-              onClick={async () => {
-                const [profile, meetups, notifications] = await Promise.all([
-                  supabase
-                    .from("profiles")
-                    .select("*")
-                    .eq("id", user.id)
-                    .maybeSingle(),
-                  supabase
-                    .from("meetup_requests")
-                    .select("*")
-                    .or(`user_id.eq.${user.id},with_user_id.eq.${user.id}`),
-                  supabase
-                    .from("notifications")
-                    .select("*")
-                    .eq("user_id", user.id),
-                ]);
-                const blob = new Blob(
-                  [
-                    JSON.stringify(
-                      {
-                        exported_at: new Date().toISOString(),
-                        profile: profile.data,
-                        meetups: meetups.data || [],
-                        notifications: notifications.data || [],
-                      },
-                      null,
-                      2,
-                    ),
-                  ],
-                  { type: "application/json" },
-                );
-                const link = document.createElement("a");
-                link.href = URL.createObjectURL(blob);
-                link.download = "crewdeck-account-export.json";
-                link.click();
-                setTimeout(() => URL.revokeObjectURL(link.href), 1000);
-              }}
-            >
-              <Download /> Export my data
+              <RefreshCw className={diagnosing ? "spin" : ""} />
+              {diagnosing ? "Checking CrewDeck…" : "Run full diagnostics"}
             </button>
           </div>
           {accountMessage && <p className="form-message">{accountMessage}</p>}
+          {diagnostics.length > 0 && (
+            <div className="diagnostic-results">
+              {diagnostics.map((item) => (
+                <div className={item.ok ? "passed" : "failed"} key={item.name}>
+                  <i aria-hidden="true" />
+                  <span>
+                    <strong>{item.name}</strong>
+                    <small>{item.detail}</small>
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
           <details className="settings-danger-details">
             <summary>Account deletion center</summary>
             <p>
               Account deletion permanently removes your profile, messages,
-              uploads, and sign-in access. Submit a Captain ticket when you are
-              ready to request it.
+              uploads, and sign-in access. Open the community Discord and make a
+              support ticket so the Captain can verify the request safely.
             </p>
+            <button
+              className="button secondary"
+              type="button"
+              onClick={() =>
+                window.desktop.openExternal("https://discord.gg/Gk3YRYmMfA")
+              }
+            >
+              Open Discord support
+            </button>
           </details>
         </section>
         <section className="panel settings-panel">
@@ -820,30 +934,6 @@ export default function AppSettings({ user }) {
             notification area so messages and alerts can still arrive. Use the
             tray icon’s Quit option to close it completely.
           </p>
-        </section>
-        <section className="panel settings-panel settings-panel-wide">
-          <div className="section-icon">
-            <Bell />
-          </div>
-          <h2>What’s New history</h2>
-          <p>Reopen a summary of recent CrewDeck improvements at any time.</p>
-          <div className="whats-new-history">
-            <details open>
-              <summary>Social, meetup, and moderation tools</summary>
-              <p>
-                Added message reactions, pins, mentions, reminders, read
-                receipts, conversation controls, group meetup tools, the Crew
-                Hub, moderation evidence, and Captain operations.
-              </p>
-            </details>
-            <details>
-              <summary>Calls and accessibility</summary>
-              <p>
-                Added call chat, raise hand, deafen, configurable push to talk,
-                microphone diagnostics, accent choices, and reduced effects.
-              </p>
-            </details>
-          </div>
         </section>
         <section className="panel settings-panel">
           <div className="section-icon">

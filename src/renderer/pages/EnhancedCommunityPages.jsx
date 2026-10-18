@@ -140,6 +140,7 @@ export function CrewPage({ onViewProfile }) {
 export function CrewProfilePage({ person, user, onBack }) {
   const [reporting, setReporting] = useState(false);
   const [reportMessage, setReportMessage] = useState("");
+  const [friendship, setFriendship] = useState(null);
   const {
     data: profile,
     loading,
@@ -149,6 +150,33 @@ export function CrewProfilePage({ person, user, onBack }) {
     () => (person?.id ? getProfile(person.id) : Promise.resolve(null)),
     [person?.id],
   );
+  useEffect(() => {
+    if (!user?.id || !person?.id || user.id === person.id) return;
+    let live = true;
+    const loadFriendship = async () => {
+      const result = await supabase
+        .from("friendships")
+        .select("requester_id,addressee_id,status")
+        .or(
+          `and(requester_id.eq.${user.id},addressee_id.eq.${person.id}),and(requester_id.eq.${person.id},addressee_id.eq.${user.id})`,
+        )
+        .maybeSingle();
+      if (live) setFriendship(result.data || null);
+    };
+    loadFriendship();
+    const channel = supabase
+      .channel(`profile-friendship-${user.id}-${person.id}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "friendships" },
+        loadFriendship,
+      )
+      .subscribe();
+    return () => {
+      live = false;
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id, person?.id]);
   if (loading)
     return (
       <div className="page">
@@ -252,15 +280,69 @@ export function CrewProfilePage({ person, user, onBack }) {
             <button
               className="button secondary"
               onClick={async () => {
-                const result = await supabase
-                  .from("friendships")
-                  .insert({ requester_id: user.id, addressee_id: profile.id });
+                let result;
+                if (
+                  friendship?.status === "pending" &&
+                  friendship.requester_id === user.id
+                ) {
+                  result = await supabase
+                    .from("friendships")
+                    .delete()
+                    .eq("requester_id", user.id)
+                    .eq("addressee_id", profile.id);
+                  if (!result.error) setFriendship(null);
+                  setReportMessage(
+                    result.error?.message || "Friend request canceled.",
+                  );
+                  return;
+                }
+                if (
+                  friendship?.status === "pending" &&
+                  friendship.addressee_id === user.id
+                ) {
+                  result = await supabase
+                    .from("friendships")
+                    .update({
+                      status: "accepted",
+                      accepted_at: new Date().toISOString(),
+                    })
+                    .eq("requester_id", profile.id)
+                    .eq("addressee_id", user.id);
+                  if (!result.error)
+                    setFriendship({ ...friendship, status: "accepted" });
+                  setReportMessage(
+                    result.error?.message || "Friend request accepted.",
+                  );
+                  return;
+                }
+                if (friendship?.status === "accepted") return;
+                result = await supabase.from("friendships").upsert({
+                  requester_id: user.id,
+                  addressee_id: profile.id,
+                  status: "pending",
+                  accepted_at: null,
+                });
+                if (!result.error)
+                  setFriendship({
+                    requester_id: user.id,
+                    addressee_id: profile.id,
+                    status: "pending",
+                  });
                 setReportMessage(
                   result.error?.message || "Friend request sent.",
                 );
               }}
+              disabled={friendship?.status === "accepted"}
             >
-              <UserPlus /> Add friend
+              <UserPlus />
+              {friendship?.status === "accepted"
+                ? "Friends"
+                : friendship?.status === "pending" &&
+                    friendship.requester_id === user.id
+                  ? "Cancel request"
+                  : friendship?.status === "pending"
+                    ? "Accept request"
+                    : "Add friend"}
             </button>
             <button
               className="button ghost danger-action"
