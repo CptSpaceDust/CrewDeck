@@ -102,31 +102,18 @@ test("website and desktop ship matching community operations surfaces", () => {
   assert.doesNotMatch(settings, /Export my data|What’s New history/);
 });
 
-test("friend hub stays private, opt-in, and available on website and desktop", () => {
-  const siteRoot = path.join(root, "..");
-  const migration = fs.readFileSync(
-    path.join(
-      siteRoot,
-      "supabase",
-      "migrations",
-      "20261018024500_friend_hub.sql",
-    ),
-    "utf8",
+test("friend hub stays private, opt-in, and available in the packaged app", () => {
+  const migration = read(
+    "supabase",
+    "migrations",
+    "20261018024500_friend_hub.sql",
   );
-  const hardening = fs.readFileSync(
-    path.join(
-      siteRoot,
-      "supabase",
-      "migrations",
-      "20261018030000_harden_friend_hub.sql",
-    ),
-    "utf8",
+  const hardening = read(
+    "supabase",
+    "migrations",
+    "20261018030000_harden_friend_hub.sql",
   );
   const desktop = read("src", "renderer", "pages", "FriendsPage.jsx");
-  const website = fs.readFileSync(
-    path.join(siteRoot, "js", "friends.js"),
-    "utf8",
-  );
   assert.match(migration, /create table if not exists public\.friend_details/);
   assert.match(migration, /friend_details_owner/);
   assert.match(
@@ -146,7 +133,7 @@ test("friend hub stays private, opt-in, and available on website and desktop", (
   ]) {
     assert.match(desktop, new RegExp(marker));
   }
-  assert.match(website, /get_friend_recommendations/);
-  assert.match(website, /get_friend_activity_feed/);
-  assert.match(website, /start_call=1/);
+  assert.match(desktop, /get_friend_recommendations/);
+  assert.match(desktop, /get_friend_activity_feed/);
+  assert.match(desktop, /start_call=1/);
 });

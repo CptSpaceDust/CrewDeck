@@ -2,7 +2,7 @@
 
 Every published CrewDeck release is documented here and copied into its GitHub release notes.
 
-## [1.8.3] - 2026-10-17
+## [1.8.4] - 2026-10-17
 
 ### Added
 
