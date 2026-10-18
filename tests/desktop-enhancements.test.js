@@ -134,7 +134,8 @@ test("Ideas Board actions and call routes have stable layouts and one-shot behav
   assert.match(styles, /\.idea-card-footer/);
   assert.match(styles, /overflow-wrap: anywhere/);
   assert.match(messages, /onRouteConsumed\?\.\(\)/);
-  assert.match(messages, /\[route\?\.conversation, route\?\.call/);
+  assert.match(messages, /crewdeck-open-call/);
+  assert.match(messages, /route\?\.startCall/);
   assert.match(messages, /blockedUntil=\{slowUntil\}/);
 });
 

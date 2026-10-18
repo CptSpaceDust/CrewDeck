@@ -199,6 +199,22 @@ function AudioDevices({ preferences, preference }) {
         </select>
       </Field>
       <div className="settings-audio-processing">
+        <label className="check-field voice-check-setting">
+          <input
+            type="checkbox"
+            checked={preferences.voiceCheckBeforeJoining !== false}
+            onChange={(event) =>
+              preference("voiceCheckBeforeJoining", event.target.checked)
+            }
+          />
+          <span>
+            <strong>Voice check before joining</strong>
+            <small>
+              Show a microphone preview and audio summary before a call
+              connects.
+            </small>
+          </span>
+        </label>
         <label className="check-field">
           <input
             type="checkbox"
@@ -603,54 +619,66 @@ export default function AppSettings({ user }) {
                 <span>Favorite games</span>
               </label>
             </div>
-            <div className="form-grid friend-meetup-preset">
-              <Field label="Default duration">
-                <select
-                  name="duration"
-                  defaultValue={friendSettings.meetup_preset?.duration || 2}
-                >
-                  <option value="1">1 hour</option>
-                  <option value="2">2 hours</option>
-                  <option value="3">3 hours</option>
-                  <option value="4">4 hours</option>
-                </select>
-              </Field>
-              <Field label="Default meetup type">
-                <select
-                  name="meetup_type"
-                  defaultValue={
-                    friendSettings.meetup_preset?.meetup_type ||
-                    "Hanging Out / Chatting"
-                  }
-                >
-                  <option>Gaming</option>
-                  <option>World Exploration</option>
-                  <option>Hanging Out / Chatting</option>
-                  <option>Watching Something</option>
-                  <option>Working on a Project</option>
-                  <option>Other</option>
-                </select>
-              </Field>
-              <Field label="Scheduling flexibility">
-                <select
-                  name="time_flexibility"
-                  defaultValue={
-                    friendSettings.meetup_preset?.time_flexibility || "exact"
-                  }
-                >
-                  <option value="exact">Exact time only</option>
-                  <option value="30">±30 minutes</option>
-                  <option value="60">±1 hour</option>
-                </select>
-              </Field>
-              <Field label="Default note">
-                <input
-                  name="message"
-                  maxLength="700"
-                  defaultValue={friendSettings.meetup_preset?.message || ""}
-                />
-              </Field>
-            </div>
+            <section className="friend-meetup-preset-card">
+              <header>
+                <span className="friend-meetup-preset-icon">01</span>
+                <div>
+                  <h3>One-click meetup preset</h3>
+                  <p>
+                    Defaults used when you plan a meetup directly from a friend
+                    card.
+                  </p>
+                </div>
+              </header>
+              <div className="form-grid friend-meetup-preset">
+                <Field label="Default duration">
+                  <select
+                    name="duration"
+                    defaultValue={friendSettings.meetup_preset?.duration || 2}
+                  >
+                    <option value="1">1 hour</option>
+                    <option value="2">2 hours</option>
+                    <option value="3">3 hours</option>
+                    <option value="4">4 hours</option>
+                  </select>
+                </Field>
+                <Field label="Default meetup type">
+                  <select
+                    name="meetup_type"
+                    defaultValue={
+                      friendSettings.meetup_preset?.meetup_type ||
+                      "Hanging Out / Chatting"
+                    }
+                  >
+                    <option>Gaming</option>
+                    <option>World Exploration</option>
+                    <option>Hanging Out / Chatting</option>
+                    <option>Watching Something</option>
+                    <option>Working on a Project</option>
+                    <option>Other</option>
+                  </select>
+                </Field>
+                <Field label="Scheduling flexibility">
+                  <select
+                    name="time_flexibility"
+                    defaultValue={
+                      friendSettings.meetup_preset?.time_flexibility || "exact"
+                    }
+                  >
+                    <option value="exact">Exact time only</option>
+                    <option value="30">±30 minutes</option>
+                    <option value="60">±1 hour</option>
+                  </select>
+                </Field>
+                <Field label="Default note">
+                  <input
+                    name="message"
+                    maxLength="700"
+                    defaultValue={friendSettings.meetup_preset?.message || ""}
+                  />
+                </Field>
+              </div>
+            </section>
             <button className="button primary">Save friend settings</button>
             {friendSettingsMessage && (
               <p className="form-message">{friendSettingsMessage}</p>

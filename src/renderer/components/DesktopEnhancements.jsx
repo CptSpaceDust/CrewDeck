@@ -280,9 +280,8 @@ export function WhatsNew() {
             <div>
               <strong>Added</strong>
               <p>
-                Friends now include private nicknames and notes, close-friend
-                alerts, mutual connections, quick actions, recommendations,
-                activity updates, and meetup presets.
+                Calls can stay connected across pages in a draggable compact
+                tile, and the microphone check can be enabled in Settings.
               </p>
             </div>
           </article>
@@ -291,9 +290,8 @@ export function WhatsNew() {
             <div>
               <strong>Changed</strong>
               <p>
-                Friends sort online members first, settings stay synchronized
-                across CrewDeck, and speaking indicators fit each caller's
-                avatar.
+                Friends, meetup presets, polls, Evidence Inbox, call chat, and
+                message reminders now have clearer Space Glass layouts.
               </p>
             </div>
           </article>
@@ -302,8 +300,8 @@ export function WhatsNew() {
             <div>
               <strong>Fixed</strong>
               <p>
-                Active polls load inside messages, and reactions stay aligned
-                and visible after their controls close.
+                Meetup requests submit reliably, poll deletion cleans up its
+                message, reminder text stays clean, and the sidebar is stable.
               </p>
             </div>
           </article>

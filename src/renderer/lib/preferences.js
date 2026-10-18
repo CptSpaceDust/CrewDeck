@@ -34,6 +34,7 @@ export const defaultPreferences = Object.freeze({
   noiseSuppression: true,
   echoCancellation: true,
   autoGainControl: true,
+  voiceCheckBeforeJoining: true,
   mutedConversations: {},
 });
 

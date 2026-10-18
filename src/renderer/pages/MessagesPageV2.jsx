@@ -8,6 +8,7 @@ import {
   BarChart3,
   Edit3,
   Maximize2,
+  Minimize2,
   Mic,
   MicOff,
   Hand,
@@ -254,7 +255,7 @@ function DeleteMessageDialog({ message, onClose, onDelete }) {
   );
 }
 
-function VoiceCall({ conversation, user, onClose, requestedCallId }) {
+export function VoiceCall({ conversation, user, onClose, requestedCallId }) {
   const callPreferences = getPreferences();
   const pushToTalkCode = callPreferences.pushToTalkKey || "Space";
   const pushToTalkLabel =
@@ -279,7 +280,9 @@ function VoiceCall({ conversation, user, onClose, requestedCallId }) {
   const [pushToTalk, setPushToTalk] = useState(
     Boolean(callPreferences.pushToTalkDefault),
   );
-  const [joinRequested, setJoinRequested] = useState(false);
+  const [joinRequested, setJoinRequested] = useState(
+    callPreferences.voiceCheckBeforeJoining === false,
+  );
   const [micTest, setMicTest] = useState({
     running: false,
     level: 0,
@@ -292,6 +295,12 @@ function VoiceCall({ conversation, user, onClose, requestedCallId }) {
   const [callChatOpen, setCallChatOpen] = useState(false);
   const [callMessages, setCallMessages] = useState([]);
   const [participantControls, setParticipantControls] = useState([]);
+  const [minimized, setMinimized] = useState(false);
+  const [compactPosition, setCompactPosition] = useState(() => ({
+    x: Math.max(18, window.innerWidth - 118),
+    y: Math.max(18, window.innerHeight - 138),
+  }));
+  const dragRef = useRef(null);
   const roomRef = useRef();
   const callRef = useRef();
   const startedAtRef = useRef(0);
@@ -302,6 +311,34 @@ function VoiceCall({ conversation, user, onClose, requestedCallId }) {
     conversation.type === "group"
       ? conversation.name
       : conversation.person?.username || "Crew member";
+
+  function beginCompactDrag(event) {
+    dragRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      originX: compactPosition.x,
+      originY: compactPosition.y,
+      moved: false,
+    };
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  }
+  function moveCompactCall(event) {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const dx = event.clientX - drag.startX,
+      dy = event.clientY - drag.startY;
+    if (Math.abs(dx) + Math.abs(dy) > 5) drag.moved = true;
+    setCompactPosition({
+      x: Math.max(10, Math.min(window.innerWidth - 104, drag.originX + dx)),
+      y: Math.max(10, Math.min(window.innerHeight - 118, drag.originY + dy)),
+    });
+  }
+  function finishCompactDrag() {
+    const moved = dragRef.current?.moved;
+    dragRef.current = null;
+    if (!moved) setMinimized(false);
+  }
 
   async function testMicrophone() {
     setMicTest({
@@ -872,6 +909,38 @@ function VoiceCall({ conversation, user, onClose, requestedCallId }) {
     });
   }
 
+  if (minimized) {
+    const active =
+      participants.find((participant) => speaking.has(participant.identity)) ||
+      participants[0];
+    const compactProfile = active
+      ? participantProfile(active, active === participants[0])
+      : {
+          username: callTitle,
+          avatar: conversation.person?.avatar || conversation.avatar || "",
+        };
+    return (
+      <button
+        type="button"
+        className={`compact-call-cube${active && speaking.has(active.identity) ? " speaking" : ""}`}
+        style={{ left: compactPosition.x, top: compactPosition.y }}
+        onPointerDown={beginCompactDrag}
+        onPointerMove={moveCompactCall}
+        onPointerUp={finishCompactDrag}
+        onPointerCancel={() => {
+          dragRef.current = null;
+        }}
+        aria-label={`Return to ${callTitle} call`}
+        title="Drag to move · click to reopen"
+      >
+        <Avatar profile={compactProfile} size={58} />
+        <span>
+          <Phone /> {connected ? duration : "Connecting"}
+        </span>
+      </button>
+    );
+  }
+
   if (!joinRequested) {
     return (
       <div className="call-overlay">
@@ -950,6 +1019,14 @@ function VoiceCall({ conversation, user, onClose, requestedCallId }) {
             <Wifi />
             <span>{connected ? duration : "Connecting"}</span>
           </div>
+          <button
+            className="call-minimize"
+            type="button"
+            onClick={() => setMinimized(true)}
+            title="Minimize call"
+          >
+            <Minimize2 />
+          </button>
         </header>
 
         <div className="call-status" role="status">
@@ -1168,9 +1245,11 @@ function VoiceCall({ conversation, user, onClose, requestedCallId }) {
               {callMessages.map((item) => (
                 <p key={item.id}>
                   <strong>
-                    {participants.find(
-                      (person) => person.identity === item.sender_id,
-                    )?.profile?.username ||
+                    {participantProfile(
+                      participants.find(
+                        (person) => person.identity === item.sender_id,
+                      ),
+                    )?.username ||
                       (item.sender_id === user.id ? "You" : "Crew member")}
                   </strong>
                   <span>{item.content}</span>
@@ -1397,7 +1476,6 @@ function DirectMessagesPage({
   const [notice, setNotice] = useState("");
   const [query, setQuery] = useState("");
   const [, setReadRevision] = useState(0);
-  const [call, setCall] = useState(null);
   const [replying, setReplying] = useState(null);
   const [deleting, setDeleting] = useState(null);
   const [slowUntil, setSlowUntil] = useState(0);
@@ -1504,11 +1582,27 @@ function DirectMessagesPage({
     if (found) {
       setSelected(found);
       if (route.call || route.startCall) {
-        setCall({ conversation: found, callId: route.call || crypto.randomUUID() });
+        window.dispatchEvent(
+          new CustomEvent("crewdeck-open-call", {
+            detail: {
+              conversation: {
+                ...found,
+                meName: profile.username,
+                meAvatar: profile.avatar,
+              },
+              requestedCallId: route.call || crypto.randomUUID(),
+            },
+          }),
+        );
         onRouteConsumed?.();
       }
     }
-  }, [route?.conversation, route?.call, route?.startCall, conversations.length]);
+  }, [
+    route?.conversation,
+    route?.call,
+    route?.startCall,
+    conversations.length,
+  ]);
   useEffect(() => {
     if (!selected) {
       setMessages([]);
@@ -1803,7 +1897,19 @@ function DirectMessagesPage({
                   </button>
                   <button
                     className="icon-button call"
-                    onClick={() => setCall({ conversation: selected })}
+                    onClick={() =>
+                      window.dispatchEvent(
+                        new CustomEvent("crewdeck-open-call", {
+                          detail: {
+                            conversation: {
+                              ...selected,
+                              meName: profile.username,
+                              meAvatar: profile.avatar,
+                            },
+                          },
+                        }),
+                      )
+                    }
                   >
                     <Phone />
                   </button>
@@ -1934,18 +2040,6 @@ function DirectMessagesPage({
           )}
         </section>
       </div>
-      {call && (
-        <VoiceCall
-          conversation={{
-            ...call.conversation,
-            meName: profile.username,
-            meAvatar: profile.avatar,
-          }}
-          user={user}
-          requestedCallId={call.callId}
-          onClose={() => setCall(null)}
-        />
-      )}
       {deleting && (
         <DeleteMessageDialog
           message={deleting}
@@ -2638,7 +2732,6 @@ function GroupMessagesPage({
   const [query, setQuery] = useState("");
   const [, setReadRevision] = useState(0);
   const [replying, setReplying] = useState(null);
-  const [call, setCall] = useState(null);
   const [deleting, setDeleting] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const endRef = useRef();
@@ -2746,10 +2839,19 @@ function GroupMessagesPage({
   }, [selected?.id]);
   useEffect(() => {
     if (!route?.call || !details || details.id !== selected?.id) return;
-    setCall({
-      conversation: { ...details, type: "group" },
-      callId: route.call,
-    });
+    window.dispatchEvent(
+      new CustomEvent("crewdeck-open-call", {
+        detail: {
+          conversation: {
+            ...details,
+            type: "group",
+            meName: profile.username,
+            meAvatar: profile.avatar,
+          },
+          requestedCallId: route.call,
+        },
+      }),
+    );
     onRouteConsumed?.();
   }, [route?.call, details?.id, selected?.id]);
   useEffect(() => {
@@ -2802,6 +2904,17 @@ function GroupMessagesPage({
     }
   }
   async function remove(item) {
+    const pollId = String(item.content || "").match(
+      /^\[\[crewdeck-poll:([0-9a-f-]{36})\]\]$/i,
+    )?.[1];
+    if (pollId) {
+      const { error } = await supabase.rpc("delete_group_poll_message", {
+        poll_key: pollId,
+      });
+      if (error) throw error;
+      setMessages((rows) => rows.filter((row) => row.id !== item.id));
+      return;
+    }
     await deleteGroupMessage(item.id, user.id);
     setMessages((rows) => rows.filter((row) => row.id !== item.id));
     setReplying((current) => (current?.id === item.id ? null : current));
@@ -3077,7 +3190,18 @@ function GroupMessagesPage({
                     className="icon-button call"
                     title="Start group call"
                     onClick={() =>
-                      setCall({ conversation: { ...details, type: "group" } })
+                      window.dispatchEvent(
+                        new CustomEvent("crewdeck-open-call", {
+                          detail: {
+                            conversation: {
+                              ...details,
+                              type: "group",
+                              meName: profile.username,
+                              meAvatar: profile.avatar,
+                            },
+                          },
+                        }),
+                      )
                     }
                   >
                     <Phone />
@@ -3278,18 +3402,6 @@ function GroupMessagesPage({
           )}
         </aside>
       </div>
-      {call && (
-        <VoiceCall
-          conversation={{
-            ...call.conversation,
-            meName: profile.username,
-            meAvatar: profile.avatar,
-          }}
-          user={user}
-          requestedCallId={call.callId}
-          onClose={() => setCall(null)}
-        />
-      )}
       {deleting && (
         <DeleteMessageDialog
           message={deleting}

@@ -199,8 +199,17 @@ export default function CaptainOperations({ user, embedded = false }) {
       <section className="panel captain-evidence-panel">
         <header>
           <div>
-            <Flag />
-            <h3>Evidence inbox</h3>
+            <span className="captain-evidence-icon">
+              <Flag />
+            </span>
+            <span>
+              <small>EVIDENCE REVIEW</small>
+              <h3>Evidence inbox</h3>
+              <p>
+                Preserved message context for fast, consistent moderation
+                decisions.
+              </p>
+            </span>
           </div>
           <div className="captain-evidence-actions">
             <button
@@ -226,7 +235,12 @@ export default function CaptainOperations({ user, embedded = false }) {
                 ? report.message_context[0]
                 : null;
               return (
-                <label key={report.id}>
+                <label
+                  key={report.id}
+                  className={
+                    selectedEvidence.includes(report.id) ? "selected" : ""
+                  }
+                >
                   <input
                     type="checkbox"
                     checked={selectedEvidence.includes(report.id)}
@@ -238,17 +252,28 @@ export default function CaptainOperations({ user, embedded = false }) {
                       )
                     }
                   />
-                  <span>
-                    <strong>
-                      {profileNames[report.reported_user_id] || "Crew member"}
-                    </strong>
+                  <span className="captain-evidence-content">
+                    <span className="captain-evidence-title">
+                      <strong>
+                        {profileNames[report.reported_user_id] || "Crew member"}
+                      </strong>
+                      <b>{report.status}</b>
+                    </span>
                     <small>
-                      {report.conversation_kind.toUpperCase()} · {report.status}{" "}
-                      · {new Date(report.created_at).toLocaleString()}
+                      {report.conversation_kind.toUpperCase()} ·{" "}
+                      {new Date(report.created_at).toLocaleString()}
                     </small>
-                    <p>{context?.content || "Evidence snapshot"}</p>
-                    {context?.reason && <em>{context.reason}</em>}
-                    <code>{report.conversation_id}</code>
+                    <blockquote>
+                      {context?.content || "Evidence snapshot"}
+                    </blockquote>
+                    {context?.reason && (
+                      <p>
+                        <strong>Reason:</strong> {context.reason}
+                      </p>
+                    )}
+                    <code title="Conversation ID">
+                      {report.conversation_id}
+                    </code>
                   </span>
                 </label>
               );

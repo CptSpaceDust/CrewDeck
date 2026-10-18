@@ -29,7 +29,7 @@ import {
   GuidelinesPage,
 } from "./pages/EnhancedCommunityPages";
 import MeetupsPage from "./pages/MeetupsPage";
-import MessagesPage from "./pages/MessagesPageV2";
+import MessagesPage, { VoiceCall } from "./pages/MessagesPageV2";
 import NotificationsPage from "./pages/NotificationsPage";
 import { useMessageAlerts } from "./lib/messageAlerts";
 import { activeConversation } from "./components/MessageComposer";
@@ -138,6 +138,7 @@ export default function App() {
   );
   const [toast, setToast] = useState(null);
   const [incomingCall, setIncomingCall] = useState(null);
+  const [activeCall, setActiveCall] = useState(null);
   const incomingCallRef = useRef(null);
   useMessageAlerts(mfaRequired ? null : session?.user?.id);
   useMeetupReminders(mfaRequired ? null : session?.user?.id);
@@ -245,6 +246,11 @@ export default function App() {
     [],
   );
   useEffect(() => window.desktop.onNavigate((value) => navigate(value)), []);
+  useEffect(() => {
+    const openCall = (event) => setActiveCall(event.detail);
+    window.addEventListener("crewdeck-open-call", openCall);
+    return () => window.removeEventListener("crewdeck-open-call", openCall);
+  }, []);
   useEffect(() => {
     incomingCallRef.current = incomingCall;
     if (!incomingCall) return;
@@ -687,6 +693,14 @@ export default function App() {
             </button>
           </div>
         </section>
+      )}
+      {activeCall && (
+        <VoiceCall
+          conversation={activeCall.conversation}
+          user={session.user}
+          requestedCallId={activeCall.requestedCallId}
+          onClose={() => setActiveCall(null)}
+        />
       )}
     </div>
   );

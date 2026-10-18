@@ -53,7 +53,7 @@ test("What’s Changed contains Added, Changed, and Fixed summaries", () => {
   assert.match(source, /<strong>Added<\/strong>/);
   assert.match(source, /<strong>Changed<\/strong>/);
   assert.match(source, /<strong>Fixed<\/strong>/);
-  assert.match(source, /Friends now include private nicknames and notes/);
-  assert.match(source, /Friends sort online members first/);
-  assert.match(source, /Active polls load inside messages/);
+  assert.match(source, /Calls can stay connected across pages/);
+  assert.match(source, /Evidence Inbox, call chat/);
+  assert.match(source, /Meetup requests submit reliably/);
 });

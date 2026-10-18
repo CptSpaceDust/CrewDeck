@@ -2,6 +2,25 @@
 
 Every published CrewDeck release is documented here and copied into its GitHub release notes.
 
+## [1.8.5] - 2026-10-18
+
+### Added
+
+- Profile pages on the website now include complete friend request controls.
+- App calls can stay connected while navigating and shrink into a draggable speaker tile.
+- The app can optionally show a microphone check before joining calls.
+
+### Changed
+
+- Friends, one-click meetup presets, Evidence Inbox, polls, call chat, message reminders, and the CrewDeck download button use clearer Space Glass layouts.
+- Website message controls appear only when the pointer is over the message bubble.
+
+### Fixed
+
+- Meetup requests no longer lose their form reference on the website or fail notification RLS in the app.
+- Poll deletion removes its embedded group message, and reminder excerpts no longer include emoji controls.
+- The app sidebar no longer shifts sideways on hover.
+
 ## [1.8.4] - 2026-10-17
 
 ### Added
