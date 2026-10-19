@@ -2,6 +2,28 @@
 
 Every published CrewDeck release is documented here and copied into its GitHub release notes.
 
+## [1.9.0] - 2026-10-18
+
+### Added
+
+- Conversations now support 10 MB scanned attachments, voice messages, a shared media gallery, expiring messages, daily dividers, group welcome messages, and controlled invite links.
+- Voice calls now include a speaker queue, saved per-friend volume, screen-share pointers, network reconnection feedback, and a global push-to-talk shortcut.
+- The Help Request Board, Bug Report Center, and filterable Community Calendar are available on the website and in CrewDeck.
+- Privacy Checkup now controls messages, calls, invites, mentions, and friend requests, with trusted contacts and temporary contact pauses.
+- CrewDeck adds a command palette, separate conversation windows, Windows share targets, startup profiles, local media caching, and repair mode.
+
+### Changed
+
+- Community Operations now combines announcements, bug reports, help requests, evidence, moderation cases, maintenance, and Community Calendar publishing in a clearer Captain workspace.
+- Notifications, appearance, accessibility, meetup presets, and custom time controls use expanded Space Glass layouts.
+- Scheduled and active announcements appear in the app header and can be removed from Captain tools.
+
+### Fixed
+
+- Group invite-link controls now let owners choose expiration and use limits, and their state no longer crashes the group manager.
+- Call invitations, direct-message requests, friend requests, and group invitations now honor member interaction privacy.
+- Obsolete Call Chat, Favorite Crew, and UI-preference tables were identified for a separate cleanup review.
+
 ## [1.8.6] - 2026-10-18
 
 ### Added

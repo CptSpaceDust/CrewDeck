@@ -1,5 +1,14 @@
 import { useEffect, useRef, useState } from "react";
-import { Send } from "lucide-react";
+import {
+  BellOff,
+  CalendarClock,
+  History,
+  Mic,
+  Paperclip,
+  Send,
+  Square,
+  Trash2,
+} from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { shouldSendOnEnter } from "../lib/messageBehavior.mjs";
 import {
@@ -8,6 +17,12 @@ import {
   markConversationRead,
   saveDraft,
 } from "../lib/preferences";
+import {
+  cancelScheduledConversationMessage,
+  getMessageDraftVersions,
+  getScheduledConversationMessages,
+  saveMessageDraftVersion,
+} from "../lib/crewFeatures";
 
 export const activeConversation = { current: null };
 
@@ -85,6 +100,7 @@ export default function MessageComposer({
   people,
   placeholder,
   onSend,
+  onSendAttachment,
   blockedUntil = 0,
 }) {
   const [draft, setDraft] = useState("");
@@ -94,6 +110,16 @@ export default function MessageComposer({
   );
   const [typers, setTypers] = useState({});
   const [clock, setClock] = useState(Date.now());
+  const [silent, setSilent] = useState(false);
+  const [sendAt, setSendAt] = useState("");
+  const [expiresInMinutes, setExpiresInMinutes] = useState("");
+  const [scheduled, setScheduled] = useState([]);
+  const [versions, setVersions] = useState([]);
+  const [toolsOpen, setToolsOpen] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const [nativeShareFile, setNativeShareFile] = useState(null);
+  const recorderRef = useRef(null);
+  const recordingStartedRef = useRef(0);
   const channelRef = useRef(null);
   const inputRef = useRef(null);
   const sendingRef = useRef(false);
@@ -105,6 +131,13 @@ export default function MessageComposer({
     window.addEventListener("desktop-preferences", sync);
     return () => window.removeEventListener("desktop-preferences", sync);
   }, []);
+  useEffect(() => {
+    window.desktop?.shareTarget?.get?.().then((target) => {
+      if (!target?.base64 || !target?.mimeType) return;
+      const bytes = Uint8Array.from(atob(target.base64), (character) => character.charCodeAt(0));
+      setNativeShareFile(new File([bytes], target.name || "shared-file", { type:target.mimeType }));
+    });
+  }, [id]);
   useEffect(() => {
     let alive = true,
       ready = false;
@@ -179,6 +212,19 @@ export default function MessageComposer({
       supabase.removeChannel(channel);
     };
   }, [id, group, user.id]);
+  async function loadComposerHistory() {
+    const kind = group ? "group" : "dm";
+    const [scheduledRows, versionRows] = await Promise.all([
+      getScheduledConversationMessages(user.id, kind, id),
+      getMessageDraftVersions(user.id, kind, id),
+    ]);
+    setScheduled(scheduledRows || []);
+    setVersions(versionRows || []);
+  }
+  useEffect(() => {
+    if (!toolsOpen) return;
+    loadComposerHistory().catch(() => {});
+  }, [toolsOpen, id, group, user.id]);
   useEffect(() => {
     setClock(Date.now());
     if (blockedUntil <= Date.now()) return undefined;
@@ -220,17 +266,74 @@ export default function MessageComposer({
     sendingRef.current = true;
     setBusy(true);
     try {
-      if ((await onSend(event)) !== false) {
+      const content = draft.trim();
+      if ((await onSend(event, { silent, sendAt, expiresInMinutes: expiresInMinutes ? Number(expiresInMinutes) : null })) !== false) {
+        await saveMessageDraftVersion(
+          user.id,
+          group ? "group" : "dm",
+          id,
+          content,
+        ).catch(() => {});
         setDraft("");
         draftRef.current = "";
         saveDraft(user.id, id, group, "");
         channelRef.current?.(false);
+        setSilent(false);
+        setSendAt("");
+        setExpiresInMinutes("");
+        if (toolsOpen) await loadComposerHistory().catch(() => {});
       }
     } finally {
       sendingRef.current = false;
       setBusy(false);
       requestAnimationFrame(() => inputRef.current?.focus());
     }
+  }
+  async function attachFile(file, durationSeconds = null) {
+    if (!file || !onSendAttachment) return;
+    setBusy(true);
+    try {
+      await onSendAttachment(file, { silent, durationSeconds });
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function toggleRecording() {
+    if (recording) {
+      recorderRef.current?.stop();
+      return;
+    }
+    if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) return;
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      },
+    });
+    const chunks = [];
+    const recorder = new MediaRecorder(stream, {
+      mimeType: MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "",
+    });
+    recorderRef.current = recorder;
+    recordingStartedRef.current = Date.now();
+    setRecording(true);
+    recorder.ondataavailable = (event) => {
+      if (event.data.size) chunks.push(event.data);
+    };
+    recorder.onstop = async () => {
+      stream.getTracks().forEach((track) => track.stop());
+      setRecording(false);
+      recorderRef.current = null;
+      const blob = new Blob(chunks, {
+        type: recorder.mimeType || "audio/webm",
+      });
+      const file = new File([blob], `voice-message-${Date.now()}.webm`, {
+        type: blob.type,
+      });
+      await attachFile(file, (Date.now() - recordingStartedRef.current) / 1000);
+    };
+    recorder.start();
   }
   return (
     <>
@@ -283,6 +386,117 @@ export default function MessageComposer({
           <Send />
         </button>
       </form>
+      <div className="composer-delivery-controls">
+        {nativeShareFile && <button type="button" className="native-share-target" disabled={busy} onClick={async () => { await attachFile(nativeShareFile); setNativeShareFile(null); }}><Paperclip /> Send {nativeShareFile.name}</button>}
+        <label className="composer-file-button">
+          <Paperclip />
+          <span>Attach file</span>
+          <input
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/gif,audio/*,application/pdf,text/plain"
+            disabled={busy}
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              event.target.value = "";
+              attachFile(file);
+            }}
+          />
+        </label>
+        <button
+          type="button"
+          className={recording ? "active" : ""}
+          onClick={() => toggleRecording().catch(() => {})}
+        >
+          {recording ? <Square /> : <Mic />}
+          {recording ? "Stop recording" : "Voice message"}
+        </button>
+        <button
+          type="button"
+          className={silent ? "active" : ""}
+          aria-pressed={silent}
+          onClick={() => setSilent((value) => !value)}
+        >
+          <BellOff /> {silent ? "Sending silently" : "Send silently"}
+        </button>
+        <label>
+          <CalendarClock />
+          <span>Schedule</span>
+          <input
+            type="datetime-local"
+            value={sendAt}
+            min={new Date(Date.now() + 60000).toISOString().slice(0, 16)}
+            onChange={(event) => setSendAt(event.target.value)}
+          />
+        </label>
+        <label>
+          <Timer />
+          <span>Expires</span>
+          <select value={expiresInMinutes} onChange={(event) => setExpiresInMinutes(event.target.value)}>
+            <option value="">After 5 days</option>
+            <option value="15">After 15 minutes</option>
+            <option value="60">After 1 hour</option>
+            <option value="360">After 6 hours</option>
+            <option value="1440">After 1 day</option>
+          </select>
+        </label>
+        <button type="button" onClick={() => setToolsOpen((value) => !value)}>
+          <History /> Saved & scheduled
+        </button>
+      </div>
+      {toolsOpen && (
+        <section className="composer-history-panel">
+          <div>
+            <h4>Scheduled messages</h4>
+            {scheduled.length ? (
+              scheduled.map((item) => (
+                <article key={item.id}>
+                  <span>
+                    <strong>{item.content}</strong>
+                    <small>{new Date(item.send_at).toLocaleString()}</small>
+                  </span>
+                  <button
+                    type="button"
+                    title="Cancel scheduled message"
+                    onClick={async () => {
+                      await cancelScheduledConversationMessage(
+                        item.id,
+                        user.id,
+                      );
+                      await loadComposerHistory();
+                    }}
+                  >
+                    <Trash2 />
+                  </button>
+                </article>
+              ))
+            ) : (
+              <p>No scheduled messages.</p>
+            )}
+          </div>
+          <div>
+            <h4>Recent drafts</h4>
+            {versions.length ? (
+              versions.map((item) => (
+                <button
+                  type="button"
+                  className="draft-version"
+                  key={item.id}
+                  onClick={() => {
+                    setDraft(item.content);
+                    draftRef.current = item.content;
+                    saveDraft(user.id, id, group, item.content);
+                  }}
+                >
+                  <span>{item.content}</span>
+                  <small>{new Date(item.created_at).toLocaleString()}</small>
+                </button>
+              ))
+            ) : (
+              <p>Sent drafts will appear here.</p>
+            )}
+          </div>
+        </section>
+      )}
       <details className="message-format-help">
         <summary>Message formatting · {draft.length} / 900</summary>
         <p>

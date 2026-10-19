@@ -1352,7 +1352,16 @@ export function ProfilePage({ user, profile, onUpdated }) {
         favorite_game: f.get("favorite_game"),
         birthday: f.get("birthday") || null,
         show_age: f.get("show_age") === "on",
-        show_birthday: f.get("show_birthday") === "on",
+        show_birthday: f.get("birthday_visibility") !== "hidden",
+        birthday_visibility: f.get("birthday_visibility") || "month_day",
+        online_visibility: f.get("online_visibility") || "everyone",
+        activity_visibility: f.get("activity_visibility") || "friends",
+        availability_visibility: f.get("availability_visibility") || "friends",
+        badges_visibility: f.get("badges_visibility") || "everyone",
+        status_message: String(f.get("status_message") || "").trim() || null,
+        status_expires_at: f.get("status_expires_at")
+          ? new Date(f.get("status_expires_at")).toISOString()
+          : null,
         theme: f.get("theme") || "default",
         discord: f.get("discord"),
         youtube: f.get("youtube"),
@@ -1417,6 +1426,79 @@ export function ProfilePage({ user, profile, onUpdated }) {
               <option value="retro">Retro NASA</option>
             </select>
           </Field>
+          <Field label="Status message" hint="Up to 120 characters">
+            <input
+              name="status_message"
+              maxLength="120"
+              defaultValue={profile.status_message || ""}
+            />
+          </Field>
+          <Field label="Status expires">
+            <input
+              name="status_expires_at"
+              type="datetime-local"
+              defaultValue={
+                profile.status_expires_at
+                  ? new Date(profile.status_expires_at)
+                      .toISOString()
+                      .slice(0, 16)
+                  : ""
+              }
+            />
+          </Field>
+          <Field label="Birthday visibility">
+            <select
+              name="birthday_visibility"
+              defaultValue={
+                profile.birthday_visibility ||
+                (profile.show_birthday ? "month_day" : "hidden")
+              }
+            >
+              <option value="full">Full date</option>
+              <option value="month_day">Month and day</option>
+              <option value="hidden">Hidden</option>
+            </select>
+          </Field>
+          <Field label="Online status visibility">
+            <select
+              name="online_visibility"
+              defaultValue={profile.online_visibility || "everyone"}
+            >
+              <option value="everyone">Everyone</option>
+              <option value="friends">Friends</option>
+              <option value="nobody">Nobody</option>
+            </select>
+          </Field>
+          <Field label="Activity visibility">
+            <select
+              name="activity_visibility"
+              defaultValue={profile.activity_visibility || "friends"}
+            >
+              <option value="everyone">Everyone</option>
+              <option value="friends">Friends</option>
+              <option value="nobody">Nobody</option>
+            </select>
+          </Field>
+          <Field label="Availability visibility">
+            <select
+              name="availability_visibility"
+              defaultValue={profile.availability_visibility || "friends"}
+            >
+              <option value="everyone">Everyone</option>
+              <option value="friends">Friends</option>
+              <option value="nobody">Nobody</option>
+            </select>
+          </Field>
+          <Field label="Badge visibility">
+            <select
+              name="badges_visibility"
+              defaultValue={profile.badges_visibility || "everyone"}
+            >
+              <option value="everyone">Everyone</option>
+              <option value="friends">Friends</option>
+              <option value="nobody">Nobody</option>
+            </select>
+          </Field>
           <Field label="Avatar" hint="PNG, JPG, WebP, or GIF under 5 MB">
             <input
               name="avatar"
@@ -1450,14 +1532,6 @@ export function ProfilePage({ user, profile, onUpdated }) {
             defaultChecked={profile.show_age}
           />
           <span>Show my age on my profile</span>
-        </label>
-        <label className="check-field">
-          <input
-            name="show_birthday"
-            type="checkbox"
-            defaultChecked={profile.show_birthday}
-          />
-          <span>Show my birthday to the community</span>
         </label>
         <div className="button-row">
           <button className="button primary" disabled={busy}>

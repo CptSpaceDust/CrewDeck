@@ -274,6 +274,18 @@ export default function AppSettings({ user }) {
     show_favorite_games: true,
   });
   const [friendSettingsMessage, setFriendSettingsMessage] = useState("");
+  const [interactionPreferences, setInteractionPreferences] = useState({
+    messages_from: "everyone",
+    calls_from: "everyone",
+    invites_from: "everyone",
+    mentions_from: "everyone",
+    friend_requests_from: "everyone",
+    warn_suspicious_links: true,
+  });
+  const [privacyMessage, setPrivacyMessage] = useState("");
+  const [privacyCrew, setPrivacyCrew] = useState([]);
+  const [trustedContacts, setTrustedContacts] = useState([]);
+  const [boundaries, setBoundaries] = useState([]);
   const [notificationStatus, setNotificationStatus] = useState(null);
   const [notificationMessage, setNotificationMessage] = useState("");
   const [startup, setStartup] = useState(false);
@@ -303,6 +315,8 @@ export default function AppSettings({ user }) {
               meetup_preset: data.meetup_preset || {},
             }));
         });
+      supabase.from("interaction_preferences").select("*").eq("user_id", user.id).maybeSingle().then(({ data }) => data && setInteractionPreferences((current) => ({ ...current, ...data })));
+      refreshPrivacyContacts();
     }
   }, []);
   function preference(key, value) {
@@ -329,6 +343,28 @@ export default function AppSettings({ user }) {
       .upsert(next, { onConflict: "user_id" });
     setFriendSettingsMessage(error?.message || "Friend settings saved.");
     if (!error) setFriendSettings(next);
+  }
+  async function saveInteractionPreferences(event) {
+    event.preventDefault();
+    const { error } = await supabase.from("interaction_preferences").upsert({ ...interactionPreferences, user_id:user.id, updated_at:new Date().toISOString() }, { onConflict:"user_id" });
+    setPrivacyMessage(error?.message || "Privacy checkup saved.");
+  }
+  async function refreshPrivacyContacts() {
+    if (!user?.id) return;
+    const [crew, trusted, paused] = await Promise.all([
+      supabase.from("profiles").select("id,username").neq("id", user.id).order("username"),
+      supabase.from("trusted_contacts").select("trusted_user_id").eq("owner_id", user.id),
+      supabase.from("communication_boundaries").select("target_id,paused_until").eq("owner_id", user.id).gt("paused_until", new Date().toISOString()),
+    ]);
+    setPrivacyCrew(crew.data || []); setTrustedContacts(trusted.data || []); setBoundaries(paused.data || []);
+  }
+  async function addTrustedContact(event) {
+    event.preventDefault(); const target = new FormData(event.currentTarget).get("target_id"); if (!target) return;
+    const { error } = await supabase.from("trusted_contacts").upsert({ owner_id:user.id, trusted_user_id:target }); setPrivacyMessage(error?.message || "Trusted contact added."); if (!error) { event.currentTarget.reset(); refreshPrivacyContacts(); }
+  }
+  async function pauseContact(event) {
+    event.preventDefault(); const form = new FormData(event.currentTarget); const target = form.get("target_id"); if (!target) return; const days = Number(form.get("days") || 1);
+    const { error } = await supabase.from("communication_boundaries").upsert({ owner_id:user.id, target_id:target, paused_until:new Date(Date.now() + days * 86400000).toISOString() }); setPrivacyMessage(error?.message || "Contact paused."); if (!error) { event.currentTarget.reset(); refreshPrivacyContacts(); }
   }
   useEffect(() => {
     window.desktop.updater.getState().then(setUpdate);
@@ -742,6 +778,73 @@ export default function AppSettings({ user }) {
               <option value="120">Extra large · 120%</option>
             </select>
           </Field>
+          <Field
+            label={`Message text size · ${preferences.messageFontSize || 100}%`}
+          >
+            <input
+              type="range"
+              min="90"
+              max="130"
+              step="5"
+              value={preferences.messageFontSize || 100}
+              onChange={(event) =>
+                preference("messageFontSize", Number(event.target.value))
+              }
+            />
+          </Field>
+          <Field label="Reading width">
+            <select
+              value={preferences.readingWidth || "wide"}
+              onChange={(event) =>
+                preference("readingWidth", event.target.value)
+              }
+            >
+              <option value="narrow">Narrow</option>
+              <option value="wide">Comfortable</option>
+              <option value="full">Full width</option>
+            </select>
+          </Field>
+          <Field label="Message spacing">
+            <select
+              value={preferences.messageSpacing || "comfortable"}
+              onChange={(event) =>
+                preference("messageSpacing", event.target.value)
+              }
+            >
+              <option value="compact">Compact</option>
+              <option value="comfortable">Comfortable</option>
+              <option value="spacious">Spacious</option>
+            </select>
+          </Field>
+          <Field
+            label={`Motion intensity · ${preferences.reduceMotion ? 0 : (preferences.motionIntensity ?? 100)}%`}
+          >
+            <input
+              type="range"
+              min="0"
+              max="100"
+              step="10"
+              value={
+                preferences.reduceMotion
+                  ? 0
+                  : (preferences.motionIntensity ?? 100)
+              }
+              disabled={preferences.reduceMotion}
+              onChange={(event) =>
+                preference("motionIntensity", Number(event.target.value))
+              }
+            />
+          </Field>
+          <label className="check-field">
+            <input
+              type="checkbox"
+              checked={Boolean(preferences.dyslexicFont)}
+              onChange={(event) =>
+                preference("dyslexicFont", event.target.checked)
+              }
+            />
+            <span>Use a dyslexia-friendly reading font</span>
+          </label>
           <label className="check-field">
             <input
               type="checkbox"
@@ -812,6 +915,9 @@ export default function AppSettings({ user }) {
             />
             <span>Use larger buttons and form controls</span>
           </label>
+          <label className="check-field"><input type="checkbox" checked={Boolean(preferences.reducedTransparency)} onChange={(event) => preference("reducedTransparency", event.target.checked)} /><span>Reduce transparency while keeping Space Glass borders</span></label>
+          <label className="check-field"><input type="checkbox" checked={Boolean(preferences.colorblindIndicators)} onChange={(event) => preference("colorblindIndicators", event.target.checked)} /><span>Use shapes and labels with status colors</span></label>
+          <label className="check-field"><input type="checkbox" checked={Boolean(preferences.audioCueCaptions)} onChange={(event) => preference("audioCueCaptions", event.target.checked)} /><span>Show a visual caption when CrewDeck plays an audio cue</span></label>
         </section>
         <section className="panel settings-panel">
           <div className="section-icon">
@@ -965,6 +1071,10 @@ export default function AppSettings({ user }) {
               />
               <span>Show Windows notifications</span>
             </label>
+            <label className="check-field"><input type="checkbox" checked={preferences.callNotifications !== false} onChange={(event) => preference("callNotifications", event.target.checked)} /><span>Notify and ring for incoming calls</span></label>
+            <label className="check-field"><input type="checkbox" checked={preferences.reactionNotifications !== false} onChange={(event) => preference("reactionNotifications", event.target.checked)} /><span>Notify when someone reacts to my message</span></label>
+            <label className="check-field"><input type="checkbox" checked={preferences.notificationBundling !== false} onChange={(event) => preference("notificationBundling", event.target.checked)} /><span>Bundle message bursts into one notification</span></label>
+            <label className="check-field"><input type="checkbox" checked={Boolean(preferences.privateNotificationPreviews)} onChange={(event) => preference("privateNotificationPreviews", event.target.checked)} /><span>Hide message contents in notification previews</span></label>
             <label className="check-field">
               <input
                 type="checkbox"
@@ -1101,56 +1211,32 @@ export default function AppSettings({ user }) {
             <p className="form-message">{notificationMessage}</p>
           )}
         </section>
-        <section className="panel settings-panel">
+        <section className="panel settings-panel settings-panel-wide privacy-checkup-panel">
           <div className="section-icon">
             <LockKeyhole />
           </div>
-          <h2>Connection & account center</h2>
-          <p>
-            Check the services and device features CrewDeck needs, or contact
-            the Captain about your account.
-          </p>
-          <div className="button-row">
-            <button
-              className="button secondary"
-              onClick={runDiagnostics}
-              disabled={diagnosing}
-            >
-              <RefreshCw className={diagnosing ? "spin" : ""} />
-              {diagnosing ? "Checking CrewDeck…" : "Run full diagnostics"}
-            </button>
+          <h2>Privacy checkup</h2>
+          <p>Review who can reach you. Trusted contacts can pass stricter friend-only settings.</p>
+          <form className="privacy-checkup-grid" onSubmit={saveInteractionPreferences}>
+            {[["messages_from","Message me"],["calls_from","Call me"],["invites_from","Invite me"],["mentions_from","Mention me"]].map(([key,label]) => <Field label={`Who may ${label.toLowerCase()}?`} key={key}><select value={interactionPreferences[key]} onChange={(event) => setInteractionPreferences((current) => ({ ...current, [key]:event.target.value }))}><option value="everyone">Everyone</option><option value="friends">Friends</option><option value="trusted">Trusted contacts</option><option value="nobody">Nobody</option></select></Field>)}
+            <Field label="Who may add me as a friend?"><select value={interactionPreferences.friend_requests_from} onChange={(event) => setInteractionPreferences((current) => ({ ...current, friend_requests_from:event.target.value }))}><option value="everyone">Everyone</option><option value="friends_of_friends">Friends of friends</option><option value="nobody">Nobody</option></select></Field>
+            <label className="check-field"><input type="checkbox" checked={interactionPreferences.warn_suspicious_links} onChange={(event) => setInteractionPreferences((current) => ({ ...current, warn_suspicious_links:event.target.checked }))} /><span>Warn before opening suspicious or misleading links</span></label>
+            <button className="button primary">Save privacy choices</button>{privacyMessage && <p className="form-message">{privacyMessage}</p>}
+          </form>
+          <div className="privacy-contact-manager">
+            <form className="privacy-contact-card" onSubmit={addTrustedContact}><h3>Trusted contacts</h3><p>Allow selected people through trusted-only contact settings.</p><Field label="Crew member"><select name="target_id" required><option value="">Choose a crew member</option>{privacyCrew.map((person) => <option key={person.id} value={person.id}>{person.username}</option>)}</select></Field><button className="button secondary">Add trusted contact</button><div className="privacy-contact-chips">{trustedContacts.map((item) => <button type="button" key={item.trusted_user_id} onClick={async () => { await supabase.from("trusted_contacts").delete().eq("owner_id", user.id).eq("trusted_user_id", item.trusted_user_id); refreshPrivacyContacts(); }}>{privacyCrew.find((person) => person.id === item.trusted_user_id)?.username || "Crew member"} ×</button>)}</div></form>
+            <form className="privacy-contact-card" onSubmit={pauseContact}><h3>Temporary contact pause</h3><p>Pause calls, messages, mentions, and invitations from one person.</p><Field label="Crew member"><select name="target_id" required><option value="">Choose a crew member</option>{privacyCrew.map((person) => <option key={person.id} value={person.id}>{person.username}</option>)}</select></Field><Field label="Pause for"><select name="days"><option value="1">1 day</option><option value="7">7 days</option><option value="30">30 days</option></select></Field><button className="button secondary">Pause contact</button><div className="privacy-contact-chips">{boundaries.map((item) => <button type="button" key={item.target_id} onClick={async () => { await supabase.from("communication_boundaries").delete().eq("owner_id", user.id).eq("target_id", item.target_id); refreshPrivacyContacts(); }}>{privacyCrew.find((person) => person.id === item.target_id)?.username || "Crew member"} · {new Date(item.paused_until).toLocaleDateString()} ×</button>)}</div></form>
           </div>
+        </section>
+        <section className="panel settings-panel settings-panel-wide diagnostics-panel">
+          <div className="section-icon"><RefreshCw /></div><h2>Connection diagnostics</h2><p>Check your session, database, messaging, voice, realtime updates, notifications, and audio hardware.</p>
+          <button className="button secondary" type="button" disabled={diagnosing} onClick={runDiagnostics}><RefreshCw /> {diagnosing ? "Checking CrewDeck…" : "Run full diagnostics"}</button>
           {accountMessage && <p className="form-message">{accountMessage}</p>}
-          {diagnostics.length > 0 && (
-            <div className="diagnostic-results">
-              {diagnostics.map((item) => (
-                <div className={item.ok ? "passed" : "failed"} key={item.name}>
-                  <i aria-hidden="true" />
-                  <span>
-                    <strong>{item.name}</strong>
-                    <small>{item.detail}</small>
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-          <details className="settings-danger-details">
-            <summary>Account deletion center</summary>
-            <p>
-              Account deletion permanently removes your profile, messages,
-              uploads, and sign-in access. Open the community Discord and make a
-              support ticket so the Captain can verify the request safely.
-            </p>
-            <button
-              className="button secondary"
-              type="button"
-              onClick={() =>
-                window.desktop.openExternal("https://discord.gg/Gk3YRYmMfA")
-              }
-            >
-              Open Discord support
-            </button>
-          </details>
+          {diagnostics.length > 0 && <div className="diagnostic-grid">{diagnostics.map((item) => <article className={item.ok ? "ok" : "failed"} key={item.name}><strong>{item.name}</strong><span>{item.ok ? "Ready" : "Needs attention"}</span><small>{item.detail}</small></article>)}</div>}
+        </section>
+        <section className="panel settings-panel">
+          <div className="section-icon"><UserPlus /></div><h2>Account support</h2><p>For account deletion, recovery, or a private problem, open a Captain support ticket in Discord.</p>
+          <button className="button secondary" type="button" onClick={() => window.desktop.openExternal("https://discord.gg/Gk3YRYmMfA")}>Open Discord support</button>
         </section>
         <section className="panel settings-panel">
           <div className="section-icon">
@@ -1166,6 +1252,11 @@ export default function AppSettings({ user }) {
             />
             <span>Launch CrewDeck with Windows</span>
           </label>
+          <Field label="Open this page at startup"><select value={preferences.startupPage || "introductions"} onChange={(event) => preference("startupPage", event.target.value)}><option value="introductions">Introductions</option><option value="messages">Messages</option><option value="friends">Friends</option><option value="meetups">Meetup Calendar</option><option value="community-calendar">Community Calendar</option></select></Field>
+          <label className="check-field"><input type="checkbox" checked={preferences.backgroundMessages !== false} onChange={(event) => preference("backgroundMessages", event.target.checked)} /><span>Keep message notifications active in the background</span></label>
+          <label className="check-field"><input type="checkbox" checked={preferences.backgroundCalls !== false} onChange={(event) => preference("backgroundCalls", event.target.checked)} /><span>Keep incoming calls active in the background</span></label>
+          <label className="check-field"><input type="checkbox" checked={Boolean(preferences.globalPushToTalk)} onChange={async (event) => { preference("globalPushToTalk", event.target.checked); if (event.target.checked) await window.desktop.globalPtt.enable("Control+Shift+Space"); }} /><span>Enable global push to talk toggle · Ctrl Shift Space</span></label>
+          <button className="button secondary" type="button" onClick={async () => { const result = await window.desktop.repair(); setNotificationMessage(result.ok ? "Repair complete. CrewDeck caches were rebuilt." : "Repair could not finish."); }}><RefreshCw /> Repair local app cache</button>
           <p className="micro-copy">
             Closing the window keeps CrewDeck running in the Windows
             notification area so messages and alerts can still arrive. Use the

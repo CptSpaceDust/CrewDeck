@@ -10,14 +10,26 @@ export const defaultPreferences = Object.freeze({
   reducedEffects: false,
   compactLayout: false,
   reduceMotion: false,
+  motionIntensity: 100,
   interfaceScale: 100,
+  messageFontSize: 100,
+  readingWidth: "wide",
+  messageSpacing: "comfortable",
+  dyslexicFont: false,
   highContrast: false,
   strongFocus: false,
   underlineLinks: false,
   largeControls: false,
+  reducedTransparency: false,
+  colorblindIndicators: false,
+  audioCueCaptions: false,
   enterToSend: true,
   desktopNotifications: true,
   messageNotifications: true,
+  callNotifications: true,
+  reactionNotifications: true,
+  notificationBundling: true,
+  privateNotificationPreviews: false,
   notificationSound: true,
   notificationVolume: 82,
   hideNotificationContentWhenLocked: false,
@@ -36,6 +48,10 @@ export const defaultPreferences = Object.freeze({
   autoGainControl: true,
   voiceCheckBeforeJoining: true,
   mutedConversations: {},
+  startupPage: "introductions",
+  backgroundMessages: true,
+  backgroundCalls: true,
+  globalPushToTalk: false,
 });
 
 export function applyPreferences(settings = getPreferences()) {
@@ -45,13 +61,28 @@ export function applyPreferences(settings = getPreferences()) {
   root.dataset.effects = settings.reducedEffects ? "reduced" : "full";
   root.dataset.density = settings.compactLayout ? "compact" : "comfortable";
   root.dataset.motion = settings.reduceMotion ? "reduced" : "full";
+  root.dataset.readingWidth = settings.readingWidth || "wide";
+  root.dataset.messageSpacing = settings.messageSpacing || "comfortable";
+  root.dataset.dyslexicFont = settings.dyslexicFont ? "on" : "off";
   root.dataset.contrast = settings.highContrast ? "high" : "standard";
   root.dataset.focus = settings.strongFocus ? "strong" : "standard";
   root.dataset.links = settings.underlineLinks ? "underlined" : "standard";
   root.dataset.controls = settings.largeControls ? "large" : "standard";
+  root.dataset.transparency = settings.reducedTransparency ? "reduced" : "glass";
+  root.dataset.colorIndicators = settings.colorblindIndicators ? "labeled" : "color";
   root.style.setProperty(
     "--interface-scale",
     String((Number(settings.interfaceScale) || 100) / 100),
+  );
+  root.style.setProperty(
+    "--motion-intensity",
+    String(
+      Math.max(0, Math.min(100, Number(settings.motionIntensity) || 0)) / 100,
+    ),
+  );
+  root.style.setProperty(
+    "--message-font-scale",
+    String((Number(settings.messageFontSize) || 100) / 100),
   );
   root.dataset.mayuLoaders = "on";
   return settings;

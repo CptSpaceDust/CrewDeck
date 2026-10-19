@@ -25,6 +25,10 @@ contextBridge.exposeInMainWorld("desktop", {
   },
   openExternal: (url) => ipcRenderer.send("desktop:open-external", url),
   onNavigate: (callback) => subscribe("desktop:navigate", callback),
+  openMessageWindow: (route) => ipcRenderer.invoke("desktop:open-message-window", route),
+  shareTarget: { get: () => ipcRenderer.invoke("desktop:get-share-target") },
+  repair: () => ipcRenderer.invoke("desktop:repair"),
+  globalPtt: { enable: (accelerator) => ipcRenderer.invoke("desktop:set-global-ptt", accelerator), onToggle: (callback) => subscribe("desktop:global-ptt", callback) },
   onDeepLink: (callback) => subscribe("auth:deep-link", callback),
   screenShare: {
     listSources: () => ipcRenderer.invoke("screen-share:list-sources"),

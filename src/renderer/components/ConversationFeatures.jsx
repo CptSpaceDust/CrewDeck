@@ -9,6 +9,7 @@ import {
   SmilePlus,
   Timer,
   Trash2,
+  Paperclip,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -20,9 +21,10 @@ import {
   saveConversationPreference,
   toggleMessageReaction,
   unpinGroupMessage,
+  openMessageAttachment,
 } from "../lib/crewFeatures";
 import { supabase } from "../lib/supabase";
-import { promptInApp } from "./InAppDialog";
+import { confirmInApp, promptInApp } from "./InAppDialog";
 
 const EMOJIS = ["👍", "❤️", "😂", "🎉", "🚀"];
 const MORE_EMOJIS = [
@@ -68,12 +70,20 @@ const MORE_EMOJIS = [
   "☕",
 ];
 
+function suspiciousLink(url) {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol !== "https:" || /^\d{1,3}(\.\d{1,3}){3}$/.test(parsed.hostname) || parsed.hostname.includes("xn--") || parsed.username || parsed.password || parsed.hostname.split(".").length > 5;
+  } catch { return true; }
+}
+
 export function useConversationFeatures(kind, conversationId, userId) {
   const [state, setState] = useState({
     preferences: null,
     pins: [],
     reactions: [],
     receipts: [],
+    attachments: [],
   });
   const reload = async () =>
     setState(await getConversationFeatures(kind, conversationId, userId));
@@ -88,6 +98,16 @@ export function useConversationFeatures(kind, conversationId, userId) {
           event: "*",
           schema: "public",
           table: "message_pins",
+          filter: `conversation_id=eq.${conversationId}`,
+        },
+        reload,
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "message_attachments",
           filter: `conversation_id=eq.${conversationId}`,
         },
         reload,
@@ -154,6 +174,7 @@ export function MessageFeatureBar({
   userId,
   reactions,
   receipts = [],
+  attachments = [],
   canPin,
   onChanged,
   onNotice,
@@ -161,6 +182,9 @@ export function MessageFeatureBar({
   const [pickerOpen, setPickerOpen] = useState(false);
   const pickerRef = useRef(null);
   const messageReactions = reactions.filter(
+    (item) => item.message_id === message.id,
+  );
+  const messageAttachments = attachments.filter(
     (item) => item.message_id === message.id,
   );
   const reactionGroups = [
@@ -211,6 +235,32 @@ export function MessageFeatureBar({
 
   return (
     <>
+      {messageAttachments.length > 0 && (
+        <div className="message-attachment-list">
+          {messageAttachments.map((item) => (
+            <button
+              type="button"
+              key={item.id}
+              onClick={() =>
+                openMessageAttachment(item.id).catch((error) =>
+                  onNotice?.(error.message),
+                )
+              }
+            >
+              <Paperclip />
+              <span>
+                <strong>{item.file_name}</strong>
+                <small>
+                  {Math.max(1, Math.ceil(item.byte_size / 1024))} KB
+                  {item.duration_seconds
+                    ? ` · ${Math.round(item.duration_seconds)}s`
+                    : ""}
+                </small>
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
       {reactionGroups.length > 0 && (
         <div
           className="message-reaction-summary"
@@ -404,12 +454,25 @@ export function ConversationDetails({
   onNotice,
 }) {
   const [reminders, setReminders] = useState([]);
+  const [media, setMedia] = useState([]);
+  const [links, setLinks] = useState([]);
   const [loading, setLoading] = useState(true);
   async function load() {
     try {
-      setReminders(
-        (await getMessageReminders(userId, kind, conversationId)) || [],
-      );
+      const [nextReminders, attachmentsResult, messagesResult] = await Promise.all([
+        getMessageReminders(userId, kind, conversationId),
+        supabase.from("message_attachments").select("*").eq("conversation_kind", kind).eq("conversation_id", conversationId).order("created_at", { ascending: false }),
+        supabase.from(kind === "group" ? "group_messages" : "dm_messages").select("id,content,created_at").eq(kind === "group" ? "group_id" : "conversation_id", conversationId).order("created_at", { ascending: false }).limit(250),
+      ]);
+      setReminders(nextReminders || []);
+      setMedia(attachmentsResult.data || []);
+      const foundLinks = [];
+      for (const message of messagesResult.data || []) {
+        for (const match of String(message.content || "").matchAll(/https?:\/\/[^\s<]+/gi)) {
+          foundLinks.push({ messageId: message.id, url: match[0].replace(/[),.!?]+$/, ""), createdAt: message.created_at });
+        }
+      }
+      setLinks(foundLinks.slice(0, 60));
     } catch (error) {
       onNotice?.(error.message);
     } finally {
@@ -484,6 +547,40 @@ export function ConversationDetails({
           No message reminders for this conversation.
         </p>
       )}
+      <header className="conversation-media-heading">
+        <div>
+          <Paperclip />
+          <span>
+            <strong>Shared media</strong>
+            <small>Images, files, voice messages, and links from this conversation.</small>
+          </span>
+        </div>
+      </header>
+      <div className="conversation-media-gallery">
+        {media.map((item) => (
+          <button
+            type="button"
+            key={item.id}
+            onClick={async () => {
+              const { data, error } = await supabase.functions.invoke("message-file-access", { body: { action: "download", attachmentId: item.id } });
+              if (error || data?.error) return onNotice?.(error?.message || data?.error || "Unable to open this file.");
+              window.desktop?.openExternal ? window.desktop.openExternal(data.url) : window.open(data.url, "_blank", "noopener,noreferrer");
+            }}
+          >
+            <span className="conversation-media-type">{item.duration_seconds ? "VOICE" : item.mime_type?.startsWith("image/") ? "IMAGE" : "FILE"}</span>
+            <strong>{item.file_name}</strong>
+            <small>{Math.max(1, Math.ceil(item.byte_size / 1024))} KB</small>
+          </button>
+        ))}
+        {links.map((item) => (
+          <button type="button" key={`${item.messageId}-${item.url}`} onClick={async () => { if (suspiciousLink(item.url) && !(await confirmInApp(`This link uses an unusual address:\n${item.url}`, { title:"Open suspicious link?", confirmLabel:"Open link" }))) return; window.desktop?.openExternal ? window.desktop.openExternal(item.url) : window.open(item.url, "_blank", "noopener,noreferrer"); }}>
+            <span className="conversation-media-type">LINK</span>
+            <strong>{new URL(item.url).hostname}</strong>
+            <small>{item.url}</small>
+          </button>
+        ))}
+        {!media.length && !links.length && <p className="micro-copy">Nothing has been shared here yet.</p>}
+      </div>
     </section>
   );
 }
@@ -549,6 +646,23 @@ export function ConversationNotificationControl({
         ))}
       </fieldset>
       <div className="conversation-preference-selects">
+        <label>
+          <span>Conversation theme</span>
+          <select
+            aria-label="Conversation theme"
+            value={preference?.theme_key || "default"}
+            onChange={(event) => save({ theme_key: event.target.value })}
+          >
+            <option value="default">Space Default</option>
+            <option value="nebula">Nebula</option>
+            <option value="galaxy">Galaxy</option>
+            <option value="fire">Solar Flare</option>
+            <option value="ice">Frozen Planet</option>
+            <option value="alien">Alien World</option>
+            <option value="void">Void Protocol</option>
+            <option value="retro">Retro NASA</option>
+          </select>
+        </label>
         <label>
           <span>Organize in folder</span>
           <select

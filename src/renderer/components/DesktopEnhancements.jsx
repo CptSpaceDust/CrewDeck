@@ -280,8 +280,9 @@ export function WhatsNew() {
             <div>
               <strong>Added</strong>
               <p>
-                Meetups can share a date when times do not overlap, use a new
-                time picker, and let confirmed members back out cleanly.
+                Shared files and voice messages, expiring messages, Community
+                Calendar, Help Requests, Bug Reports, privacy controls, and new
+                call tools are now aboard.
               </p>
             </div>
           </article>
@@ -290,8 +291,8 @@ export function WhatsNew() {
             <div>
               <strong>Changed</strong>
               <p>
-                My Meetups now keeps invitation, attendance, and check-in
-                details synchronized. Call Chat has been removed.
+                Community Operations, notifications, accessibility, meetup
+                controls, and Space Glass settings have clearer layouts.
               </p>
             </div>
           </article>
@@ -300,8 +301,8 @@ export function WhatsNew() {
             <div>
               <strong>Fixed</strong>
               <p>
-                The calendar no longer marks unrelated crew members as busy, and
-                the website Friends page has a stable responsive layout.
+                Group invite links, interaction privacy, realtime conversation
+                tools, and desktop recovery behavior are more reliable.
               </p>
             </div>
           </article>

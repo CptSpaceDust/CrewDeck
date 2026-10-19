@@ -35,6 +35,11 @@ test("desktop enhancements cover notifications, drafts, reminders, and privacy",
   assert.match(enhancements, /Meetup starting soon/);
   assert.match(enhancements, /What’s Changed/);
   assert.match(settings, /Appearance & accessibility/);
+  assert.match(settings, /Message text size/);
+  assert.match(settings, /Reading width/);
+  assert.match(settings, /Message spacing/);
+  assert.match(settings, /Motion intensity/);
+  assert.match(settings, /dyslexia-friendly reading font/);
   assert.match(settings, /Calls & audio/);
   assert.match(settings, /Send test notification/);
   assert.doesNotMatch(settings, /Show Mayu on loading screens/);
@@ -62,6 +67,18 @@ test("desktop enhancements cover notifications, drafts, reminders, and privacy",
   assert.match(messages, /const sent = await sendGroupMessage/);
   assert.match(messages, /rows\.some\(\(row\) => row\.id === sent\.id\)/);
   assert.match(profile, /Report a concern/);
+});
+
+test("advanced messaging, meetup templates, and profile privacy are wired", () => {
+  const composer = read("src/renderer/components/MessageComposer.jsx");
+  const meetup = read("src/renderer/pages/MeetupsPage.jsx");
+  const profile = read("src/renderer/pages/CommunityPagesV2.jsx");
+  assert.match(composer, /Send silently/);
+  assert.match(composer, /Scheduled messages/);
+  assert.match(meetup, /MeetupTemplateControls/);
+  assert.match(meetup, /join_instructions/);
+  assert.match(profile, /birthday_visibility/);
+  assert.match(profile, /status_expires_at/);
 });
 
 test("notifications stay synchronized and app flows avoid native popups", () => {

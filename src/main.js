@@ -10,6 +10,7 @@ const {
   session,
   shell,
   Tray,
+  globalShortcut,
 } = require("electron");
 const fs = require("node:fs");
 const path = require("node:path");
@@ -53,6 +54,8 @@ let failedAttempts = [];
 let pendingDeepLink = "";
 let pendingNotificationRoute = "";
 let pendingDisplaySourceId = "";
+let pendingShareTarget = "";
+const messageWindows = new Set();
 const activeNotifications = new Set();
 let updateState = {
   status: "idle",
@@ -377,6 +380,22 @@ function createWindow() {
   if (isDevelopment) mainWindow.webContents.openDevTools({ mode: "detach" });
 }
 
+function createMessageWindow(route = "Messages.html") {
+  const child = new BrowserWindow({ width:1080, height:760, minWidth:760, minHeight:560, title:"CrewDeck Messages", icon:ICON_PATH, backgroundColor:"#070b16", webPreferences:{ preload:path.join(__dirname, "preload.js"), contextIsolation:true, nodeIntegration:false, sandbox:true, spellcheck:true, backgroundThrottling:false } });
+  child.removeMenu();
+  child.webContents.setWindowOpenHandler(({ url }) => { if (/^https?:/i.test(url) && !url.startsWith(APP_ORIGIN)) shell.openExternal(url); return { action:"deny" }; });
+  messageWindows.add(child);
+  child.on("closed", () => messageWindows.delete(child));
+  child.webContents.on("did-finish-load", () => child.webContents.send("desktop:navigate", route));
+  child.loadURL(isDevelopment ? "http://127.0.0.1:5173" : `${APP_ORIGIN}/index.html`);
+  return child;
+}
+
+function extractShareTarget(argv = []) {
+  const candidate = argv.find((value) => { try { return fs.statSync(value).isFile(); } catch { return false; } });
+  if (candidate && fs.statSync(candidate).size <= 10 * 1024 * 1024) pendingShareTarget = candidate;
+}
+
 function setupIpc() {
   function showDesktopNotification(payload = {}) {
     if (!Notification.isSupported())
@@ -497,6 +516,14 @@ function setupIpc() {
     });
     return { ok: true, enabled: app.getLoginItemSettings().openAtLogin };
   });
+  ipcMain.handle("desktop:open-message-window", (_event, route) => { createMessageWindow(String(route || "Messages.html")); return { ok:true }; });
+  ipcMain.handle("desktop:get-share-target", () => {
+    if (!pendingShareTarget) return null;
+    const target = pendingShareTarget; pendingShareTarget = "";
+    try { const extension = path.extname(target).toLowerCase(); const types = { ".png":"image/png", ".jpg":"image/jpeg", ".jpeg":"image/jpeg", ".webp":"image/webp", ".gif":"image/gif", ".pdf":"application/pdf", ".txt":"text/plain", ".mp3":"audio/mpeg", ".wav":"audio/wav", ".ogg":"audio/ogg", ".webm":"audio/webm" }; const mimeType = types[extension]; if (!mimeType) return { error:"CrewDeck cannot safely share this file type." }; return { name:path.basename(target), mimeType, base64:fs.readFileSync(target).toString("base64") }; } catch { return { error:"The shared file could not be opened." }; }
+  });
+  ipcMain.handle("desktop:repair", async () => { await session.defaultSession.clearCache(); await session.defaultSession.clearStorageData({ storages:["serviceworkers","cachestorage"] }); return { ok:true }; });
+  ipcMain.handle("desktop:set-global-ptt", (_event, accelerator) => { globalShortcut.unregister("Control+Shift+Space"); const value = String(accelerator || "Control+Shift+Space"); try { return { ok:globalShortcut.register(value, () => { mainWindow?.webContents.send("desktop:global-ptt"); for (const window of messageWindows) window.webContents.send("desktop:global-ptt"); }) }; } catch { return { ok:false }; } });
   ipcMain.on("desktop:open-external", (_event, value) => {
     try {
       const url = new URL(String(value));
@@ -549,6 +576,7 @@ if (!gotSingleInstanceLock) {
   app.quit();
 } else {
   app.on("second-instance", (_event, argv) => {
+    extractShareTarget(argv);
     const link = argv.find((value) => parseDeepLink(value));
     if (link) deliverDeepLink(link);
     else showMainWindow();
@@ -565,6 +593,7 @@ if (!gotSingleInstanceLock) {
       path.join(app.getPath("userData"), "app-lock.json"),
     );
     locked = lockStore.settings.enabled;
+    extractShareTarget(process.argv.slice(1));
     const startupLink = process.argv.find((value) => parseDeepLink(value));
     if (startupLink) pendingDeepLink = startupLink;
     registerAppOrigin();
@@ -578,6 +607,7 @@ if (!gotSingleInstanceLock) {
 
 app.on("before-quit", () => {
   isQuitting = true;
+  globalShortcut.unregisterAll();
 });
 app.on("activate", showMainWindow);
 app.on("window-all-closed", () => {

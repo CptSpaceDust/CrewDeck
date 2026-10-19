@@ -80,7 +80,12 @@ import {
 } from "../lib/data";
 import { supabase } from "../lib/supabase";
 import { playCallEventSound, startRingtone, stopRingtone } from "../lib/sounds";
-import { changeGroupRole, markMessageRead } from "../lib/crewFeatures";
+import {
+  changeGroupRole,
+  markMessageRead,
+  scheduleConversationMessage,
+  uploadMessageAttachment,
+} from "../lib/crewFeatures";
 import {
   conversationUnreadCount,
   getPreferences,
@@ -100,6 +105,31 @@ import {
 } from "../components/ui";
 
 let callAudioContext;
+
+function messageDayKey(value) {
+  const date = new Date(value);
+  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+}
+
+function MessageDayDivider({ value }) {
+  const date = new Date(value);
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+  const key = messageDayKey(value);
+  const label =
+    key === messageDayKey(today)
+      ? "Today"
+      : key === messageDayKey(yesterday)
+        ? "Yesterday"
+        : date.toLocaleDateString([], {
+            weekday: "long",
+            month: "long",
+            day: "numeric",
+            year: date.getFullYear() === today.getFullYear() ? undefined : "numeric",
+          });
+  return <div className="message-day-divider"><span>{label}</span></div>;
+}
 
 function playCallTone(type) {
   try {
@@ -167,8 +197,9 @@ function participantProfile(participant, local = false) {
   };
 }
 
-function ScreenShareTile({ item }) {
+function ScreenShareTile({ item, callId, userId }) {
   const videoRef = useRef();
+  const [pointers, setPointers] = useState([]);
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !item.track) return;
@@ -182,6 +213,22 @@ function ScreenShareTile({ item }) {
       video.srcObject = null;
     };
   }, [item.track]);
+  useEffect(() => {
+    if (!callId) return undefined;
+    const load = async () => {
+      const { data } = await supabase.from("call_screen_pointers").select("user_id,x,y,expires_at").eq("call_id", callId).gt("expires_at", new Date().toISOString());
+      setPointers(data || []);
+    };
+    load();
+    const channel = supabase.channel(`screen-pointers-${callId}`).on("postgres_changes", { event:"*", schema:"public", table:"call_screen_pointers", filter:`call_id=eq.${callId}` }, load).subscribe();
+    const timer = setInterval(load, 2500);
+    return () => { clearInterval(timer); supabase.removeChannel(channel); };
+  }, [callId]);
+  async function point(event) {
+    if (!callId) return;
+    const box = event.currentTarget.getBoundingClientRect();
+    await supabase.from("call_screen_pointers").upsert({ call_id:callId, user_id:userId, x:(event.clientX - box.left) / box.width, y:(event.clientY - box.top) / box.height, expires_at:new Date(Date.now() + 4000).toISOString(), updated_at:new Date().toISOString() }, { onConflict:"call_id,user_id" });
+  }
   return (
     <article className="call-screen-card">
       <header>
@@ -195,7 +242,10 @@ function ScreenShareTile({ item }) {
           <Maximize2 />
         </button>
       </header>
-      <video ref={videoRef} autoPlay playsInline muted />
+      <div className="call-screen-pointer-surface" onPointerDown={point} title="Click to point at this shared screen">
+        <video ref={videoRef} autoPlay playsInline muted />
+        {pointers.map((pointer) => <i className="call-screen-pointer" key={pointer.user_id} style={{ left:`${pointer.x * 100}%`, top:`${pointer.y * 100}%` }}><span /></i>)}
+      </div>
     </article>
   );
 }
@@ -291,6 +341,8 @@ export function VoiceCall({ conversation, user, onClose, requestedCallId }) {
   const [deafened, setDeafened] = useState(false);
   const [handRaised, setHandRaised] = useState(false);
   const [participantControls, setParticipantControls] = useState([]);
+  const [speakerQueue, setSpeakerQueue] = useState([]);
+  const [queuedToSpeak, setQueuedToSpeak] = useState(false);
   const [minimized, setMinimized] = useState(false);
   const [compactPosition, setCompactPosition] = useState(() => ({
     x: Math.max(18, window.innerWidth - 118),
@@ -302,6 +354,19 @@ export function VoiceCall({ conversation, user, onClose, requestedCallId }) {
   const startedAtRef = useRef(0);
   const audioElementsRef = useRef(new Map());
   const mutedBeforeDeafenRef = useRef(false);
+
+  useEffect(() => {
+    if (!callPreferences.globalPushToTalk || !window.desktop?.globalPtt) return undefined;
+    window.desktop.globalPtt.enable("Control+Shift+Space");
+    return window.desktop.globalPtt.onToggle(() => { if (roomRef.current && connected) toggleMic(); });
+  }, [connected, callPreferences.globalPushToTalk]);
+
+  useEffect(() => {
+    const offline = () => setStatus("Connection changed. Holding your place in the call…");
+    const online = () => setStatus("Network restored. Reconnecting voice…");
+    addEventListener("offline", offline); addEventListener("online", online);
+    return () => { removeEventListener("offline", offline); removeEventListener("online", online); };
+  }, []);
 
   const callTitle =
     conversation.type === "group"
@@ -637,15 +702,17 @@ export function VoiceCall({ conversation, user, onClose, requestedCallId }) {
                 .filter((id) => id !== user.id)
             : [conversation.person.id];
           await Promise.allSettled(
-            recipients.map((targetUserId) =>
-              supabase.rpc("create_notification", {
+            recipients.map(async (targetUserId) => {
+              const permission = await supabase.rpc("can_interact_with", { target_user:targetUserId, interaction_type:"call" });
+              if (permission.error || permission.data !== true) return;
+              return supabase.rpc("create_notification", {
                 target_user_id: targetUserId,
                 notification_type: "voice_call",
                 notification_title: "Incoming voice call",
                 notification_message: `${conversation.meName || "A crew member"} wants to call you!`,
                 notification_link: `Conversation.html?${isGroup ? "group" : "id"}=${encodeURIComponent(contextId)}&call=${encodeURIComponent(callId)}&caller=${encodeURIComponent(conversation.meName || "A crew member")}&caller_avatar=${encodeURIComponent(conversation.meAvatar || "")}&caller_id=${encodeURIComponent(user.id)}&conversation_title=${encodeURIComponent(callTitle)}`,
-              }),
-            ),
+              });
+            }),
           );
         }
       } catch (error) {
@@ -818,13 +885,20 @@ export function VoiceCall({ conversation, user, onClose, requestedCallId }) {
     }
   }
 
-  function changeVolume(participantId, value) {
+  async function changeVolume(participantId, value) {
     const volume = Number(value) / 100;
     setVolumes((current) => ({ ...current, [participantId]: volume }));
     for (const [key, element] of audioElementsRef.current) {
       if (key.startsWith(`${participantId}:`)) element.volume = volume;
     }
+    await supabase.from("friend_audio_profiles").upsert({ owner_id:user.id, friend_id:participantId, volume, updated_at:new Date().toISOString() }, { onConflict:"owner_id,friend_id" });
   }
+
+  useEffect(() => {
+    const ids = participants.map((participant) => participant.identity).filter((id) => id && id !== user.id);
+    if (!ids.length) return;
+    supabase.from("friend_audio_profiles").select("friend_id,volume").eq("owner_id", user.id).in("friend_id", ids).then(({ data }) => setVolumes((current) => ({ ...current, ...Object.fromEntries((data || []).map((item) => [item.friend_id, Number(item.volume)])) })));
+  }, [participants.map((participant) => participant.identity).join(","), user.id]);
 
   async function enableAudio() {
     try {
@@ -875,6 +949,26 @@ export function VoiceCall({ conversation, user, onClose, requestedCallId }) {
       .subscribe();
     return () => supabase.removeChannel(channel);
   }, [activeCallId, user.id]);
+
+  useEffect(() => {
+    if (!activeCallId) return undefined;
+    const loadQueue = async () => {
+      const { data } = await supabase.from("call_speaker_queue").select("user_id,position,joined_at").eq("call_id", activeCallId).order("position");
+      setSpeakerQueue(data || []);
+      setQueuedToSpeak(Boolean((data || []).some((item) => item.user_id === user.id)));
+    };
+    loadQueue();
+    const channel = supabase.channel(`speaker-queue-${activeCallId}`).on("postgres_changes", { event:"*", schema:"public", table:"call_speaker_queue", filter:`call_id=eq.${activeCallId}` }, loadQueue).subscribe();
+    return () => supabase.removeChannel(channel);
+  }, [activeCallId, user.id]);
+
+  async function toggleSpeakerQueue() {
+    if (queuedToSpeak) await supabase.from("call_speaker_queue").delete().eq("call_id", activeCallId).eq("user_id", user.id);
+    else {
+      const { count } = await supabase.from("call_speaker_queue").select("user_id", { count:"exact", head:true }).eq("call_id", activeCallId);
+      await supabase.from("call_speaker_queue").upsert({ call_id:activeCallId, user_id:user.id, position:Number(count || 0) + 1 });
+    }
+  }
 
   async function updateCallControl(changes) {
     await supabase.from("call_participant_controls").upsert({
@@ -1037,7 +1131,7 @@ export function VoiceCall({ conversation, user, onClose, requestedCallId }) {
         {screens.length > 0 && (
           <div className="call-screen-grid">
             {screens.map((item) => (
-              <ScreenShareTile item={item} key={item.key} />
+              <ScreenShareTile item={item} callId={activeCallId} userId={user.id} key={item.key} />
             ))}
           </div>
         )}
@@ -1105,6 +1199,7 @@ export function VoiceCall({ conversation, user, onClose, requestedCallId }) {
                     <Headphones /> Deafened
                   </small>
                 )}
+                {speakerQueue.some((item) => item.user_id === participant.identity) && <small className="call-speaker-position">Speaker #{speakerQueue.findIndex((item) => item.user_id === participant.identity) + 1}</small>}
                 {!local && (
                   <label
                     className="call-volume"
@@ -1175,6 +1270,7 @@ export function VoiceCall({ conversation, user, onClose, requestedCallId }) {
             <Hand />
             <span>{handRaised ? "Lower hand" : "Raise hand"}</span>
           </button>
+          <button className={queuedToSpeak ? "call-button active" : "call-button"} disabled={!connected} onClick={toggleSpeakerQueue} title="Join the speaking line"><Users /><span>{queuedToSpeak ? "Leave queue" : "Speaker queue"}</span></button>
           <button
             className={muted ? "call-button active" : "call-button"}
             disabled={!connected || Boolean(busyControl) || pushToTalk}
@@ -1596,7 +1692,7 @@ function DirectMessagesPage({
       setNotice(e.message);
     }
   }
-  async function send(e) {
+  async function send(e, delivery = {}) {
     e.preventDefault();
     const input = e.currentTarget.elements.message;
     const content = input.value.trim();
@@ -1612,12 +1708,30 @@ function DirectMessagesPage({
         setNotice(blocked);
         return false;
       }
+      if (delivery.sendAt) {
+        await scheduleConversationMessage({
+          kind: "dm",
+          conversationId: selected.id,
+          userId: user.id,
+          content,
+          sendAt: delivery.sendAt,
+          silent: delivery.silent,
+        });
+        setNotice(
+          `Message scheduled for ${new Date(delivery.sendAt).toLocaleString()}.`,
+        );
+        setReplying(null);
+        return true;
+      }
       const sent = await sendMessage(
         selected.id,
         user.id,
         selected.person.id,
         content,
         replying?.id || null,
+        delivery.silent,
+        "text",
+        delivery.expiresInMinutes,
       );
       setMessages((rows) =>
         rows.some((row) => row.id === sent.id) ? rows : [...rows, sent],
@@ -1638,6 +1752,37 @@ function DirectMessagesPage({
     await deleteMessage(item.id, user.id);
     setMessages((rows) => rows.filter((x) => x.id !== item.id));
     setReplying((current) => (current?.id === item.id ? null : current));
+  }
+  async function sendAttachment(file, delivery = {}) {
+    if (!selected) return;
+    try {
+      const blocked = await restrictionMessage(user.id, "messaging");
+      if (blocked) throw new Error(blocked);
+      const voice = file.type.startsWith("audio/") && delivery.durationSeconds;
+      const sent = await sendMessage(
+        selected.id,
+        user.id,
+        selected.person.id,
+        voice ? "Voice message" : `Shared file: ${file.name}`,
+        null,
+        delivery.silent,
+        voice ? "voice" : file.type.startsWith("image/") ? "image" : "file",
+      );
+      await uploadMessageAttachment({
+        kind: "dm",
+        conversationId: selected.id,
+        messageId: sent.id,
+        file,
+        durationSeconds: delivery.durationSeconds,
+      });
+      setMessages((rows) =>
+        rows.some((row) => row.id === sent.id) ? rows : [...rows, sent],
+      );
+      await reloadConversationFeatures();
+      setNotice(voice ? "Voice message sent." : "File shared.");
+    } catch (error) {
+      setNotice(error.message);
+    }
   }
   async function refreshMessages() {
     if (refreshing) return;
@@ -1771,7 +1916,12 @@ function DirectMessagesPage({
             );
           })}
         </aside>
-        <section className="panel chat-panel">
+        <section
+          className="panel chat-panel"
+          data-conversation-theme={
+            conversationFeatures.preferences?.theme_key || "default"
+          }
+        >
           {selected ? (
             <>
               <header className="chat-header">
@@ -1849,18 +1999,23 @@ function DirectMessagesPage({
                   pins={conversationFeatures.pins}
                   onChanged={reloadConversationFeatures}
                 />
-                {messages.map((item) => {
+                {messages.map((item, index) => {
                   const quoted = item.reply_to_id
                     ? byId[item.reply_to_id]
                     : null;
+                  const startsDay =
+                    index === 0 ||
+                    messageDayKey(messages[index - 1].created_at) !==
+                      messageDayKey(item.created_at);
                   return (
-                    <div
-                      className={
-                        item.sender_id === user.id ? "message mine" : "message"
-                      }
-                      tabIndex={0}
-                      key={item.id}
-                    >
+                    <div className="message-with-divider" key={item.id}>
+                      {startsDay && <MessageDayDivider value={item.created_at} />}
+                      <div
+                        className={
+                          item.sender_id === user.id ? "message mine" : "message"
+                        }
+                        tabIndex={0}
+                      >
                       <MessageReplyQuote
                         message={item}
                         messages={messages}
@@ -1883,6 +2038,7 @@ function DirectMessagesPage({
                             hour: "numeric",
                             minute: "2-digit",
                           })}
+                          {item.expires_at ? ` · expires ${new Date(item.expires_at).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}` : ""}
                         </time>
                         <div className="message-actions">
                           <button
@@ -1917,16 +2073,18 @@ function DirectMessagesPage({
                           )}
                         </div>
                       </div>
-                      <MessageFeatureBar
+                        <MessageFeatureBar
                         kind="dm"
                         conversationId={selected.id}
                         message={item}
                         userId={user.id}
                         reactions={conversationFeatures.reactions}
                         receipts={conversationFeatures.receipts}
+                        attachments={conversationFeatures.attachments}
                         onChanged={reloadConversationFeatures}
                         onNotice={setNotice}
-                      />
+                        />
+                      </div>
                     </div>
                   );
                 })}
@@ -1950,6 +2108,7 @@ function DirectMessagesPage({
                 people={[selected.person]}
                 placeholder={`Message ${selected.person?.username || "crew member"}`}
                 onSend={send}
+                onSendAttachment={sendAttachment}
                 blockedUntil={slowUntil}
               />
             </>
@@ -1975,6 +2134,9 @@ function DirectMessagesPage({
 function CreateGroupButton({ user, profile, onCreated, onNotice }) {
   const [open, setOpen] = useState(false);
   const [people, setPeople] = useState([]);
+  const [inviteLinks, setInviteLinks] = useState([]);
+  const [inviteDays, setInviteDays] = useState("7");
+  const [inviteUses, setInviteUses] = useState("10");
   const [selected, setSelected] = useState([]);
   const [query, setQuery] = useState("");
   const [busy, setBusy] = useState(false);
@@ -2129,7 +2291,12 @@ function ManageGroupButton({
   async function show() {
     setOpen(true);
     try {
-      setPeople(await getProfiles("id,username,avatar,rank"));
+      const [profiles, links] = await Promise.all([
+        getProfiles("id,username,avatar,rank"),
+        supabase.from("group_invite_links").select("*").eq("group_id", group.id).is("revoked_at", null).order("created_at", { ascending: false }),
+      ]);
+      setPeople(profiles);
+      setInviteLinks(links.data || []);
     } catch (error) {
       onNotice(error.message);
     }
@@ -2142,6 +2309,7 @@ function ManageGroupButton({
       await renameGroupConversation(group.id, user.id, form.get("name"));
       await updateGroupConversationSettings(group.id, user.id, {
         description: form.get("description"),
+        welcome_message: form.get("welcome_message"),
         slow_mode_seconds: form.get("slow_mode_seconds"),
       });
       await onChanged();
@@ -2239,6 +2407,15 @@ function ManageGroupButton({
                   defaultValue={group.description || ""}
                 />
               </Field>
+              <Field label="Welcome message" hint="Shown to members at the top of the conversation">
+                <textarea
+                  name="welcome_message"
+                  maxLength="1500"
+                  rows="4"
+                  defaultValue={group.welcome_message || ""}
+                  placeholder="Welcome aboard! Read the rules, introduce yourself, and have fun."
+                />
+              </Field>
               <Field label="Slow mode">
                 <select
                   name="slow_mode_seconds"
@@ -2256,6 +2433,28 @@ function ManageGroupButton({
                 {busy === "name" ? "Saving…" : "Change group name"}
               </button>
             </form>
+          )}
+          {myRole === "owner" && (
+            <div className="group-manage-section group-invite-links">
+              <h3>Invite links</h3>
+              <p className="micro-copy">Create a controlled link with an expiration date and use limit.</p>
+              <div className="form-grid"><Field label="Expires after"><select value={inviteDays} onChange={(event) => setInviteDays(event.target.value)}><option value="1">1 day</option><option value="7">7 days</option><option value="30">30 days</option><option value="0">Never</option></select></Field><Field label="Use limit"><select value={inviteUses} onChange={(event) => setInviteUses(event.target.value)}><option value="1">1 use</option><option value="5">5 uses</option><option value="10">10 uses</option><option value="25">25 uses</option><option value="0">No limit</option></select></Field></div>
+              <button className="button secondary" type="button" onClick={async () => {
+                setBusy("invite-link");
+                try {
+                  const expiresAt = Number(inviteDays) ? new Date(Date.now() + Number(inviteDays) * 86400000).toISOString() : null;
+                  const { data, error } = await supabase.from("group_invite_links").insert({ group_id: group.id, created_by: user.id, expires_at: expiresAt, max_uses: Number(inviteUses) || null }).select().single();
+                  if (error) throw error;
+                  setInviteLinks((rows) => [data, ...rows]);
+                } catch (error) { onNotice(error.message); } finally { setBusy(""); }
+              }} disabled={busy === "invite-link"}>Create invite link</button>
+              <div className="group-invite-link-list">
+                {inviteLinks.map((link) => {
+                  const inviteUrl = `https://cptspacedust.com/Conversation.html?joinGroup=${link.token}`;
+                  return <article key={link.id}><span><strong>{link.use_count}/{link.max_uses || "∞"} uses</strong><small>Expires {link.expires_at ? new Date(link.expires_at).toLocaleString() : "never"}</small></span><button type="button" onClick={() => navigator.clipboard.writeText(inviteUrl).then(() => onNotice("Invite link copied."))}>Copy</button><button type="button" className="danger" onClick={async () => { await supabase.from("group_invite_links").update({ revoked_at: new Date().toISOString() }).eq("id", link.id); setInviteLinks((rows) => rows.filter((item) => item.id !== link.id)); }}>Revoke</button></article>;
+                })}
+              </div>
+            </div>
           )}
           {myRole === "owner" && (
             <div className="group-manage-section">
@@ -2801,7 +3000,7 @@ function GroupMessagesPage({
   const visible = groups.filter((item) =>
     item.name?.toLowerCase().includes(query.toLowerCase()),
   );
-  async function send(event) {
+  async function send(event, delivery = {}) {
     event.preventDefault();
     const input = event.currentTarget.elements.message;
     const content = input.value.trim();
@@ -2809,11 +3008,29 @@ function GroupMessagesPage({
     try {
       const blocked = await restrictionMessage(user.id, "messaging");
       if (blocked) throw new Error(blocked);
+      if (delivery.sendAt) {
+        await scheduleConversationMessage({
+          kind: "group",
+          conversationId: selected.id,
+          userId: user.id,
+          content,
+          sendAt: delivery.sendAt,
+          silent: delivery.silent,
+        });
+        setNotice(
+          `Message scheduled for ${new Date(delivery.sendAt).toLocaleString()}.`,
+        );
+        setReplying(null);
+        return true;
+      }
       const sent = await sendGroupMessage(
         selected.id,
         user.id,
         content,
         replying?.id || null,
+        delivery.silent,
+        "text",
+        delivery.expiresInMinutes,
       );
       setMessages((rows) =>
         rows.some((row) => row.id === sent.id) ? rows : [...rows, sent],
@@ -2839,6 +3056,36 @@ function GroupMessagesPage({
     await deleteGroupMessage(item.id, user.id);
     setMessages((rows) => rows.filter((row) => row.id !== item.id));
     setReplying((current) => (current?.id === item.id ? null : current));
+  }
+  async function sendAttachment(file, delivery = {}) {
+    if (!selected) return;
+    try {
+      const blocked = await restrictionMessage(user.id, "messaging");
+      if (blocked) throw new Error(blocked);
+      const voice = file.type.startsWith("audio/") && delivery.durationSeconds;
+      const sent = await sendGroupMessage(
+        selected.id,
+        user.id,
+        voice ? "Voice message" : `Shared file: ${file.name}`,
+        null,
+        delivery.silent,
+        voice ? "voice" : file.type.startsWith("image/") ? "image" : "file",
+      );
+      await uploadMessageAttachment({
+        kind: "group",
+        conversationId: selected.id,
+        messageId: sent.id,
+        file,
+        durationSeconds: delivery.durationSeconds,
+      });
+      setMessages((rows) =>
+        rows.some((row) => row.id === sent.id) ? rows : [...rows, sent],
+      );
+      await reloadConversationFeatures();
+      setNotice(voice ? "Voice message sent." : "File shared.");
+    } catch (error) {
+      setNotice(error.message);
+    }
   }
   async function refreshMessages() {
     if (refreshing) return;
@@ -3072,7 +3319,12 @@ function GroupMessagesPage({
             </button>
           ))}
         </aside>
-        <section className="panel chat-panel">
+        <section
+          className="panel chat-panel"
+          data-conversation-theme={
+            conversationFeatures.preferences?.theme_key || "default"
+          }
+        >
           {details ? (
             <>
               <header className="chat-header">
@@ -3144,6 +3396,13 @@ function GroupMessagesPage({
                 </div>
               </header>
               <div className="message-stream">
+                {details.welcome_message && (
+                  <aside className="group-welcome-card">
+                    <span>GROUP WELCOME</span>
+                    <strong>{details.name}</strong>
+                    <p>{details.welcome_message}</p>
+                  </aside>
+                )}
                 <PinnedMessages
                   pins={conversationFeatures.pins}
                   canManage={
@@ -3151,7 +3410,7 @@ function GroupMessagesPage({
                   }
                   onChanged={reloadConversationFeatures}
                 />
-                {messages.map((item) => {
+                {messages.map((item, index) => {
                   const sender = profiles[item.sender_id];
                   const quoted = item.reply_to_id
                     ? byId[item.reply_to_id]
@@ -3159,14 +3418,19 @@ function GroupMessagesPage({
                   const pollMarker = item.content.match(
                     /^\[\[crewdeck-poll:([0-9a-f-]{36})\]\]$/i,
                   );
+                  const startsDay =
+                    index === 0 ||
+                    messageDayKey(messages[index - 1].created_at) !==
+                      messageDayKey(item.created_at);
                   return (
-                    <div
-                      className={
-                        item.sender_id === user.id ? "message mine" : "message"
-                      }
-                      tabIndex={0}
-                      key={item.id}
-                    >
+                    <div className="message-with-divider" key={item.id}>
+                      {startsDay && <MessageDayDivider value={item.created_at} />}
+                      <div
+                        className={
+                          item.sender_id === user.id ? "message mine" : "message"
+                        }
+                        tabIndex={0}
+                      >
                       {item.sender_id !== user.id && (
                         <small className="message-author">
                           {sender?.username || "Former member"}
@@ -3205,6 +3469,7 @@ function GroupMessagesPage({
                             minute: "2-digit",
                           })}
                           {item.edited_at ? " · Edited" : ""}
+                          {item.expires_at ? ` · expires ${new Date(item.expires_at).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}` : ""}
                         </time>
                         <div className="message-actions">
                           <button
@@ -3244,19 +3509,21 @@ function GroupMessagesPage({
                           )}
                         </div>
                       </div>
-                      <MessageFeatureBar
+                        <MessageFeatureBar
                         kind="group"
                         conversationId={selected.id}
                         message={item}
                         userId={user.id}
                         reactions={conversationFeatures.reactions}
                         receipts={conversationFeatures.receipts}
+                        attachments={conversationFeatures.attachments}
                         canPin={
                           myGroupRole === "owner" || myGroupRole === "moderator"
                         }
                         onChanged={reloadConversationFeatures}
                         onNotice={setNotice}
-                      />
+                        />
+                      </div>
                     </div>
                   );
                 })}
@@ -3281,6 +3548,7 @@ function GroupMessagesPage({
                 people={details.members}
                 placeholder={`Message ${details.name}`}
                 onSend={send}
+                onSendAttachment={sendAttachment}
               />
             </>
           ) : (

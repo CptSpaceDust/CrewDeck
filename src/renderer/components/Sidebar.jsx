@@ -12,6 +12,8 @@ import {
   UserRound,
   Users,
   UserPlus,
+  Bug,
+  HandHelping,
 } from "lucide-react";
 import { Avatar } from "./ui";
 import BrandMark from "./BrandMark";
@@ -47,6 +49,8 @@ const groups = [
       ["collabs", "Collab Board", Users],
       ["ideas", "Ideas Board", Lightbulb],
       ["birthdays", "Birthdays", Cake],
+      ["help-requests", "Help Board", HandHelping],
+      ["bug-reports", "Bug Reports", Bug],
     ],
   },
   {
@@ -54,6 +58,7 @@ const groups = [
     items: [
       ["meetups", "Meetup Calendar", CalendarDays],
       ["my-meetups", "My Meetups", CalendarCheck],
+      ["community-calendar", "Community Calendar", CalendarDays],
     ],
   },
 ];

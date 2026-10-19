@@ -90,6 +90,9 @@ test("website and desktop ship matching community operations surfaces", () => {
   const settings = read("src", "renderer", "components", "AppSettings.jsx");
   assert.match(captain, /Evidence inbox/);
   assert.match(captain, /Maintenance mode/);
+  assert.match(captain, /Active moderation cases/);
+  assert.match(captain, /Member welfare queue/);
+  assert.match(captain, /CAPTAIN ONLY/);
   assert.match(friends, /Your crew friends/);
   assert.doesNotMatch(
     friends,

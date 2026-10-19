@@ -88,41 +88,100 @@ export async function deleteClosedGroupPoll(pollId) {
 }
 
 export async function getConversationFeatures(kind, conversationId, userId) {
-  const [preferences, pins, reactions, receipts] = await Promise.all([
-    supabase
-      .from("conversation_preferences")
-      .select("*")
-      .eq("user_id", userId)
-      .eq("conversation_kind", kind)
-      .eq("conversation_id", conversationId)
-      .maybeSingle(),
-    supabase
-      .from("message_pins")
-      .select("*")
-      .eq("conversation_kind", kind)
-      .eq("conversation_id", conversationId)
-      .order("created_at", { ascending: false }),
-    supabase
-      .from("message_reactions")
-      .select("*")
-      .eq("conversation_kind", kind)
-      .eq("conversation_id", conversationId),
-    supabase
-      .from("message_read_receipts")
-      .select("*")
-      .eq("conversation_kind", kind)
-      .eq("conversation_id", conversationId),
-  ]);
+  const [preferences, pins, reactions, receipts, attachments] =
+    await Promise.all([
+      supabase
+        .from("conversation_preferences")
+        .select("*")
+        .eq("user_id", userId)
+        .eq("conversation_kind", kind)
+        .eq("conversation_id", conversationId)
+        .maybeSingle(),
+      supabase
+        .from("message_pins")
+        .select("*")
+        .eq("conversation_kind", kind)
+        .eq("conversation_id", conversationId)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("message_reactions")
+        .select("*")
+        .eq("conversation_kind", kind)
+        .eq("conversation_id", conversationId),
+      supabase
+        .from("message_read_receipts")
+        .select("*")
+        .eq("conversation_kind", kind)
+        .eq("conversation_id", conversationId),
+      supabase
+        .from("message_attachments")
+        .select("*")
+        .eq("conversation_kind", kind)
+        .eq("conversation_id", conversationId),
+    ]);
   if (preferences.error) throw preferences.error;
   if (pins.error) throw pins.error;
   if (reactions.error) throw reactions.error;
   if (receipts.error) throw receipts.error;
+  if (attachments.error) throw attachments.error;
   return {
     preferences: preferences.data,
     pins: pins.data || [],
     reactions: reactions.data || [],
     receipts: receipts.data || [],
+    attachments: attachments.data || [],
   };
+}
+
+export async function uploadMessageAttachment({
+  kind,
+  conversationId,
+  messageId,
+  file,
+  durationSeconds = null,
+}) {
+  if (!file || file.size > 10 * 1024 * 1024)
+    throw new Error("Choose a file that is 10 MB or smaller.");
+  const base64 = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Unable to read this file."));
+    reader.onload = () => resolve(String(reader.result).split(",")[1] || "");
+    reader.readAsDataURL(file);
+  });
+  const { data, error } = await supabase.functions.invoke(
+    "message-file-access",
+    {
+      body: {
+        action: "upload",
+        conversationKind: kind,
+        conversationId,
+        messageId,
+        fileName: file.name,
+        mimeType: file.type,
+        base64,
+        durationSeconds,
+      },
+    },
+  );
+  if (error) throw error;
+  if (data?.error) throw new Error(data.error);
+  return data.attachment;
+}
+
+export async function openMessageAttachment(attachmentId) {
+  const cacheKey = `crewdeck.media-cache.${attachmentId}`;
+  const cached = sessionStorage.getItem(cacheKey);
+  if (cached) {
+    try { const value = JSON.parse(cached); if (value.url && value.expiresAt > Date.now()) { window.open(value.url, "_blank", "noopener,noreferrer"); return; } } catch {}
+  }
+  const { data, error } = await supabase.functions.invoke(
+    "message-file-access",
+    { body: { action: "download", attachmentId } },
+  );
+  if (error) throw error;
+  if (data?.error) throw new Error(data.error);
+  sessionStorage.setItem(cacheKey, JSON.stringify({ url:data.url, expiresAt:Date.now() + 100000 }));
+  window.open(data.url, "_blank", "noopener,noreferrer");
 }
 
 export async function saveConversationPreference(
@@ -234,6 +293,95 @@ export async function deleteMessageReminder(reminderId, userId) {
   );
 }
 
+export async function scheduleConversationMessage({
+  kind,
+  conversationId,
+  userId,
+  content,
+  sendAt,
+  silent = false,
+}) {
+  const when = new Date(sendAt);
+  if (!Number.isFinite(when.getTime()) || when.getTime() < Date.now() + 60000)
+    throw new Error("Choose a time at least one minute from now.");
+  return unwrap(
+    await supabase
+      .from("scheduled_messages")
+      .insert({
+        conversation_kind: kind,
+        conversation_id: conversationId,
+        sender_id: userId,
+        content: content.trim(),
+        silent,
+        send_at: when.toISOString(),
+      })
+      .select()
+      .single(),
+  );
+}
+
+export async function getScheduledConversationMessages(
+  userId,
+  kind,
+  conversationId,
+) {
+  return unwrap(
+    await supabase
+      .from("scheduled_messages")
+      .select("id,content,silent,send_at,created_at")
+      .eq("sender_id", userId)
+      .eq("conversation_kind", kind)
+      .eq("conversation_id", conversationId)
+      .is("delivered_at", null)
+      .is("cancelled_at", null)
+      .order("send_at"),
+  );
+}
+
+export async function cancelScheduledConversationMessage(id, userId) {
+  return unwrap(
+    await supabase
+      .from("scheduled_messages")
+      .update({ cancelled_at: new Date().toISOString() })
+      .eq("id", id)
+      .eq("sender_id", userId)
+      .is("delivered_at", null)
+      .select("id")
+      .maybeSingle(),
+  );
+}
+
+export async function saveMessageDraftVersion(
+  userId,
+  kind,
+  conversationId,
+  content,
+) {
+  const clean = String(content || "").trim();
+  if (!clean) return null;
+  return unwrap(
+    await supabase.from("message_draft_versions").insert({
+      user_id: userId,
+      conversation_kind: kind,
+      conversation_id: conversationId,
+      content: clean,
+    }),
+  );
+}
+
+export async function getMessageDraftVersions(userId, kind, conversationId) {
+  return unwrap(
+    await supabase
+      .from("message_draft_versions")
+      .select("id,content,created_at")
+      .eq("user_id", userId)
+      .eq("conversation_kind", kind)
+      .eq("conversation_id", conversationId)
+      .order("created_at", { ascending: false })
+      .limit(10),
+  );
+}
+
 export async function markMessageRead(kind, conversationId, messageId, userId) {
   return unwrap(
     await supabase.from("message_read_receipts").upsert(
@@ -308,6 +456,9 @@ export function meetupCalendarDetails(meetup, otherName = "Crew member") {
   const details = [
     meetup.message,
     meetup.vrc_username ? `VRChat: ${meetup.vrc_username}` : "",
+    meetup.location_name ? `Location: ${meetup.location_name}` : "",
+    meetup.join_url ? `Join: ${meetup.join_url}` : "",
+    meetup.join_instructions,
   ]
     .filter(Boolean)
     .join("\n");

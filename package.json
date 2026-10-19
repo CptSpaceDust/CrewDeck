@@ -1,6 +1,6 @@
 {
   "name": "crewdeck-desktop",
-  "version": "1.8.6",
+  "version": "1.9.0",
   "private": true,
   "author": "CptSpaceDust",
   "description": "The private desktop home for the CrewDeck community.",
@@ -49,6 +49,25 @@
         "nsis"
       ]
     },
+    "fileAssociations": [
+      {
+        "ext": [
+          "png",
+          "jpg",
+          "jpeg",
+          "webp",
+          "gif",
+          "pdf",
+          "txt",
+          "mp3",
+          "wav",
+          "ogg",
+          "webm"
+        ],
+        "name": "Share with CrewDeck",
+        "role": "Viewer"
+      }
+    ],
     "nsis": {
       "guid": "d7a6a953-56df-5b98-b299-c025a7d6ae7b",
       "include": "build/installer.nsh",

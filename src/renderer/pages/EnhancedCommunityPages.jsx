@@ -192,7 +192,19 @@ export function CrewProfilePage({ person, user, onBack }) {
         />
       </div>
     );
-  const online = isOnline(profile);
+  const isFriend = friendship?.status === "accepted";
+  const canSee = (visibility, fallback = "everyone") => {
+    const value = visibility || fallback;
+    return (
+      user?.id === profile.id ||
+      value === "everyone" ||
+      (value === "friends" && isFriend)
+    );
+  };
+  const onlineVisible = canSee(profile.online_visibility);
+  const activityVisible = canSee(profile.activity_visibility, "friends");
+  const badgesVisible = canSee(profile.badges_visibility);
+  const online = onlineVisible && isOnline(profile);
   const inCall =
     profile.in_call_until &&
     new Date(profile.in_call_until).getTime() > Date.now();
@@ -220,21 +232,39 @@ export function CrewProfilePage({ person, user, onBack }) {
         <div className="crew-profile-hero">
           <Avatar profile={profile} size={112} />
           <div>
-            <span
-              className={`profile-presence ${online ? "online" : "offline"}`}
-            >
-              <i />
-              {online ? "Online" : "Offline"}
-            </span>
+            {onlineVisible ? (
+              <span
+                className={`profile-presence ${online ? "online" : "offline"}`}
+              >
+                <i />
+                {online ? "Online" : "Offline"}
+              </span>
+            ) : (
+              <span className="profile-presence private">
+                <i />
+                Status private
+              </span>
+            )}
             <h2>{profile.username}</h2>
             <span className="rank">{profile.rank || "Crew Member"}</span>
-            {inCall && <span className="crew-call-status">In a call</span>}
-            <div className="tag-row">
-              {(Array.isArray(profile.badges) ? profile.badges : []).map(
-                (badge) => (
-                  <span key={badge}>{badge}</span>
-                ),
+            {inCall && activityVisible && (
+              <span className="crew-call-status">In a call</span>
+            )}
+            {activityVisible &&
+              profile.status_message &&
+              (!profile.status_expires_at ||
+                new Date(profile.status_expires_at) > new Date()) && (
+                <p className="profile-custom-status">
+                  {profile.status_message}
+                </p>
               )}
+            <div className="tag-row">
+              {(badgesVisible && Array.isArray(profile.badges)
+                ? profile.badges
+                : []
+              ).map((badge) => (
+                <span key={badge}>{badge}</span>
+              ))}
             </div>
           </div>
         </div>
@@ -250,13 +280,15 @@ export function CrewProfilePage({ person, user, onBack }) {
           <div>
             <small>Status</small>
             <strong>
-              {inCall
-                ? "In a call"
-                : online
-                  ? "Online"
-                  : profile.last_seen
-                    ? `Last seen ${new Date(profile.last_seen).toLocaleString()}`
-                    : "Offline"}
+              {!onlineVisible
+                ? "Private"
+                : inCall && activityVisible
+                  ? "In a call"
+                  : online
+                    ? "Online"
+                    : profile.last_seen
+                      ? `Last seen ${new Date(profile.last_seen).toLocaleString()}`
+                      : "Offline"}
             </strong>
           </div>
         </div>
@@ -316,6 +348,8 @@ export function CrewProfilePage({ person, user, onBack }) {
                   return;
                 }
                 if (friendship?.status === "accepted") return;
+                const permission = await supabase.rpc("can_interact_with", { target_user:profile.id, interaction_type:"friend" });
+                if (permission.error || permission.data !== true) { setReportMessage(permission.error?.message || "This crew member is not accepting friend requests from you."); return; }
                 result = await supabase.from("friendships").upsert({
                   requester_id: user.id,
                   addressee_id: profile.id,

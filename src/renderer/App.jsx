@@ -38,8 +38,10 @@ import { claimConversationAlert } from "./lib/alertDelivery.mjs";
 import CaptainPage from "./pages/CaptainPage";
 import ControlCenterPage from "./pages/ControlCenterPage";
 import FriendsPage from "./pages/FriendsPage";
+import { BugReportsPage, CommunityCalendarPage, HelpRequestsPage } from "./pages/CommunityToolsPage";
 import UpdateOverlay from "./components/UpdateVisual";
 import { InAppDialogHost } from "./components/InAppDialog";
+import CommandPalette from "./components/CommandPalette";
 import {
   ConnectivityBanner,
   CommunityStatus,
@@ -125,7 +127,7 @@ export default function App() {
   const [session, setSession] = useState(null);
   const [mfaRequired, setMfaRequired] = useState(false);
   const [profile, setProfile] = useState(null);
-  const [page, setPage] = useState("introductions");
+  const [page, setPage] = useState(() => getPreferences().startupPage || "introductions");
   const [loading, setLoading] = useState(true);
   const [startupMinimumElapsed, setStartupMinimumElapsed] = useState(false);
   const [recovery, setRecovery] = useState(false);
@@ -533,6 +535,12 @@ export default function App() {
             onViewProfile={viewPerson}
           />
         );
+      case "help-requests":
+        return <HelpRequestsPage {...props} />;
+      case "bug-reports":
+        return <BugReportsPage {...props} />;
+      case "community-calendar":
+        return <CommunityCalendarPage {...props} />;
       case "crew-profile":
         return (
           <CrewProfilePage
@@ -606,6 +614,7 @@ export default function App() {
     <div className="app-shell">
       <UpdateOverlay />
       <InAppDialogHost />
+      <CommandPalette onNavigate={selectPage} />
       <WhatsNew />
       <InactivityLock enabled={lock.enabled} />
       <Sidebar
@@ -617,9 +626,9 @@ export default function App() {
       />
       <main className="main-shell">
         <ConnectivityBanner />
-        <CommunityStatus />
         <header className="topbar">
           <div className="desktop-drag-region" />
+          <CommunityStatus />
           <div className="topbar-actions">
             <button
               className={page === "messages" ? "active" : ""}

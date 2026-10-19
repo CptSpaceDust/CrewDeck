@@ -25,6 +25,7 @@ import {
   setLongTermMeetupAvailability,
 } from "../lib/data";
 import { useLoader } from "../lib/hooks";
+import { supabase } from "../lib/supabase";
 import {
   availabilityInstantRange,
   formatMeetupLocal,
@@ -34,7 +35,7 @@ import {
   meetupLocalDateKey,
   zonedDateTime,
 } from "../lib/time";
-import { confirmInApp } from "../components/InAppDialog";
+import { confirmInApp, promptInApp } from "../components/InAppDialog";
 import {
   MeetupCountdown,
   MeetupTools,
@@ -64,6 +65,128 @@ const personName = (profiles, id) =>
 const involves = (item, ids) =>
   ids.some((id) => id && (item.user_id === id || item.with_user_id === id));
 const overlaps = (startA, endA, startB, endB) => startA < endB && endA > startB;
+function MeetupTemplateControls({ userId, formRef, onNotice }) {
+  const [templates, setTemplates] = useState([]);
+  const [selected, setSelected] = useState("");
+  async function load() {
+    const { data, error } = await supabase
+      .from("meetup_templates")
+      .select("*")
+      .eq("user_id", userId)
+      .order("name");
+    if (error) throw error;
+    setTemplates(data || []);
+  }
+  useEffect(() => {
+    load().catch((error) => onNotice(error.message));
+  }, [userId]);
+  function apply() {
+    const template = templates.find((item) => item.id === selected);
+    const form = formRef.current;
+    if (!template || !form) return;
+    const values = {
+      duration: template.duration,
+      type: template.meetup_type,
+      participants: (template.participant_usernames || []).join(", "),
+      location_name: template.location_name,
+      join_url: template.join_url,
+      join_instructions: template.join_instructions,
+      message: template.message,
+    };
+    for (const [name, value] of Object.entries(values)) {
+      const control = form.elements.namedItem(name);
+      if (control && value != null) control.value = String(value);
+    }
+    onNotice(`Loaded “${template.name}”.`);
+  }
+  async function save() {
+    const form = formRef.current;
+    if (!form) return;
+    const name = await promptInApp(
+      "Save the current meetup details for later.",
+      "",
+      {
+        title: "Save meetup template",
+        inputLabel: "Template name",
+        confirmLabel: "Save template",
+      },
+    );
+    if (!name?.trim()) return;
+    const values = new FormData(form);
+    const row = {
+      user_id: userId,
+      name: name.trim(),
+      meetup_type: values.get("type") || null,
+      duration: Number(values.get("duration") || 1),
+      participant_usernames: String(values.get("participants") || "")
+        .split(/[\n,]/)
+        .map((item) => item.trim().replace(/^@/, ""))
+        .filter(Boolean),
+      location_name: String(values.get("location_name") || "").trim() || null,
+      join_url: String(values.get("join_url") || "").trim() || null,
+      join_instructions:
+        String(values.get("join_instructions") || "").trim() || null,
+      message: String(values.get("message") || "").trim() || null,
+      updated_at: new Date().toISOString(),
+    };
+    const { error } = await supabase
+      .from("meetup_templates")
+      .upsert(row, { onConflict: "user_id,name" });
+    if (error) return onNotice(error.message);
+    onNotice("Meetup template saved.");
+    await load();
+  }
+  async function remove() {
+    if (!selected) return;
+    const { error } = await supabase
+      .from("meetup_templates")
+      .delete()
+      .eq("id", selected)
+      .eq("user_id", userId);
+    if (error) return onNotice(error.message);
+    setSelected("");
+    onNotice("Meetup template deleted.");
+    await load();
+  }
+  return (
+    <section className="meetup-template-controls">
+      <div>
+        <strong>Meetup templates</strong>
+        <small>Reuse locations, participants, duration, and notes.</small>
+      </div>
+      <select
+        value={selected}
+        onChange={(event) => setSelected(event.target.value)}
+      >
+        <option value="">Choose a template…</option>
+        {templates.map((item) => (
+          <option key={item.id} value={item.id}>
+            {item.name}
+          </option>
+        ))}
+      </select>
+      <button
+        type="button"
+        className="button secondary"
+        disabled={!selected}
+        onClick={apply}
+      >
+        Load
+      </button>
+      <button type="button" className="button secondary" onClick={save}>
+        Save current
+      </button>
+      <button
+        type="button"
+        className="button ghost"
+        disabled={!selected}
+        onClick={remove}
+      >
+        Delete
+      </button>
+    </section>
+  );
+}
 function SpaceTimePicker({ name, defaultValue = "18:00" }) {
   const [initialHours, initialMinutes] = defaultValue.split(":").map(Number);
   const [hour, setHour] = useState(initialHours % 12 || 12);
@@ -344,6 +467,7 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
   const [message, setMessage] = useState("");
   const [recurrence, setRecurrence] = useState("none");
   const formHeadingRef = useRef(null);
+  const requestFormRef = useRef(null);
   const meetups = Array.isArray(meetupLoader.data) ? meetupLoader.data : [];
   const profiles = Array.isArray(profileLoader.data) ? profileLoader.data : [];
   const availability = Array.isArray(availabilityLoader.data)
@@ -511,6 +635,10 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
         vrc_username: String(form.get("vrc")).trim(),
         meetup_type: form.get("type"),
         additional_participants: String(form.get("participants") || "").trim(),
+        location_name: String(form.get("location_name") || "").trim() || null,
+        join_url: String(form.get("join_url") || "").trim() || null,
+        join_instructions:
+          String(form.get("join_instructions") || "").trim() || null,
         time_flexibility: form.get("flexibility"),
         recurrence_rule: form.get("recurrence"),
         recurrence_count: Number(form.get("recurrence_count") || 1),
@@ -846,6 +974,26 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
                             {item.meetup_type || "VRChat meetup"} ·{" "}
                             {item.message || "No notes."}
                           </p>
+                          {item.location_name && (
+                            <p className="meetup-location">
+                              <strong>Location:</strong> {item.location_name}
+                            </p>
+                          )}
+                          {item.join_url && (
+                            <a
+                              className="button ghost compact-button"
+                              href={item.join_url}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              Open join link
+                            </a>
+                          )}
+                          {item.join_instructions && (
+                            <p className="meetup-join-instructions">
+                              {item.join_instructions}
+                            </p>
+                          )}
                           <p className="meetup-local-time">
                             {formatMeetupLocal(
                               item.meetup_date,
@@ -881,14 +1029,15 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
                               </button>
                             </div>
                           )}
-                          {item.user_id === user.id && item.status === "pending" && (
-                            <button
-                              className="button danger compact-button"
-                              onClick={() => cancel(item)}
-                            >
-                              Cancel request
-                            </button>
-                          )}
+                          {item.user_id === user.id &&
+                            item.status === "pending" && (
+                              <button
+                                className="button danger compact-button"
+                                onClick={() => cancel(item)}
+                              >
+                                Cancel request
+                              </button>
+                            )}
                           {item.status === "denied" && item.admin_reason && (
                             <p className="meetup-denial">{item.admin_reason}</p>
                           )}
@@ -929,7 +1078,11 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
             </section>
           )}
           {!myMeetupsOnly && selected && (
-            <form className="panel meetup-request-form" onSubmit={submit}>
+            <form
+              ref={requestFormRef}
+              className="panel meetup-request-form"
+              onSubmit={submit}
+            >
               <div className="meetup-form-heading" ref={formHeadingRef}>
                 <span>📅</span>
                 <div>
@@ -947,6 +1100,11 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
                   </p>
                 </div>
               </div>
+              <MeetupTemplateControls
+                userId={user.id}
+                formRef={requestFormRef}
+                onNotice={setMessage}
+              />
               {(selectedBlocks.length > 0 ||
                 selectedBusyMeetups.length > 0) && (
                 <div className="meetup-off-hours">
@@ -1035,6 +1193,31 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
                 <h3>Details</h3>
                 <Field label="Additional participant usernames" hint="Optional">
                   <textarea name="participants" rows="3" />
+                </Field>
+                <div className="form-grid">
+                  <Field label="Location or world name" hint="Optional">
+                    <input
+                      name="location_name"
+                      maxLength="160"
+                      placeholder="VRChat world, Discord channel, or address"
+                    />
+                  </Field>
+                  <Field label="Join link" hint="Optional">
+                    <input
+                      name="join_url"
+                      type="url"
+                      maxLength="1000"
+                      placeholder="https://…"
+                    />
+                  </Field>
+                </div>
+                <Field label="Joining instructions" hint="Optional">
+                  <textarea
+                    name="join_instructions"
+                    rows="3"
+                    maxLength="2000"
+                    placeholder="Instance details, access notes, or meeting point"
+                  />
                 </Field>
                 <Field label="Scheduling flexibility">
                   <select

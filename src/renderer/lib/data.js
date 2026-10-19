@@ -691,7 +691,7 @@ export async function getMessages(conversationId) {
     await supabase
       .from("dm_messages")
       .select(
-        "id,conversation_id,sender_id,content,created_at,reply_to_id,is_reply,forwarded_from_kind,forwarded_from_message_id,forwarded_from_sender_id,forwarded_excerpt",
+        "id,conversation_id,sender_id,content,created_at,expires_at,reply_to_id,is_reply,forwarded_from_kind,forwarded_from_message_id,forwarded_from_sender_id,forwarded_excerpt",
       )
       .eq("conversation_id", conversationId)
       .gte("created_at", fiveDaysAgo)
@@ -705,6 +705,9 @@ export async function sendMessage(
   otherUserId,
   content,
   replyToId = null,
+  silent = false,
+  messageType = "text",
+  expiresInMinutes = null,
 ) {
   const message = unwrap(
     await supabase
@@ -714,22 +717,29 @@ export async function sendMessage(
         sender_id: userId,
         content,
         reply_to_id: replyToId,
+        silent,
+        message_type: messageType,
+        expires_at: expiresInMinutes
+          ? new Date(Date.now() + Number(expiresInMinutes) * 60000).toISOString()
+          : null,
       })
       .select()
       .single(),
   );
-  const { error } = await supabase.rpc("create_dm_notification", {
-    target_user_id: otherUserId,
-    target_conversation_id: conversationId,
-  });
-  if (error)
-    console.warn("Could not create direct-message notification", error);
+  if (!silent) {
+    await supabase.rpc("create_dm_notification", {
+      target_user_id: otherUserId,
+      target_conversation_id: conversationId,
+    });
+  }
   return message;
 }
 
 export async function requestConversation(user, profile, other) {
   const userId = user.id;
   const otherId = other.id;
+  const allowed = unwrap(await supabase.rpc("can_interact_with", { target_user: otherId, interaction_type:"message" }));
+  if (!allowed) throw new Error(`${other.username || "This member"} is not accepting new messages from you.`);
   const [userOne, userTwo] = [userId, otherId].sort();
   const existing = unwrap(
     await supabase
@@ -919,7 +929,7 @@ export async function getGroupDetails(groupId) {
     await supabase
       .from("group_conversations")
       .select(
-        "id,name,avatar_url,owner_id,description,slow_mode_seconds,call_locked",
+        "id,name,avatar_url,owner_id,description,welcome_message,slow_mode_seconds,call_locked",
       )
       .eq("id", groupId)
       .maybeSingle(),
@@ -961,7 +971,7 @@ export async function getGroupMessages(groupId) {
     await supabase
       .from("group_messages")
       .select(
-        "id,group_id,sender_id,content,created_at,edited_at,reply_to_id,is_reply,forwarded_from_kind,forwarded_from_message_id,forwarded_from_sender_id,forwarded_excerpt",
+        "id,group_id,sender_id,content,created_at,edited_at,expires_at,reply_to_id,is_reply,forwarded_from_kind,forwarded_from_message_id,forwarded_from_sender_id,forwarded_excerpt",
       )
       .eq("group_id", groupId)
       .order("created_at", { ascending: false })
@@ -974,6 +984,9 @@ export async function sendGroupMessage(
   userId,
   content,
   replyToId = null,
+  silent = false,
+  messageType = "text",
+  expiresInMinutes = null,
 ) {
   const message = unwrap(
     await supabase
@@ -983,6 +996,11 @@ export async function sendGroupMessage(
         sender_id: userId,
         content,
         reply_to_id: replyToId,
+        silent,
+        message_type: messageType,
+        expires_at: expiresInMinutes
+          ? new Date(Date.now() + Number(expiresInMinutes) * 60000).toISOString()
+          : null,
       })
       .select()
       .single(),
@@ -1031,22 +1049,25 @@ export async function sendGroupMessage(
   const mentionsEveryone =
     ["owner", "moderator"].includes(senderMembership?.role) &&
     /(^|\s)@everyone\b/i.test(content);
-  const notified = (targets || []).filter((target) => {
-    const preference = preferenceByUser[target.id];
-    if (
-      preference?.notification_level === "none" ||
-      (preference?.muted_until && new Date(preference.muted_until) > new Date())
-    )
-      return false;
-    if (preference?.notification_level !== "mentions") return true;
-    return (
-      mentionsEveryone ||
-      new RegExp(
-        `(^|\\s)@${String(target.username || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`,
-        "i",
-      ).test(content)
-    );
-  });
+  const notified = silent
+    ? []
+    : (targets || []).filter((target) => {
+        const preference = preferenceByUser[target.id];
+        if (
+          preference?.notification_level === "none" ||
+          (preference?.muted_until &&
+            new Date(preference.muted_until) > new Date())
+        )
+          return false;
+        if (preference?.notification_level !== "mentions") return true;
+        return (
+          mentionsEveryone ||
+          new RegExp(
+            `(^|\\s)@${String(target.username || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`,
+            "i",
+          ).test(content)
+        );
+      });
   await Promise.allSettled(
     notified.map(({ id: targetUserId }) =>
       supabase.rpc("create_notification", {
@@ -1180,10 +1201,14 @@ export async function updateGroupConversationSettings(
             .trim()
             .slice(0, 500) || null,
         slow_mode_seconds: Number(changes.slow_mode_seconds || 0),
+        welcome_message:
+          String(changes.welcome_message || "")
+            .trim()
+            .slice(0, 1500) || null,
       })
       .eq("id", groupId)
       .eq("owner_id", userId)
-      .select("id,description,slow_mode_seconds")
+      .select("id,description,welcome_message,slow_mode_seconds")
       .single(),
   );
 }
