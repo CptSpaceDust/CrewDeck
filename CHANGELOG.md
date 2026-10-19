@@ -2,6 +2,14 @@
 
 Every published CrewDeck release is documented here and copied into its GitHub release notes.
 
+## [1.9.1] - 2026-10-18
+
+### Fixed
+
+- Opening a direct or group conversation no longer crashes with `Timer is not defined`.
+- Conversation search stays in its own fixed section beside the message panel while the conversation list scrolls independently.
+- Added regression coverage for the composer icon import and both conversation-list layouts.
+
 ## [1.9.0] - 2026-10-18
 
 ### Added

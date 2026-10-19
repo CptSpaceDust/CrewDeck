@@ -7,6 +7,7 @@ import {
   Paperclip,
   Send,
   Square,
+  Timer,
   Trash2,
 } from "lucide-react";
 import { supabase } from "../lib/supabase";

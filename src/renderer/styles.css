@@ -1349,14 +1349,23 @@ p {
   gap: 13px;
 }
 .conversation-list {
+  display: flex;
+  flex-direction: column;
   padding: 12px;
-  overflow-y: auto;
+  min-height: 0;
+  overflow: hidden;
 }
 .conversation-search {
+  flex: 0 0 auto;
   margin-bottom: 11px;
 }
 .conversation-search input {
   width: 100%;
+}
+.conversation-items {
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 .conversation {
   width: 100%;

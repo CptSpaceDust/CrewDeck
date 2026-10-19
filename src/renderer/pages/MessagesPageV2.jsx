@@ -1884,6 +1884,7 @@ function DirectMessagesPage({
               onChange={(e) => setQuery(e.target.value)}
             />
           </div>
+          <div className="conversation-items">
           {visible.map((item) => {
             const online =
               item.person?.last_seen &&
@@ -1915,6 +1916,7 @@ function DirectMessagesPage({
               </button>
             );
           })}
+          </div>
         </aside>
         <section
           className="panel chat-panel"
@@ -3291,6 +3293,7 @@ function GroupMessagesPage({
               onChange={(event) => setQuery(event.target.value)}
             />
           </div>
+          <div className="conversation-items">
           {visible.map((group) => (
             <button
               className={
@@ -3318,6 +3321,7 @@ function GroupMessagesPage({
               )}
             </button>
           ))}
+          </div>
         </aside>
         <section
           className="panel chat-panel"

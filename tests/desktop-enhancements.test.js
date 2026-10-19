@@ -71,10 +71,15 @@ test("desktop enhancements cover notifications, drafts, reminders, and privacy",
 
 test("advanced messaging, meetup templates, and profile privacy are wired", () => {
   const composer = read("src/renderer/components/MessageComposer.jsx");
+  const messages = read("src/renderer/pages/MessagesPageV2.jsx");
+  const styles = read("src/renderer/styles.css");
   const meetup = read("src/renderer/pages/MeetupsPage.jsx");
   const profile = read("src/renderer/pages/CommunityPagesV2.jsx");
   assert.match(composer, /Send silently/);
   assert.match(composer, /Scheduled messages/);
+  assert.match(composer, /\bTimer,\s*\n\s*Trash2,/);
+  assert.equal((messages.match(/className="conversation-items"/g) || []).length, 2);
+  assert.match(styles, /\.conversation-items\s*\{[\s\S]*?overflow-y:\s*auto/);
   assert.match(meetup, /MeetupTemplateControls/);
   assert.match(meetup, /join_instructions/);
   assert.match(profile, /birthday_visibility/);
