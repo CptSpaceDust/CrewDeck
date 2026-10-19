@@ -302,7 +302,9 @@ export function WhatsNew() {
               <strong>Fixed</strong>
               <p>
                 Group invite links, interaction privacy, realtime conversation
-                tools, and desktop recovery behavior are more reliable.
+                tools, and desktop recovery behavior are more reliable. Meetups can share a date
+                when their times do not overlap, Call Chat has been removed, and
+                the calendar no longer marks unrelated crew members as busy.
               </p>
             </div>
           </article>
