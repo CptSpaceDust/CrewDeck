@@ -691,7 +691,7 @@ export async function getMessages(conversationId) {
     await supabase
       .from("dm_messages")
       .select(
-        "id,conversation_id,sender_id,content,created_at,expires_at,reply_to_id,is_reply,forwarded_from_kind,forwarded_from_message_id,forwarded_from_sender_id,forwarded_excerpt",
+        "id,conversation_id,sender_id,content,created_at,expires_at,message_type,reply_to_id,is_reply,forwarded_from_kind,forwarded_from_message_id,forwarded_from_sender_id,forwarded_excerpt",
       )
       .eq("conversation_id", conversationId)
       .gte("created_at", fiveDaysAgo)
@@ -971,7 +971,7 @@ export async function getGroupMessages(groupId) {
     await supabase
       .from("group_messages")
       .select(
-        "id,group_id,sender_id,content,created_at,edited_at,expires_at,reply_to_id,is_reply,forwarded_from_kind,forwarded_from_message_id,forwarded_from_sender_id,forwarded_excerpt",
+        "id,group_id,sender_id,content,created_at,edited_at,expires_at,message_type,reply_to_id,is_reply,forwarded_from_kind,forwarded_from_message_id,forwarded_from_sender_id,forwarded_excerpt",
       )
       .eq("group_id", groupId)
       .order("created_at", { ascending: false })

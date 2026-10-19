@@ -280,8 +280,8 @@ export function WhatsNew() {
             <div>
               <strong>Added</strong>
               <p>
-                Images, videos, files, and recorded voice messages now appear
-                directly inside conversations.
+                Message attachments now stay focused on the shared media and
+                playback controls without extra placeholder labels.
               </p>
             </div>
           </article>
@@ -290,8 +290,7 @@ export function WhatsNew() {
             <div>
               <strong>Changed</strong>
               <p>
-                Message scheduling, expiration, silent delivery, and saved
-                messages now live in one compact Space Glass tools menu.
+                Command palette results use clearer, full-width navigation rows.
               </p>
             </div>
           </article>
@@ -300,9 +299,8 @@ export function WhatsNew() {
             <div>
               <strong>Fixed</strong>
               <p>
-                Attachment errors now explain what went wrong, incomplete
-                messages are cleaned up, and the command palette no longer
-                overlaps the Messages button.
+                Attachment labels remain hidden after conversations reload, and
+                command palette entries no longer overlap each other.
               </p>
             </div>
           </article>

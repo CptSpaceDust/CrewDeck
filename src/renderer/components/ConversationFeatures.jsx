@@ -106,7 +106,6 @@ function MessageAttachment({ item, onNotice }) {
   if (item.mime_type?.startsWith("audio/") || item.duration_seconds) {
     return (
       <div className="message-media-preview audio">
-        <strong>Voice message</strong>
         <audio src={url} controls preload="metadata" />
       </div>
     );

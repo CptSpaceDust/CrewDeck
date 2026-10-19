@@ -330,7 +330,7 @@ p {
   padding: 8px;
 }
 .footer-actions button,
-.topbar-actions button {
+.topbar-actions > button {
   display: grid;
   place-items: center;
   border: 0;
@@ -345,7 +345,7 @@ p {
 }
 .footer-actions button:hover,
 .footer-actions button.active,
-.topbar-actions button:hover {
+.topbar-actions > button:hover {
   color: #dcecff;
   background: rgba(90, 168, 255, 0.1);
 }
@@ -391,7 +391,7 @@ p {
   display: flex;
   gap: 8px;
 }
-.topbar-actions button {
+.topbar-actions > button {
   position: relative;
   width: 36px;
   height: 36px;
@@ -2692,7 +2692,7 @@ p {
 }
 
 /* Website-parity polish */
-.topbar-actions button.active {
+.topbar-actions > button.active {
   color: #9dceff;
   border-color: rgba(100, 171, 255, 0.42);
   background: rgba(68, 137, 222, 0.16);
@@ -7125,7 +7125,7 @@ html[data-motion="full"] dialog {
 .button.primary,
 .nav-item.active,
 .notification-filters button.active,
-.topbar-actions button.active {
+.topbar-actions > button.active {
   border-color: rgba(var(--accent-rgb), 0.55);
   background: linear-gradient(
     145deg,
@@ -7644,6 +7644,10 @@ html[data-color-indicators="labeled"] .presence-chip::before {
   padding: 8px;
 }
 .command-palette > div button {
+  position: relative;
+  width: 100%;
+  height: auto;
+  min-height: 56px;
   align-items: center;
   background: transparent;
   border: 1px solid transparent;
@@ -7660,8 +7664,12 @@ html[data-color-indicators="labeled"] .presence-chip::before {
   border-color: rgba(108, 197, 255, 0.3);
 }
 .command-palette > div button span {
+  min-width: 0;
   display: grid;
+  gap: 2px;
 }
+.command-palette > div button strong,
+.command-palette > div button small { display: block; line-height: 1.25; }
 .command-palette > div button small {
   color: var(--muted);
 }

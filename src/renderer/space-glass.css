@@ -204,15 +204,15 @@ a:focus-visible,
 }
 
 .footer-actions button,
-.topbar-actions button {
+.topbar-actions > button {
   border: 1px solid transparent;
   transition: 0.18s ease;
 }
 
 .footer-actions button:hover,
 .footer-actions button.active,
-.topbar-actions button:hover,
-.topbar-actions button.active {
+.topbar-actions > button:hover,
+.topbar-actions > button.active {
   color: #eaf7ff;
   border-color: rgba(135, 207, 255, 0.22);
   background: rgba(102, 183, 255, 0.11);

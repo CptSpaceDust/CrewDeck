@@ -2186,7 +2186,9 @@ function DirectMessagesPage({
                               : "a direct message"}
                           </small>
                         )}
-                        {!["voice", "image", "video", "file"].includes(
+                        {!conversationFeatures.attachments.some(
+                          (attachment) => attachment.message_id === item.id,
+                        ) && !["voice", "image", "video", "file"].includes(
                           item.message_type,
                         ) && (
                           <p>
@@ -3733,7 +3735,9 @@ function GroupMessagesPage({
                             role={myGroupRole}
                             onNotice={setNotice}
                           />
-                        ) : !["voice", "image", "video", "file"].includes(
+                        ) : !conversationFeatures.attachments.some(
+                            (attachment) => attachment.message_id === item.id,
+                          ) && !["voice", "image", "video", "file"].includes(
                             item.message_type,
                           ) ? (
                           <p>

@@ -53,7 +53,7 @@ test("What’s Changed contains Added, Changed, and Fixed summaries", () => {
   assert.match(source, /<strong>Added<\/strong>/);
   assert.match(source, /<strong>Changed<\/strong>/);
   assert.match(source, /<strong>Fixed<\/strong>/);
-  assert.match(source, /Images, videos, files, and recorded voice messages/);
-  assert.match(source, /compact Space Glass tools menu/);
-  assert.match(source, /command palette no longer/);
+  assert.match(source, /without extra placeholder labels/);
+  assert.match(source, /full-width navigation rows/);
+  assert.match(source, /entries no longer overlap/);
 });

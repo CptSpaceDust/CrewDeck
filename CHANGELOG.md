@@ -2,6 +2,14 @@
 
 Every published CrewDeck release is documented here and copied into its GitHub release notes.
 
+## [1.9.3] - 2026-10-19
+
+### Fixed
+
+- Attachment placeholder text no longer appears above inline images, videos, files, or voice messages after reopening a conversation.
+- Voice messages now show the audio player without a duplicate label.
+- Command palette results keep their full row size instead of inheriting the small header button dimensions and overlapping each other.
+
 ## [1.9.2] - 2026-10-19
 
 ### Changed
