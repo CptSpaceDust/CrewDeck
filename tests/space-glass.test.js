@@ -53,7 +53,7 @@ test("What’s Changed contains Added, Changed, and Fixed summaries", () => {
   assert.match(source, /<strong>Added<\/strong>/);
   assert.match(source, /<strong>Changed<\/strong>/);
   assert.match(source, /<strong>Fixed<\/strong>/);
-  assert.match(source, /Meetups can share a date/);
-  assert.match(source, /Call Chat has been removed/);
-  assert.match(source, /calendar no longer marks unrelated crew members/);
+  assert.match(source, /Images, videos, files, and recorded voice messages/);
+  assert.match(source, /compact Space Glass tools menu/);
+  assert.match(source, /command palette no longer/);
 });

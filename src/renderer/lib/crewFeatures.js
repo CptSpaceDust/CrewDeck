@@ -163,25 +163,46 @@ export async function uploadMessageAttachment({
       },
     },
   );
-  if (error) throw error;
+  if (error) {
+    const detail = await error.context?.json?.().catch(() => null);
+    throw new Error(
+      detail?.error || error.message || "Unable to upload this attachment.",
+    );
+  }
   if (data?.error) throw new Error(data.error);
   return data.attachment;
 }
 
 export async function openMessageAttachment(attachmentId) {
+  const url = await getMessageAttachmentUrl(attachmentId);
+  window.open(url, "_blank", "noopener,noreferrer");
+}
+
+export async function getMessageAttachmentUrl(attachmentId) {
   const cacheKey = `crewdeck.media-cache.${attachmentId}`;
   const cached = sessionStorage.getItem(cacheKey);
   if (cached) {
-    try { const value = JSON.parse(cached); if (value.url && value.expiresAt > Date.now()) { window.open(value.url, "_blank", "noopener,noreferrer"); return; } } catch {}
+    try {
+      const value = JSON.parse(cached);
+      if (value.url && value.expiresAt > Date.now()) return value.url;
+    } catch {}
   }
   const { data, error } = await supabase.functions.invoke(
     "message-file-access",
-    { body: { action: "download", attachmentId } },
+    { body: { action: "download", attachmentId, inline: true } },
   );
-  if (error) throw error;
+  if (error) {
+    const detail = await error.context?.json?.().catch(() => null);
+    throw new Error(
+      detail?.error || error.message || "Unable to open this attachment.",
+    );
+  }
   if (data?.error) throw new Error(data.error);
-  sessionStorage.setItem(cacheKey, JSON.stringify({ url:data.url, expiresAt:Date.now() + 100000 }));
-  window.open(data.url, "_blank", "noopener,noreferrer");
+  sessionStorage.setItem(
+    cacheKey,
+    JSON.stringify({ url: data.url, expiresAt: Date.now() + 100000 }),
+  );
+  return data.url;
 }
 
 export async function saveConversationPreference(

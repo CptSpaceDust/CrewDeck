@@ -2,6 +2,20 @@
 
 Every published CrewDeck release is documented here and copied into its GitHub release notes.
 
+## [1.9.2] - 2026-10-19
+
+### Changed
+
+- Message attachments, voice recording, silent delivery, scheduling, expiration, and saved messages now live in a compact plus menu beside the composer.
+- Images and videos render inside conversations, while voice messages use an inline audio player without exposing generated filenames.
+- The command palette now sits in the app header without overlapping the Messages button.
+
+### Fixed
+
+- Video and browser-recorded audio uploads are accepted by the attachment service up to the 10 MB limit.
+- Attachment failures now show the actual server response and remove incomplete placeholder messages.
+- Schedule and expiration controls use a clearer Space Glass layout on the website and app.
+
 ## [1.9.1] - 2026-10-18
 
 ### Fixed

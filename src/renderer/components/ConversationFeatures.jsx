@@ -22,6 +22,7 @@ import {
   toggleMessageReaction,
   unpinGroupMessage,
   openMessageAttachment,
+  getMessageAttachmentUrl,
 } from "../lib/crewFeatures";
 import { supabase } from "../lib/supabase";
 import { confirmInApp, promptInApp } from "./InAppDialog";
@@ -70,11 +71,79 @@ const MORE_EMOJIS = [
   "☕",
 ];
 
+function MessageAttachment({ item, onNotice }) {
+  const [url, setUrl] = useState("");
+  useEffect(() => {
+    let current = true;
+    getMessageAttachmentUrl(item.id)
+      .then((value) => current && setUrl(value))
+      .catch((error) => onNotice?.(error.message));
+    return () => {
+      current = false;
+    };
+  }, [item.id]);
+  if (!url)
+    return <div className="message-media-loading">Loading attachment…</div>;
+  if (item.mime_type?.startsWith("image/")) {
+    return (
+      <button
+        type="button"
+        className="message-media-preview image"
+        aria-label="Open shared image"
+        onClick={() => window.open(url, "_blank", "noopener,noreferrer")}
+      >
+        <img src={url} alt="Shared image" loading="lazy" />
+      </button>
+    );
+  }
+  if (item.mime_type?.startsWith("video/")) {
+    return (
+      <div className="message-media-preview video">
+        <video src={url} controls preload="metadata" playsInline />
+      </div>
+    );
+  }
+  if (item.mime_type?.startsWith("audio/") || item.duration_seconds) {
+    return (
+      <div className="message-media-preview audio">
+        <strong>Voice message</strong>
+        <audio src={url} controls preload="metadata" />
+      </div>
+    );
+  }
+  return (
+    <button
+      type="button"
+      className="message-file-download"
+      onClick={() =>
+        openMessageAttachment(item.id).catch((error) =>
+          onNotice?.(error.message),
+        )
+      }
+    >
+      <Paperclip />
+      <span>
+        <strong>Download file</strong>
+        <small>{Math.max(1, Math.ceil(item.byte_size / 1024))} KB</small>
+      </span>
+    </button>
+  );
+}
+
 function suspiciousLink(url) {
   try {
     const parsed = new URL(url);
-    return parsed.protocol !== "https:" || /^\d{1,3}(\.\d{1,3}){3}$/.test(parsed.hostname) || parsed.hostname.includes("xn--") || parsed.username || parsed.password || parsed.hostname.split(".").length > 5;
-  } catch { return true; }
+    return (
+      parsed.protocol !== "https:" ||
+      /^\d{1,3}(\.\d{1,3}){3}$/.test(parsed.hostname) ||
+      parsed.hostname.includes("xn--") ||
+      parsed.username ||
+      parsed.password ||
+      parsed.hostname.split(".").length > 5
+    );
+  } catch {
+    return true;
+  }
 }
 
 export function useConversationFeatures(kind, conversationId, userId) {
@@ -238,26 +307,7 @@ export function MessageFeatureBar({
       {messageAttachments.length > 0 && (
         <div className="message-attachment-list">
           {messageAttachments.map((item) => (
-            <button
-              type="button"
-              key={item.id}
-              onClick={() =>
-                openMessageAttachment(item.id).catch((error) =>
-                  onNotice?.(error.message),
-                )
-              }
-            >
-              <Paperclip />
-              <span>
-                <strong>{item.file_name}</strong>
-                <small>
-                  {Math.max(1, Math.ceil(item.byte_size / 1024))} KB
-                  {item.duration_seconds
-                    ? ` · ${Math.round(item.duration_seconds)}s`
-                    : ""}
-                </small>
-              </span>
-            </button>
+            <MessageAttachment key={item.id} item={item} onNotice={onNotice} />
           ))}
         </div>
       )}
@@ -459,17 +509,37 @@ export function ConversationDetails({
   const [loading, setLoading] = useState(true);
   async function load() {
     try {
-      const [nextReminders, attachmentsResult, messagesResult] = await Promise.all([
-        getMessageReminders(userId, kind, conversationId),
-        supabase.from("message_attachments").select("*").eq("conversation_kind", kind).eq("conversation_id", conversationId).order("created_at", { ascending: false }),
-        supabase.from(kind === "group" ? "group_messages" : "dm_messages").select("id,content,created_at").eq(kind === "group" ? "group_id" : "conversation_id", conversationId).order("created_at", { ascending: false }).limit(250),
-      ]);
+      const [nextReminders, attachmentsResult, messagesResult] =
+        await Promise.all([
+          getMessageReminders(userId, kind, conversationId),
+          supabase
+            .from("message_attachments")
+            .select("*")
+            .eq("conversation_kind", kind)
+            .eq("conversation_id", conversationId)
+            .order("created_at", { ascending: false }),
+          supabase
+            .from(kind === "group" ? "group_messages" : "dm_messages")
+            .select("id,content,created_at")
+            .eq(
+              kind === "group" ? "group_id" : "conversation_id",
+              conversationId,
+            )
+            .order("created_at", { ascending: false })
+            .limit(250),
+        ]);
       setReminders(nextReminders || []);
       setMedia(attachmentsResult.data || []);
       const foundLinks = [];
       for (const message of messagesResult.data || []) {
-        for (const match of String(message.content || "").matchAll(/https?:\/\/[^\s<]+/gi)) {
-          foundLinks.push({ messageId: message.id, url: match[0].replace(/[),.!?]+$/, ""), createdAt: message.created_at });
+        for (const match of String(message.content || "").matchAll(
+          /https?:\/\/[^\s<]+/gi,
+        )) {
+          foundLinks.push({
+            messageId: message.id,
+            url: match[0].replace(/[),.!?]+$/, ""),
+            createdAt: message.created_at,
+          });
         }
       }
       setLinks(foundLinks.slice(0, 60));
@@ -552,7 +622,9 @@ export function ConversationDetails({
           <Paperclip />
           <span>
             <strong>Shared media</strong>
-            <small>Images, files, voice messages, and links from this conversation.</small>
+            <small>
+              Images, files, voice messages, and links from this conversation.
+            </small>
           </span>
         </div>
       </header>
@@ -562,24 +634,56 @@ export function ConversationDetails({
             type="button"
             key={item.id}
             onClick={async () => {
-              const { data, error } = await supabase.functions.invoke("message-file-access", { body: { action: "download", attachmentId: item.id } });
-              if (error || data?.error) return onNotice?.(error?.message || data?.error || "Unable to open this file.");
-              window.desktop?.openExternal ? window.desktop.openExternal(data.url) : window.open(data.url, "_blank", "noopener,noreferrer");
+              const { data, error } = await supabase.functions.invoke(
+                "message-file-access",
+                { body: { action: "download", attachmentId: item.id } },
+              );
+              if (error || data?.error)
+                return onNotice?.(
+                  error?.message || data?.error || "Unable to open this file.",
+                );
+              window.desktop?.openExternal
+                ? window.desktop.openExternal(data.url)
+                : window.open(data.url, "_blank", "noopener,noreferrer");
             }}
           >
-            <span className="conversation-media-type">{item.duration_seconds ? "VOICE" : item.mime_type?.startsWith("image/") ? "IMAGE" : "FILE"}</span>
+            <span className="conversation-media-type">
+              {item.duration_seconds
+                ? "VOICE"
+                : item.mime_type?.startsWith("image/")
+                  ? "IMAGE"
+                  : "FILE"}
+            </span>
             <strong>{item.file_name}</strong>
             <small>{Math.max(1, Math.ceil(item.byte_size / 1024))} KB</small>
           </button>
         ))}
         {links.map((item) => (
-          <button type="button" key={`${item.messageId}-${item.url}`} onClick={async () => { if (suspiciousLink(item.url) && !(await confirmInApp(`This link uses an unusual address:\n${item.url}`, { title:"Open suspicious link?", confirmLabel:"Open link" }))) return; window.desktop?.openExternal ? window.desktop.openExternal(item.url) : window.open(item.url, "_blank", "noopener,noreferrer"); }}>
+          <button
+            type="button"
+            key={`${item.messageId}-${item.url}`}
+            onClick={async () => {
+              if (
+                suspiciousLink(item.url) &&
+                !(await confirmInApp(
+                  `This link uses an unusual address:\n${item.url}`,
+                  { title: "Open suspicious link?", confirmLabel: "Open link" },
+                ))
+              )
+                return;
+              window.desktop?.openExternal
+                ? window.desktop.openExternal(item.url)
+                : window.open(item.url, "_blank", "noopener,noreferrer");
+            }}
+          >
             <span className="conversation-media-type">LINK</span>
             <strong>{new URL(item.url).hostname}</strong>
             <small>{item.url}</small>
           </button>
         ))}
-        {!media.length && !links.length && <p className="micro-copy">Nothing has been shared here yet.</p>}
+        {!media.length && !links.length && (
+          <p className="micro-copy">Nothing has been shared here yet.</p>
+        )}
       </div>
     </section>
   );

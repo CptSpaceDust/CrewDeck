@@ -126,9 +126,16 @@ function MessageDayDivider({ value }) {
             weekday: "long",
             month: "long",
             day: "numeric",
-            year: date.getFullYear() === today.getFullYear() ? undefined : "numeric",
+            year:
+              date.getFullYear() === today.getFullYear()
+                ? undefined
+                : "numeric",
           });
-  return <div className="message-day-divider"><span>{label}</span></div>;
+  return (
+    <div className="message-day-divider">
+      <span>{label}</span>
+    </div>
+  );
 }
 
 function playCallTone(type) {
@@ -216,18 +223,49 @@ function ScreenShareTile({ item, callId, userId }) {
   useEffect(() => {
     if (!callId) return undefined;
     const load = async () => {
-      const { data } = await supabase.from("call_screen_pointers").select("user_id,x,y,expires_at").eq("call_id", callId).gt("expires_at", new Date().toISOString());
+      const { data } = await supabase
+        .from("call_screen_pointers")
+        .select("user_id,x,y,expires_at")
+        .eq("call_id", callId)
+        .gt("expires_at", new Date().toISOString());
       setPointers(data || []);
     };
     load();
-    const channel = supabase.channel(`screen-pointers-${callId}`).on("postgres_changes", { event:"*", schema:"public", table:"call_screen_pointers", filter:`call_id=eq.${callId}` }, load).subscribe();
+    const channel = supabase
+      .channel(`screen-pointers-${callId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "call_screen_pointers",
+          filter: `call_id=eq.${callId}`,
+        },
+        load,
+      )
+      .subscribe();
     const timer = setInterval(load, 2500);
-    return () => { clearInterval(timer); supabase.removeChannel(channel); };
+    return () => {
+      clearInterval(timer);
+      supabase.removeChannel(channel);
+    };
   }, [callId]);
   async function point(event) {
     if (!callId) return;
     const box = event.currentTarget.getBoundingClientRect();
-    await supabase.from("call_screen_pointers").upsert({ call_id:callId, user_id:userId, x:(event.clientX - box.left) / box.width, y:(event.clientY - box.top) / box.height, expires_at:new Date(Date.now() + 4000).toISOString(), updated_at:new Date().toISOString() }, { onConflict:"call_id,user_id" });
+    await supabase
+      .from("call_screen_pointers")
+      .upsert(
+        {
+          call_id: callId,
+          user_id: userId,
+          x: (event.clientX - box.left) / box.width,
+          y: (event.clientY - box.top) / box.height,
+          expires_at: new Date(Date.now() + 4000).toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "call_id,user_id" },
+      );
   }
   return (
     <article className="call-screen-card">
@@ -242,9 +280,21 @@ function ScreenShareTile({ item, callId, userId }) {
           <Maximize2 />
         </button>
       </header>
-      <div className="call-screen-pointer-surface" onPointerDown={point} title="Click to point at this shared screen">
+      <div
+        className="call-screen-pointer-surface"
+        onPointerDown={point}
+        title="Click to point at this shared screen"
+      >
         <video ref={videoRef} autoPlay playsInline muted />
-        {pointers.map((pointer) => <i className="call-screen-pointer" key={pointer.user_id} style={{ left:`${pointer.x * 100}%`, top:`${pointer.y * 100}%` }}><span /></i>)}
+        {pointers.map((pointer) => (
+          <i
+            className="call-screen-pointer"
+            key={pointer.user_id}
+            style={{ left: `${pointer.x * 100}%`, top: `${pointer.y * 100}%` }}
+          >
+            <span />
+          </i>
+        ))}
       </div>
     </article>
   );
@@ -356,16 +406,24 @@ export function VoiceCall({ conversation, user, onClose, requestedCallId }) {
   const mutedBeforeDeafenRef = useRef(false);
 
   useEffect(() => {
-    if (!callPreferences.globalPushToTalk || !window.desktop?.globalPtt) return undefined;
+    if (!callPreferences.globalPushToTalk || !window.desktop?.globalPtt)
+      return undefined;
     window.desktop.globalPtt.enable("Control+Shift+Space");
-    return window.desktop.globalPtt.onToggle(() => { if (roomRef.current && connected) toggleMic(); });
+    return window.desktop.globalPtt.onToggle(() => {
+      if (roomRef.current && connected) toggleMic();
+    });
   }, [connected, callPreferences.globalPushToTalk]);
 
   useEffect(() => {
-    const offline = () => setStatus("Connection changed. Holding your place in the call…");
+    const offline = () =>
+      setStatus("Connection changed. Holding your place in the call…");
     const online = () => setStatus("Network restored. Reconnecting voice…");
-    addEventListener("offline", offline); addEventListener("online", online);
-    return () => { removeEventListener("offline", offline); removeEventListener("online", online); };
+    addEventListener("offline", offline);
+    addEventListener("online", online);
+    return () => {
+      removeEventListener("offline", offline);
+      removeEventListener("online", online);
+    };
   }, []);
 
   const callTitle =
@@ -703,7 +761,10 @@ export function VoiceCall({ conversation, user, onClose, requestedCallId }) {
             : [conversation.person.id];
           await Promise.allSettled(
             recipients.map(async (targetUserId) => {
-              const permission = await supabase.rpc("can_interact_with", { target_user:targetUserId, interaction_type:"call" });
+              const permission = await supabase.rpc("can_interact_with", {
+                target_user: targetUserId,
+                interaction_type: "call",
+              });
               if (permission.error || permission.data !== true) return;
               return supabase.rpc("create_notification", {
                 target_user_id: targetUserId,
@@ -891,14 +952,41 @@ export function VoiceCall({ conversation, user, onClose, requestedCallId }) {
     for (const [key, element] of audioElementsRef.current) {
       if (key.startsWith(`${participantId}:`)) element.volume = volume;
     }
-    await supabase.from("friend_audio_profiles").upsert({ owner_id:user.id, friend_id:participantId, volume, updated_at:new Date().toISOString() }, { onConflict:"owner_id,friend_id" });
+    await supabase
+      .from("friend_audio_profiles")
+      .upsert(
+        {
+          owner_id: user.id,
+          friend_id: participantId,
+          volume,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "owner_id,friend_id" },
+      );
   }
 
   useEffect(() => {
-    const ids = participants.map((participant) => participant.identity).filter((id) => id && id !== user.id);
+    const ids = participants
+      .map((participant) => participant.identity)
+      .filter((id) => id && id !== user.id);
     if (!ids.length) return;
-    supabase.from("friend_audio_profiles").select("friend_id,volume").eq("owner_id", user.id).in("friend_id", ids).then(({ data }) => setVolumes((current) => ({ ...current, ...Object.fromEntries((data || []).map((item) => [item.friend_id, Number(item.volume)])) })));
-  }, [participants.map((participant) => participant.identity).join(","), user.id]);
+    supabase
+      .from("friend_audio_profiles")
+      .select("friend_id,volume")
+      .eq("owner_id", user.id)
+      .in("friend_id", ids)
+      .then(({ data }) =>
+        setVolumes((current) => ({
+          ...current,
+          ...Object.fromEntries(
+            (data || []).map((item) => [item.friend_id, Number(item.volume)]),
+          ),
+        })),
+      );
+  }, [
+    participants.map((participant) => participant.identity).join(","),
+    user.id,
+  ]);
 
   async function enableAudio() {
     try {
@@ -953,20 +1041,52 @@ export function VoiceCall({ conversation, user, onClose, requestedCallId }) {
   useEffect(() => {
     if (!activeCallId) return undefined;
     const loadQueue = async () => {
-      const { data } = await supabase.from("call_speaker_queue").select("user_id,position,joined_at").eq("call_id", activeCallId).order("position");
+      const { data } = await supabase
+        .from("call_speaker_queue")
+        .select("user_id,position,joined_at")
+        .eq("call_id", activeCallId)
+        .order("position");
       setSpeakerQueue(data || []);
-      setQueuedToSpeak(Boolean((data || []).some((item) => item.user_id === user.id)));
+      setQueuedToSpeak(
+        Boolean((data || []).some((item) => item.user_id === user.id)),
+      );
     };
     loadQueue();
-    const channel = supabase.channel(`speaker-queue-${activeCallId}`).on("postgres_changes", { event:"*", schema:"public", table:"call_speaker_queue", filter:`call_id=eq.${activeCallId}` }, loadQueue).subscribe();
+    const channel = supabase
+      .channel(`speaker-queue-${activeCallId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "call_speaker_queue",
+          filter: `call_id=eq.${activeCallId}`,
+        },
+        loadQueue,
+      )
+      .subscribe();
     return () => supabase.removeChannel(channel);
   }, [activeCallId, user.id]);
 
   async function toggleSpeakerQueue() {
-    if (queuedToSpeak) await supabase.from("call_speaker_queue").delete().eq("call_id", activeCallId).eq("user_id", user.id);
+    if (queuedToSpeak)
+      await supabase
+        .from("call_speaker_queue")
+        .delete()
+        .eq("call_id", activeCallId)
+        .eq("user_id", user.id);
     else {
-      const { count } = await supabase.from("call_speaker_queue").select("user_id", { count:"exact", head:true }).eq("call_id", activeCallId);
-      await supabase.from("call_speaker_queue").upsert({ call_id:activeCallId, user_id:user.id, position:Number(count || 0) + 1 });
+      const { count } = await supabase
+        .from("call_speaker_queue")
+        .select("user_id", { count: "exact", head: true })
+        .eq("call_id", activeCallId);
+      await supabase
+        .from("call_speaker_queue")
+        .upsert({
+          call_id: activeCallId,
+          user_id: user.id,
+          position: Number(count || 0) + 1,
+        });
     }
   }
 
@@ -1131,7 +1251,12 @@ export function VoiceCall({ conversation, user, onClose, requestedCallId }) {
         {screens.length > 0 && (
           <div className="call-screen-grid">
             {screens.map((item) => (
-              <ScreenShareTile item={item} callId={activeCallId} userId={user.id} key={item.key} />
+              <ScreenShareTile
+                item={item}
+                callId={activeCallId}
+                userId={user.id}
+                key={item.key}
+              />
             ))}
           </div>
         )}
@@ -1199,7 +1324,16 @@ export function VoiceCall({ conversation, user, onClose, requestedCallId }) {
                     <Headphones /> Deafened
                   </small>
                 )}
-                {speakerQueue.some((item) => item.user_id === participant.identity) && <small className="call-speaker-position">Speaker #{speakerQueue.findIndex((item) => item.user_id === participant.identity) + 1}</small>}
+                {speakerQueue.some(
+                  (item) => item.user_id === participant.identity,
+                ) && (
+                  <small className="call-speaker-position">
+                    Speaker #
+                    {speakerQueue.findIndex(
+                      (item) => item.user_id === participant.identity,
+                    ) + 1}
+                  </small>
+                )}
                 {!local && (
                   <label
                     className="call-volume"
@@ -1270,7 +1404,15 @@ export function VoiceCall({ conversation, user, onClose, requestedCallId }) {
             <Hand />
             <span>{handRaised ? "Lower hand" : "Raise hand"}</span>
           </button>
-          <button className={queuedToSpeak ? "call-button active" : "call-button"} disabled={!connected} onClick={toggleSpeakerQueue} title="Join the speaking line"><Users /><span>{queuedToSpeak ? "Leave queue" : "Speaker queue"}</span></button>
+          <button
+            className={queuedToSpeak ? "call-button active" : "call-button"}
+            disabled={!connected}
+            onClick={toggleSpeakerQueue}
+            title="Join the speaking line"
+          >
+            <Users />
+            <span>{queuedToSpeak ? "Leave queue" : "Speaker queue"}</span>
+          </button>
           <button
             className={muted ? "call-button active" : "call-button"}
             disabled={!connected || Boolean(busyControl) || pushToTalk}
@@ -1755,18 +1897,25 @@ function DirectMessagesPage({
   }
   async function sendAttachment(file, delivery = {}) {
     if (!selected) return;
+    let sent = null;
     try {
       const blocked = await restrictionMessage(user.id, "messaging");
       if (blocked) throw new Error(blocked);
       const voice = file.type.startsWith("audio/") && delivery.durationSeconds;
-      const sent = await sendMessage(
+      sent = await sendMessage(
         selected.id,
         user.id,
         selected.person.id,
-        voice ? "Voice message" : `Shared file: ${file.name}`,
+        voice ? "Voice message" : "Attachment",
         null,
         delivery.silent,
-        voice ? "voice" : file.type.startsWith("image/") ? "image" : "file",
+        voice
+          ? "voice"
+          : file.type.startsWith("image/")
+            ? "image"
+            : file.type.startsWith("video/")
+              ? "video"
+              : "file",
       );
       await uploadMessageAttachment({
         kind: "dm",
@@ -1781,7 +1930,9 @@ function DirectMessagesPage({
       await reloadConversationFeatures();
       setNotice(voice ? "Voice message sent." : "File shared.");
     } catch (error) {
+      if (sent?.id) await deleteMessage(sent.id, user.id).catch(() => {});
       setNotice(error.message);
+      throw error;
     }
   }
   async function refreshMessages() {
@@ -1885,37 +2036,37 @@ function DirectMessagesPage({
             />
           </div>
           <div className="conversation-items">
-          {visible.map((item) => {
-            const online =
-              item.person?.last_seen &&
-              Date.now() - new Date(item.person.last_seen).getTime() < 120000;
-            return (
-              <button
-                className={
-                  selected?.id === item.id
-                    ? "conversation active"
-                    : "conversation"
-                }
-                onClick={() => setSelected(item)}
-                key={item.id}
-              >
-                <Avatar profile={item.person} />
-                <span>
-                  <strong>{item.person?.username || "Crew member"}</strong>
-                  <small
-                    className={`presence-chip ${online ? "online" : "offline"}`}
-                  >
-                    <i /> {online ? "Online" : "Offline"}
-                  </small>
-                </span>
-                {conversationUnreadCount(item.id, false) > 0 && (
-                  <b className="conversation-unread">
-                    {conversationUnreadCount(item.id, false)}
-                  </b>
-                )}
-              </button>
-            );
-          })}
+            {visible.map((item) => {
+              const online =
+                item.person?.last_seen &&
+                Date.now() - new Date(item.person.last_seen).getTime() < 120000;
+              return (
+                <button
+                  className={
+                    selected?.id === item.id
+                      ? "conversation active"
+                      : "conversation"
+                  }
+                  onClick={() => setSelected(item)}
+                  key={item.id}
+                >
+                  <Avatar profile={item.person} />
+                  <span>
+                    <strong>{item.person?.username || "Crew member"}</strong>
+                    <small
+                      className={`presence-chip ${online ? "online" : "offline"}`}
+                    >
+                      <i /> {online ? "Online" : "Offline"}
+                    </small>
+                  </span>
+                  {conversationUnreadCount(item.id, false) > 0 && (
+                    <b className="conversation-unread">
+                      {conversationUnreadCount(item.id, false)}
+                    </b>
+                  )}
+                </button>
+              );
+            })}
           </div>
         </aside>
         <section
@@ -2011,80 +2162,90 @@ function DirectMessagesPage({
                       messageDayKey(item.created_at);
                   return (
                     <div className="message-with-divider" key={item.id}>
-                      {startsDay && <MessageDayDivider value={item.created_at} />}
+                      {startsDay && (
+                        <MessageDayDivider value={item.created_at} />
+                      )}
                       <div
                         className={
-                          item.sender_id === user.id ? "message mine" : "message"
+                          item.sender_id === user.id
+                            ? "message mine"
+                            : "message"
                         }
                         tabIndex={0}
                       >
-                      <MessageReplyQuote
-                        message={item}
-                        messages={messages}
-                        people={[profile, selected.person]}
-                      />
-                      {item.forwarded_from_kind && (
-                        <small className="forwarded-message-label">
-                          Forwarded from{" "}
-                          {item.forwarded_from_kind === "group"
-                            ? "a group"
-                            : "a direct message"}
-                        </small>
-                      )}
-                      <p>
-                        <FormattedMessage>{item.content}</FormattedMessage>
-                      </p>
-                      <div className="message-footer">
-                        <time>
-                          {new Date(item.created_at).toLocaleTimeString([], {
-                            hour: "numeric",
-                            minute: "2-digit",
-                          })}
-                          {item.expires_at ? ` · expires ${new Date(item.expires_at).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}` : ""}
-                        </time>
-                        <div className="message-actions">
-                          <button
-                            onClick={() => setReplying(item)}
-                            title="Reply"
-                          >
-                            <Reply />
-                          </button>
-                          {item.sender_id === user.id && (
-                            <>
-                              <EditMessageButton
-                                message={item}
-                                userId={user.id}
-                                onSaved={(content) =>
-                                  setMessages((rows) =>
-                                    rows.map((row) =>
-                                      row.id === item.id
-                                        ? { ...row, content }
-                                        : row,
-                                    ),
-                                  )
-                                }
-                              />
-                              <button
-                                className="delete"
-                                onClick={() => setDeleting(item)}
-                                title="Delete"
-                              >
-                                <Trash2 />
-                              </button>
-                            </>
-                          )}
+                        <MessageReplyQuote
+                          message={item}
+                          messages={messages}
+                          people={[profile, selected.person]}
+                        />
+                        {item.forwarded_from_kind && (
+                          <small className="forwarded-message-label">
+                            Forwarded from{" "}
+                            {item.forwarded_from_kind === "group"
+                              ? "a group"
+                              : "a direct message"}
+                          </small>
+                        )}
+                        {!["voice", "image", "video", "file"].includes(
+                          item.message_type,
+                        ) && (
+                          <p>
+                            <FormattedMessage>{item.content}</FormattedMessage>
+                          </p>
+                        )}
+                        <div className="message-footer">
+                          <time>
+                            {new Date(item.created_at).toLocaleTimeString([], {
+                              hour: "numeric",
+                              minute: "2-digit",
+                            })}
+                            {item.expires_at
+                              ? ` · expires ${new Date(item.expires_at).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}`
+                              : ""}
+                          </time>
+                          <div className="message-actions">
+                            <button
+                              onClick={() => setReplying(item)}
+                              title="Reply"
+                            >
+                              <Reply />
+                            </button>
+                            {item.sender_id === user.id && (
+                              <>
+                                <EditMessageButton
+                                  message={item}
+                                  userId={user.id}
+                                  onSaved={(content) =>
+                                    setMessages((rows) =>
+                                      rows.map((row) =>
+                                        row.id === item.id
+                                          ? { ...row, content }
+                                          : row,
+                                      ),
+                                    )
+                                  }
+                                />
+                                <button
+                                  className="delete"
+                                  onClick={() => setDeleting(item)}
+                                  title="Delete"
+                                >
+                                  <Trash2 />
+                                </button>
+                              </>
+                            )}
+                          </div>
                         </div>
-                      </div>
                         <MessageFeatureBar
-                        kind="dm"
-                        conversationId={selected.id}
-                        message={item}
-                        userId={user.id}
-                        reactions={conversationFeatures.reactions}
-                        receipts={conversationFeatures.receipts}
-                        attachments={conversationFeatures.attachments}
-                        onChanged={reloadConversationFeatures}
-                        onNotice={setNotice}
+                          kind="dm"
+                          conversationId={selected.id}
+                          message={item}
+                          userId={user.id}
+                          reactions={conversationFeatures.reactions}
+                          receipts={conversationFeatures.receipts}
+                          attachments={conversationFeatures.attachments}
+                          onChanged={reloadConversationFeatures}
+                          onNotice={setNotice}
                         />
                       </div>
                     </div>
@@ -2111,6 +2272,7 @@ function DirectMessagesPage({
                 placeholder={`Message ${selected.person?.username || "crew member"}`}
                 onSend={send}
                 onSendAttachment={sendAttachment}
+                onNotice={setNotice}
                 blockedUntil={slowUntil}
               />
             </>
@@ -2295,7 +2457,12 @@ function ManageGroupButton({
     try {
       const [profiles, links] = await Promise.all([
         getProfiles("id,username,avatar,rank"),
-        supabase.from("group_invite_links").select("*").eq("group_id", group.id).is("revoked_at", null).order("created_at", { ascending: false }),
+        supabase
+          .from("group_invite_links")
+          .select("*")
+          .eq("group_id", group.id)
+          .is("revoked_at", null)
+          .order("created_at", { ascending: false }),
       ]);
       setPeople(profiles);
       setInviteLinks(links.data || []);
@@ -2409,7 +2576,10 @@ function ManageGroupButton({
                   defaultValue={group.description || ""}
                 />
               </Field>
-              <Field label="Welcome message" hint="Shown to members at the top of the conversation">
+              <Field
+                label="Welcome message"
+                hint="Shown to members at the top of the conversation"
+              >
                 <textarea
                   name="welcome_message"
                   maxLength="1500"
@@ -2439,21 +2609,110 @@ function ManageGroupButton({
           {myRole === "owner" && (
             <div className="group-manage-section group-invite-links">
               <h3>Invite links</h3>
-              <p className="micro-copy">Create a controlled link with an expiration date and use limit.</p>
-              <div className="form-grid"><Field label="Expires after"><select value={inviteDays} onChange={(event) => setInviteDays(event.target.value)}><option value="1">1 day</option><option value="7">7 days</option><option value="30">30 days</option><option value="0">Never</option></select></Field><Field label="Use limit"><select value={inviteUses} onChange={(event) => setInviteUses(event.target.value)}><option value="1">1 use</option><option value="5">5 uses</option><option value="10">10 uses</option><option value="25">25 uses</option><option value="0">No limit</option></select></Field></div>
-              <button className="button secondary" type="button" onClick={async () => {
-                setBusy("invite-link");
-                try {
-                  const expiresAt = Number(inviteDays) ? new Date(Date.now() + Number(inviteDays) * 86400000).toISOString() : null;
-                  const { data, error } = await supabase.from("group_invite_links").insert({ group_id: group.id, created_by: user.id, expires_at: expiresAt, max_uses: Number(inviteUses) || null }).select().single();
-                  if (error) throw error;
-                  setInviteLinks((rows) => [data, ...rows]);
-                } catch (error) { onNotice(error.message); } finally { setBusy(""); }
-              }} disabled={busy === "invite-link"}>Create invite link</button>
+              <p className="micro-copy">
+                Create a controlled link with an expiration date and use limit.
+              </p>
+              <div className="form-grid">
+                <Field label="Expires after">
+                  <select
+                    value={inviteDays}
+                    onChange={(event) => setInviteDays(event.target.value)}
+                  >
+                    <option value="1">1 day</option>
+                    <option value="7">7 days</option>
+                    <option value="30">30 days</option>
+                    <option value="0">Never</option>
+                  </select>
+                </Field>
+                <Field label="Use limit">
+                  <select
+                    value={inviteUses}
+                    onChange={(event) => setInviteUses(event.target.value)}
+                  >
+                    <option value="1">1 use</option>
+                    <option value="5">5 uses</option>
+                    <option value="10">10 uses</option>
+                    <option value="25">25 uses</option>
+                    <option value="0">No limit</option>
+                  </select>
+                </Field>
+              </div>
+              <button
+                className="button secondary"
+                type="button"
+                onClick={async () => {
+                  setBusy("invite-link");
+                  try {
+                    const expiresAt = Number(inviteDays)
+                      ? new Date(
+                          Date.now() + Number(inviteDays) * 86400000,
+                        ).toISOString()
+                      : null;
+                    const { data, error } = await supabase
+                      .from("group_invite_links")
+                      .insert({
+                        group_id: group.id,
+                        created_by: user.id,
+                        expires_at: expiresAt,
+                        max_uses: Number(inviteUses) || null,
+                      })
+                      .select()
+                      .single();
+                    if (error) throw error;
+                    setInviteLinks((rows) => [data, ...rows]);
+                  } catch (error) {
+                    onNotice(error.message);
+                  } finally {
+                    setBusy("");
+                  }
+                }}
+                disabled={busy === "invite-link"}
+              >
+                Create invite link
+              </button>
               <div className="group-invite-link-list">
                 {inviteLinks.map((link) => {
                   const inviteUrl = `https://cptspacedust.com/Conversation.html?joinGroup=${link.token}`;
-                  return <article key={link.id}><span><strong>{link.use_count}/{link.max_uses || "∞"} uses</strong><small>Expires {link.expires_at ? new Date(link.expires_at).toLocaleString() : "never"}</small></span><button type="button" onClick={() => navigator.clipboard.writeText(inviteUrl).then(() => onNotice("Invite link copied."))}>Copy</button><button type="button" className="danger" onClick={async () => { await supabase.from("group_invite_links").update({ revoked_at: new Date().toISOString() }).eq("id", link.id); setInviteLinks((rows) => rows.filter((item) => item.id !== link.id)); }}>Revoke</button></article>;
+                  return (
+                    <article key={link.id}>
+                      <span>
+                        <strong>
+                          {link.use_count}/{link.max_uses || "∞"} uses
+                        </strong>
+                        <small>
+                          Expires{" "}
+                          {link.expires_at
+                            ? new Date(link.expires_at).toLocaleString()
+                            : "never"}
+                        </small>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          navigator.clipboard
+                            .writeText(inviteUrl)
+                            .then(() => onNotice("Invite link copied."))
+                        }
+                      >
+                        Copy
+                      </button>
+                      <button
+                        type="button"
+                        className="danger"
+                        onClick={async () => {
+                          await supabase
+                            .from("group_invite_links")
+                            .update({ revoked_at: new Date().toISOString() })
+                            .eq("id", link.id);
+                          setInviteLinks((rows) =>
+                            rows.filter((item) => item.id !== link.id),
+                          );
+                        }}
+                      >
+                        Revoke
+                      </button>
+                    </article>
+                  );
                 })}
               </div>
             </div>
@@ -3061,17 +3320,24 @@ function GroupMessagesPage({
   }
   async function sendAttachment(file, delivery = {}) {
     if (!selected) return;
+    let sent = null;
     try {
       const blocked = await restrictionMessage(user.id, "messaging");
       if (blocked) throw new Error(blocked);
       const voice = file.type.startsWith("audio/") && delivery.durationSeconds;
-      const sent = await sendGroupMessage(
+      sent = await sendGroupMessage(
         selected.id,
         user.id,
-        voice ? "Voice message" : `Shared file: ${file.name}`,
+        voice ? "Voice message" : "Attachment",
         null,
         delivery.silent,
-        voice ? "voice" : file.type.startsWith("image/") ? "image" : "file",
+        voice
+          ? "voice"
+          : file.type.startsWith("image/")
+            ? "image"
+            : file.type.startsWith("video/")
+              ? "video"
+              : "file",
       );
       await uploadMessageAttachment({
         kind: "group",
@@ -3086,7 +3352,9 @@ function GroupMessagesPage({
       await reloadConversationFeatures();
       setNotice(voice ? "Voice message sent." : "File shared.");
     } catch (error) {
+      if (sent?.id) await deleteGroupMessage(sent.id, user.id).catch(() => {});
       setNotice(error.message);
+      throw error;
     }
   }
   async function refreshMessages() {
@@ -3294,33 +3562,33 @@ function GroupMessagesPage({
             />
           </div>
           <div className="conversation-items">
-          {visible.map((group) => (
-            <button
-              className={
-                selected?.id === group.id
-                  ? "conversation active"
-                  : "conversation"
-              }
-              onClick={() => setSelected(group)}
-              key={group.id}
-            >
-              <Avatar
-                profile={{ avatar: group.avatar_url, username: group.name }}
-              />
-              <span>
-                <strong>{group.name}</strong>
-                <small className="presence-chip group">
-                  <i />
-                  <Users /> Group chat
-                </small>
-              </span>
-              {conversationUnreadCount(group.id, true) > 0 && (
-                <b className="conversation-unread">
-                  {conversationUnreadCount(group.id, true)}
-                </b>
-              )}
-            </button>
-          ))}
+            {visible.map((group) => (
+              <button
+                className={
+                  selected?.id === group.id
+                    ? "conversation active"
+                    : "conversation"
+                }
+                onClick={() => setSelected(group)}
+                key={group.id}
+              >
+                <Avatar
+                  profile={{ avatar: group.avatar_url, username: group.name }}
+                />
+                <span>
+                  <strong>{group.name}</strong>
+                  <small className="presence-chip group">
+                    <i />
+                    <Users /> Group chat
+                  </small>
+                </span>
+                {conversationUnreadCount(group.id, true) > 0 && (
+                  <b className="conversation-unread">
+                    {conversationUnreadCount(group.id, true)}
+                  </b>
+                )}
+              </button>
+            ))}
           </div>
         </aside>
         <section
@@ -3428,104 +3696,114 @@ function GroupMessagesPage({
                       messageDayKey(item.created_at);
                   return (
                     <div className="message-with-divider" key={item.id}>
-                      {startsDay && <MessageDayDivider value={item.created_at} />}
+                      {startsDay && (
+                        <MessageDayDivider value={item.created_at} />
+                      )}
                       <div
                         className={
-                          item.sender_id === user.id ? "message mine" : "message"
+                          item.sender_id === user.id
+                            ? "message mine"
+                            : "message"
                         }
                         tabIndex={0}
                       >
-                      {item.sender_id !== user.id && (
-                        <small className="message-author">
-                          {sender?.username || "Former member"}
-                        </small>
-                      )}
-                      <MessageReplyQuote
-                        message={item}
-                        messages={messages}
-                        people={Object.values(profiles)}
-                      />
-                      {item.forwarded_from_kind && (
-                        <small className="forwarded-message-label">
-                          Forwarded from{" "}
-                          {item.forwarded_from_kind === "group"
-                            ? "a group"
-                            : "a direct message"}
-                        </small>
-                      )}
-                      {pollMarker ? (
-                        <InlineGroupPoll
-                          pollId={pollMarker[1]}
-                          groupId={selected.id}
-                          user={user}
-                          role={myGroupRole}
-                          onNotice={setNotice}
+                        {item.sender_id !== user.id && (
+                          <small className="message-author">
+                            {sender?.username || "Former member"}
+                          </small>
+                        )}
+                        <MessageReplyQuote
+                          message={item}
+                          messages={messages}
+                          people={Object.values(profiles)}
                         />
-                      ) : (
-                        <p>
-                          <FormattedMessage>{item.content}</FormattedMessage>
-                        </p>
-                      )}
-                      <div className="message-footer">
-                        <time>
-                          {new Date(item.created_at).toLocaleTimeString([], {
-                            hour: "numeric",
-                            minute: "2-digit",
-                          })}
-                          {item.edited_at ? " · Edited" : ""}
-                          {item.expires_at ? ` · expires ${new Date(item.expires_at).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}` : ""}
-                        </time>
-                        <div className="message-actions">
-                          <button
-                            onClick={() => setReplying(item)}
-                            title="Reply"
-                          >
-                            <Reply />
-                          </button>
-                          {item.sender_id === user.id && (
-                            <>
-                              <EditMessageButton
-                                message={item}
-                                userId={user.id}
-                                saveMessage={editGroupMessage}
-                                onSaved={(content) =>
-                                  setMessages((rows) =>
-                                    rows.map((row) =>
-                                      row.id === item.id
-                                        ? {
-                                            ...row,
-                                            content,
-                                            edited_at: new Date().toISOString(),
-                                          }
-                                        : row,
-                                    ),
-                                  )
-                                }
-                              />
-                              <button
-                                className="delete"
-                                onClick={() => setDeleting(item)}
-                                title="Delete"
-                              >
-                                <Trash2 />
-                              </button>
-                            </>
-                          )}
+                        {item.forwarded_from_kind && (
+                          <small className="forwarded-message-label">
+                            Forwarded from{" "}
+                            {item.forwarded_from_kind === "group"
+                              ? "a group"
+                              : "a direct message"}
+                          </small>
+                        )}
+                        {pollMarker ? (
+                          <InlineGroupPoll
+                            pollId={pollMarker[1]}
+                            groupId={selected.id}
+                            user={user}
+                            role={myGroupRole}
+                            onNotice={setNotice}
+                          />
+                        ) : !["voice", "image", "video", "file"].includes(
+                            item.message_type,
+                          ) ? (
+                          <p>
+                            <FormattedMessage>{item.content}</FormattedMessage>
+                          </p>
+                        ) : null}
+                        <div className="message-footer">
+                          <time>
+                            {new Date(item.created_at).toLocaleTimeString([], {
+                              hour: "numeric",
+                              minute: "2-digit",
+                            })}
+                            {item.edited_at ? " · Edited" : ""}
+                            {item.expires_at
+                              ? ` · expires ${new Date(item.expires_at).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}`
+                              : ""}
+                          </time>
+                          <div className="message-actions">
+                            <button
+                              onClick={() => setReplying(item)}
+                              title="Reply"
+                            >
+                              <Reply />
+                            </button>
+                            {item.sender_id === user.id && (
+                              <>
+                                <EditMessageButton
+                                  message={item}
+                                  userId={user.id}
+                                  saveMessage={editGroupMessage}
+                                  onSaved={(content) =>
+                                    setMessages((rows) =>
+                                      rows.map((row) =>
+                                        row.id === item.id
+                                          ? {
+                                              ...row,
+                                              content,
+                                              edited_at:
+                                                new Date().toISOString(),
+                                            }
+                                          : row,
+                                      ),
+                                    )
+                                  }
+                                />
+                                <button
+                                  className="delete"
+                                  onClick={() => setDeleting(item)}
+                                  title="Delete"
+                                >
+                                  <Trash2 />
+                                </button>
+                              </>
+                            )}
+                          </div>
                         </div>
-                      </div>
                         <MessageFeatureBar
-                        kind="group"
-                        conversationId={selected.id}
-                        message={item}
-                        userId={user.id}
-                        reactions={conversationFeatures.reactions}
-                        receipts={conversationFeatures.receipts}
-                        attachments={conversationFeatures.attachments}
-                        canPin={
-                          myGroupRole === "owner" || myGroupRole === "moderator"
-                        }
-                        onChanged={reloadConversationFeatures}
-                        onNotice={setNotice}
+                          kind="group"
+                          conversationId={selected.id}
+                          message={item}
+                          userId={user.id}
+                          reactions={conversationFeatures.reactions}
+                          receipts={conversationFeatures.receipts}
+                          attachments={conversationFeatures.attachments}
+                          canPin={
+                            myGroupRole === "owner" ||
+                            myGroupRole === "moderator"
+                          }
+                          onChanged={reloadConversationFeatures}
+                          onNotice={setNotice}
                         />
                       </div>
                     </div>
@@ -3553,6 +3831,7 @@ function GroupMessagesPage({
                 placeholder={`Message ${details.name}`}
                 onSend={send}
                 onSendAttachment={sendAttachment}
+                onNotice={setNotice}
               />
             </>
           ) : (

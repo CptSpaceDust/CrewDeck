@@ -38,7 +38,11 @@ import { claimConversationAlert } from "./lib/alertDelivery.mjs";
 import CaptainPage from "./pages/CaptainPage";
 import ControlCenterPage from "./pages/ControlCenterPage";
 import FriendsPage from "./pages/FriendsPage";
-import { BugReportsPage, CommunityCalendarPage, HelpRequestsPage } from "./pages/CommunityToolsPage";
+import {
+  BugReportsPage,
+  CommunityCalendarPage,
+  HelpRequestsPage,
+} from "./pages/CommunityToolsPage";
 import UpdateOverlay from "./components/UpdateVisual";
 import { InAppDialogHost } from "./components/InAppDialog";
 import CommandPalette from "./components/CommandPalette";
@@ -127,7 +131,9 @@ export default function App() {
   const [session, setSession] = useState(null);
   const [mfaRequired, setMfaRequired] = useState(false);
   const [profile, setProfile] = useState(null);
-  const [page, setPage] = useState(() => getPreferences().startupPage || "introductions");
+  const [page, setPage] = useState(
+    () => getPreferences().startupPage || "introductions",
+  );
   const [loading, setLoading] = useState(true);
   const [startupMinimumElapsed, setStartupMinimumElapsed] = useState(false);
   const [recovery, setRecovery] = useState(false);
@@ -614,7 +620,6 @@ export default function App() {
     <div className="app-shell">
       <UpdateOverlay />
       <InAppDialogHost />
-      <CommandPalette onNavigate={selectPage} />
       <WhatsNew />
       <InactivityLock enabled={lock.enabled} />
       <Sidebar
@@ -630,6 +635,7 @@ export default function App() {
           <div className="desktop-drag-region" />
           <CommunityStatus />
           <div className="topbar-actions">
+            <CommandPalette onNavigate={selectPage} />
             <button
               className={page === "messages" ? "active" : ""}
               title="Messages"

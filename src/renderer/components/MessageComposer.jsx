@@ -5,6 +5,7 @@ import {
   History,
   Mic,
   Paperclip,
+  Plus,
   Send,
   Square,
   Timer,
@@ -102,6 +103,7 @@ export default function MessageComposer({
   placeholder,
   onSend,
   onSendAttachment,
+  onNotice,
   blockedUntil = 0,
 }) {
   const [draft, setDraft] = useState("");
@@ -117,6 +119,7 @@ export default function MessageComposer({
   const [scheduled, setScheduled] = useState([]);
   const [versions, setVersions] = useState([]);
   const [toolsOpen, setToolsOpen] = useState(false);
+  const [deliveryOpen, setDeliveryOpen] = useState(false);
   const [recording, setRecording] = useState(false);
   const [nativeShareFile, setNativeShareFile] = useState(null);
   const recorderRef = useRef(null);
@@ -135,8 +138,14 @@ export default function MessageComposer({
   useEffect(() => {
     window.desktop?.shareTarget?.get?.().then((target) => {
       if (!target?.base64 || !target?.mimeType) return;
-      const bytes = Uint8Array.from(atob(target.base64), (character) => character.charCodeAt(0));
-      setNativeShareFile(new File([bytes], target.name || "shared-file", { type:target.mimeType }));
+      const bytes = Uint8Array.from(atob(target.base64), (character) =>
+        character.charCodeAt(0),
+      );
+      setNativeShareFile(
+        new File([bytes], target.name || "shared-file", {
+          type: target.mimeType,
+        }),
+      );
     });
   }, [id]);
   useEffect(() => {
@@ -268,7 +277,13 @@ export default function MessageComposer({
     setBusy(true);
     try {
       const content = draft.trim();
-      if ((await onSend(event, { silent, sendAt, expiresInMinutes: expiresInMinutes ? Number(expiresInMinutes) : null })) !== false) {
+      if (
+        (await onSend(event, {
+          silent,
+          sendAt,
+          expiresInMinutes: expiresInMinutes ? Number(expiresInMinutes) : null,
+        })) !== false
+      ) {
         await saveMessageDraftVersion(
           user.id,
           group ? "group" : "dm",
@@ -295,6 +310,9 @@ export default function MessageComposer({
     setBusy(true);
     try {
       await onSendAttachment(file, { silent, durationSeconds });
+      setDeliveryOpen(false);
+    } catch (error) {
+      onNotice?.(error.message || "Unable to attach this file.");
     } finally {
       setBusy(false);
     }
@@ -304,7 +322,10 @@ export default function MessageComposer({
       recorderRef.current?.stop();
       return;
     }
-    if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) return;
+    if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
+      onNotice?.("Voice recording is unavailable on this device.");
+      return;
+    }
     const stream = await navigator.mediaDevices.getUserMedia({
       audio: {
         echoCancellation: true,
@@ -348,6 +369,15 @@ export default function MessageComposer({
               : ""}
       </div>
       <form className="composer" onSubmit={submit}>
+        <button
+          type="button"
+          className={`composer-tools-toggle${deliveryOpen ? " active" : ""}`}
+          aria-label="Message tools"
+          aria-expanded={deliveryOpen}
+          onClick={() => setDeliveryOpen((value) => !value)}
+        >
+          <Plus />
+        </button>
         <textarea
           ref={inputRef}
           name="message"
@@ -386,64 +416,95 @@ export default function MessageComposer({
         >
           <Send />
         </button>
+        {deliveryOpen && (
+          <div
+            className="composer-delivery-controls"
+            role="group"
+            aria-label="Message tools"
+          >
+            {nativeShareFile && (
+              <button
+                type="button"
+                className="native-share-target"
+                disabled={busy}
+                onClick={async () => {
+                  await attachFile(nativeShareFile);
+                  setNativeShareFile(null);
+                }}
+              >
+                <Paperclip /> Send {nativeShareFile.name}
+              </button>
+            )}
+            <label className="composer-file-button">
+              <Paperclip />
+              <span>Attach file</span>
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,video/quicktime,audio/*,application/pdf,text/plain"
+                disabled={busy}
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  event.target.value = "";
+                  attachFile(file);
+                }}
+              />
+            </label>
+            <button
+              type="button"
+              className={recording ? "active" : ""}
+              onClick={() =>
+                toggleRecording().catch((error) =>
+                  onNotice?.(error.message || "Unable to start recording."),
+                )
+              }
+            >
+              {recording ? <Square /> : <Mic />}
+              {recording ? "Stop recording" : "Voice message"}
+            </button>
+            <button
+              type="button"
+              className={silent ? "active" : ""}
+              aria-pressed={silent}
+              onClick={() => setSilent((value) => !value)}
+            >
+              <BellOff /> {silent ? "Sending silently" : "Send silently"}
+            </button>
+            <label>
+              <CalendarClock />
+              <span>Schedule</span>
+              <input
+                type="datetime-local"
+                value={sendAt}
+                min={new Date(Date.now() + 60000).toISOString().slice(0, 16)}
+                onChange={(event) => setSendAt(event.target.value)}
+              />
+            </label>
+            <label>
+              <Timer />
+              <span>Expires</span>
+              <select
+                value={expiresInMinutes}
+                onChange={(event) => setExpiresInMinutes(event.target.value)}
+              >
+                <option value="">After 5 days</option>
+                <option value="15">After 15 minutes</option>
+                <option value="60">After 1 hour</option>
+                <option value="360">After 6 hours</option>
+                <option value="1440">After 1 day</option>
+              </select>
+            </label>
+            <button
+              type="button"
+              onClick={() => {
+                setToolsOpen((value) => !value);
+                setDeliveryOpen(false);
+              }}
+            >
+              <History /> Saved & scheduled
+            </button>
+          </div>
+        )}
       </form>
-      <div className="composer-delivery-controls">
-        {nativeShareFile && <button type="button" className="native-share-target" disabled={busy} onClick={async () => { await attachFile(nativeShareFile); setNativeShareFile(null); }}><Paperclip /> Send {nativeShareFile.name}</button>}
-        <label className="composer-file-button">
-          <Paperclip />
-          <span>Attach file</span>
-          <input
-            type="file"
-            accept="image/png,image/jpeg,image/webp,image/gif,audio/*,application/pdf,text/plain"
-            disabled={busy}
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              event.target.value = "";
-              attachFile(file);
-            }}
-          />
-        </label>
-        <button
-          type="button"
-          className={recording ? "active" : ""}
-          onClick={() => toggleRecording().catch(() => {})}
-        >
-          {recording ? <Square /> : <Mic />}
-          {recording ? "Stop recording" : "Voice message"}
-        </button>
-        <button
-          type="button"
-          className={silent ? "active" : ""}
-          aria-pressed={silent}
-          onClick={() => setSilent((value) => !value)}
-        >
-          <BellOff /> {silent ? "Sending silently" : "Send silently"}
-        </button>
-        <label>
-          <CalendarClock />
-          <span>Schedule</span>
-          <input
-            type="datetime-local"
-            value={sendAt}
-            min={new Date(Date.now() + 60000).toISOString().slice(0, 16)}
-            onChange={(event) => setSendAt(event.target.value)}
-          />
-        </label>
-        <label>
-          <Timer />
-          <span>Expires</span>
-          <select value={expiresInMinutes} onChange={(event) => setExpiresInMinutes(event.target.value)}>
-            <option value="">After 5 days</option>
-            <option value="15">After 15 minutes</option>
-            <option value="60">After 1 hour</option>
-            <option value="360">After 6 hours</option>
-            <option value="1440">After 1 day</option>
-          </select>
-        </label>
-        <button type="button" onClick={() => setToolsOpen((value) => !value)}>
-          <History /> Saved & scheduled
-        </button>
-      </div>
       {toolsOpen && (
         <section className="composer-history-panel">
           <div>

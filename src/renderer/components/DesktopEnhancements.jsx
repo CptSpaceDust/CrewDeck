@@ -280,9 +280,8 @@ export function WhatsNew() {
             <div>
               <strong>Added</strong>
               <p>
-                Shared files and voice messages, expiring messages, Community
-                Calendar, Help Requests, Bug Reports, privacy controls, and new
-                call tools are now aboard.
+                Images, videos, files, and recorded voice messages now appear
+                directly inside conversations.
               </p>
             </div>
           </article>
@@ -291,8 +290,8 @@ export function WhatsNew() {
             <div>
               <strong>Changed</strong>
               <p>
-                Community Operations, notifications, accessibility, meetup
-                controls, and Space Glass settings have clearer layouts.
+                Message scheduling, expiration, silent delivery, and saved
+                messages now live in one compact Space Glass tools menu.
               </p>
             </div>
           </article>
@@ -301,10 +300,9 @@ export function WhatsNew() {
             <div>
               <strong>Fixed</strong>
               <p>
-                Group invite links, interaction privacy, realtime conversation
-                tools, and desktop recovery behavior are more reliable. Meetups can share a date
-                when their times do not overlap, Call Chat has been removed, and
-                the calendar no longer marks unrelated crew members as busy.
+                Attachment errors now explain what went wrong, incomplete
+                messages are cleaned up, and the command palette no longer
+                overlaps the Messages button.
               </p>
             </div>
           </article>
