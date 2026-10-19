@@ -280,8 +280,8 @@ export function WhatsNew() {
             <div>
               <strong>Added</strong>
               <p>
-                Message attachments now stay focused on the shared media and
-                playback controls without extra placeholder labels.
+                Attachment deletion now clears the matching private file and
+                metadata from storage immediately.
               </p>
             </div>
           </article>
@@ -290,7 +290,7 @@ export function WhatsNew() {
             <div>
               <strong>Changed</strong>
               <p>
-                Command palette results use clearer, full-width navigation rows.
+                Reactions and reminder controls stay beneath shared media.
               </p>
             </div>
           </article>
@@ -299,8 +299,8 @@ export function WhatsNew() {
             <div>
               <strong>Fixed</strong>
               <p>
-                Attachment labels remain hidden after conversations reload, and
-                command palette entries no longer overlap each other.
+                Website attachment previews no longer remain stuck on their
+                loading state.
               </p>
             </div>
           </article>

@@ -883,11 +883,13 @@ export async function editMessage(id, userId, content) {
 
 export async function deleteMessage(id, userId) {
   return unwrap(
-    await supabase
-      .from("dm_messages")
-      .delete()
-      .eq("id", id)
-      .eq("sender_id", userId),
+    await supabase.functions.invoke("message-file-access", {
+      body: {
+        action: "delete-message",
+        conversationKind: "dm",
+        messageId: id,
+      },
+    }),
   );
 }
 
@@ -1096,11 +1098,13 @@ export async function editGroupMessage(id, userId, content) {
 
 export async function deleteGroupMessage(id, userId) {
   return unwrap(
-    await supabase
-      .from("group_messages")
-      .delete()
-      .eq("id", id)
-      .eq("sender_id", userId),
+    await supabase.functions.invoke("message-file-access", {
+      body: {
+        action: "delete-message",
+        conversationKind: "group",
+        messageId: id,
+      },
+    }),
   );
 }
 

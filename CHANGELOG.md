@@ -2,6 +2,17 @@
 
 Every published CrewDeck release is documented here and copied into its GitHub release notes.
 
+## [1.9.4] - 2026-10-19
+
+### Changed
+
+- Message reactions and reminder controls stay below shared media on the website.
+- Deleting an attachment or voice message now removes its private Storage object and metadata immediately.
+
+### Fixed
+
+- Website attachment previews no longer reset to “Loading attachment…” after their signed URL resolves.
+
 ## [1.9.3] - 2026-10-19
 
 ### Fixed
