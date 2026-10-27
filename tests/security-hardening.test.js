@@ -8,8 +8,8 @@ test("patched desktop dependencies stay pinned", () => {
   const pkg = JSON.parse(read("package.json"));
   assert.equal(pkg.devDependencies.concurrently, "9.2.5");
   assert.equal(pkg.devDependencies["source-map-js"], "1.2.2");
-  assert.equal(pkg.devDependencies.electron, "44.5.1");
-  assert.equal(pkg.devDependencies.vite, "6.4.3");
+  assert.equal(pkg.devDependencies.electron, "44.9.3");
+  assert.equal(pkg.devDependencies.vite, "6.4.5");
 });
 
 test("release and database security gates remain enabled", () => {

@@ -12,6 +12,7 @@ Every published CrewDeck release is documented here and copied into its GitHub r
 - Attachments wait above the composer until the member sends or removes them, and can include a text caption.
 - Drafts now restore only unsent text for the matching conversation and clear after a successful send.
 - The composer tools button is a true circle, and Shared Media shows visual image, video, and voice previews.
+- Electron, Vite, and networking dependencies are updated to patched release versions.
 
 ## [1.9.4] - 2026-10-19
 

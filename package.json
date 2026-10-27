@@ -26,11 +26,11 @@
   "devDependencies": {
     "@vitejs/plugin-react": "4.3.4",
     "concurrently": "9.2.5",
-    "electron": "44.5.1",
+    "electron": "44.9.3",
     "electron-builder": "26.15.3",
     "prettier": "3.6.2",
     "source-map-js": "1.2.2",
-    "vite": "6.4.3",
+    "vite": "6.4.5",
     "wait-on": "8.0.3"
   },
   "build": {
