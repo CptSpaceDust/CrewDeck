@@ -280,8 +280,8 @@ export function WhatsNew() {
             <div>
               <strong>Added</strong>
               <p>
-                Connect Google Calendar or scan a schedule to fill your private
-                unavailable time, including a QR handoff to your phone.
+                A compact private calendar now shows your saved availability
+                one month at a time.
               </p>
             </div>
           </article>
@@ -290,8 +290,8 @@ export function WhatsNew() {
             <div>
               <strong>Changed</strong>
               <p>
-                Meetup time choices now remove conflicts, and accepted meetups
-                can be added automatically to your chosen Google Calendar.
+                Move between months and choose any date to check its off time
+                without opening meetup details.
               </p>
             </div>
           </article>
@@ -300,8 +300,8 @@ export function WhatsNew() {
             <div>
               <strong>Fixed</strong>
               <p>
-                Past availability cleans itself up, and the new installer gives
-                clear startup, background, and app-lock choices.
+                Website and app previews now use matching full-day, partial,
+                and open date states.
               </p>
             </div>
           </article>

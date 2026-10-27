@@ -14,6 +14,9 @@ test("desktop meetups include calendar automation and conflict-filtered times", 
   assert.match(automation, /Connect Google Calendar/);
   assert.match(automation, /Continue on a phone with QR/);
   assert.match(automation, /AvailabilityPreview rows=\{preview\}/);
+  assert.match(automation, /private-calendar-grid/);
+  assert.match(automation, /Some hours off/);
+  assert.match(automation, /indefinite/);
 });
 
 test("calendar automation surfaces Edge Function error details", () => {

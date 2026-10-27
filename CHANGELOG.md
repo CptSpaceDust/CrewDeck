@@ -2,6 +2,14 @@
 
 Every published CrewDeck release is documented here and copied into its GitHub release notes.
 
+## [1.9.8] - 2026-10-27
+
+### Changed
+
+- “Preview my calendar” now opens a compact interactive month calendar instead of a list.
+- Members can move between months and select a date to see only the off time CrewDeck has saved for that day.
+- Full-day, partial-time, and open dates use the same clear calendar states on the website and desktop app.
+
 ## [1.9.7] - 2026-10-26
 
 ### Fixed

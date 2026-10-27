@@ -30,24 +30,45 @@ function readFile(file) {
   });
 }
 function AvailabilityPreview({ rows = [] }) {
-  const grouped = rows.reduce((map, row) => {
-    map[row.block_date] ||= [];
-    map[row.block_date].push(row);
-    return map;
-  }, {});
-  const days = Object.entries(grouped).slice(0, 45);
+  const now = new Date();
+  const [month, setMonth] = useState(() => new Date(now.getFullYear(), now.getMonth(), 1));
+  const [selectedDate, setSelectedDate] = useState(() => localDateKey(now));
+  const year = month.getFullYear();
+  const monthIndex = month.getMonth();
+  const firstWeekday = new Date(year, monthIndex, 1).getDay();
+  const dayCount = new Date(year, monthIndex + 1, 0).getDate();
+  const selectedItems = rows.filter((row) => row.indefinite || row.block_date === selectedDate);
   return (
     <div className="calendar-private-preview">
-      {!days.length && <p className="micro-copy">No imported unavailable time yet.</p>}
-      {days.map(([date, items]) => (
-        <article key={date}>
-          <strong>{new Date(`${date}T12:00:00`).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}</strong>
-          <span>{items.map((item) => item.all_day ? "All day" : `${String(item.start_time).slice(0, 5)}–${String(item.end_time).slice(0, 5)}`).join(", ")}</span>
-          <small>{[...new Set(items.map((item) => item.source === "google_calendar" ? "Google Calendar" : item.source === "schedule_scan" ? "Scanned schedule" : "Manual"))].join(" + ")}</small>
-        </article>
-      ))}
+      <header className="private-calendar-header">
+        <button type="button" className="button ghost private-calendar-nav" aria-label="Previous month" onClick={() => setMonth(new Date(year, monthIndex - 1, 1))}>‹</button>
+        <strong>{month.toLocaleDateString(undefined, { month: "long", year: "numeric" })}</strong>
+        <button type="button" className="button ghost private-calendar-nav" aria-label="Next month" onClick={() => setMonth(new Date(year, monthIndex + 1, 1))}>›</button>
+      </header>
+      <div className="private-calendar-weekdays" aria-hidden="true">
+        {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => <span key={day}>{day}</span>)}
+      </div>
+      <div className="private-calendar-grid">
+        {Array.from({ length: 42 }, (_, cell) => {
+          const day = cell - firstWeekday + 1;
+          if (day < 1 || day > dayCount) return <span className="private-calendar-day empty" key={`empty-${cell}`} />;
+          const key = `${year}-${String(monthIndex + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+          const items = rows.filter((row) => row.indefinite || row.block_date === key);
+          const allDay = items.some((item) => item.all_day || item.indefinite);
+          const classes = ["private-calendar-day", allDay ? "offline" : items.length ? "partial" : "", selectedDate === key ? "selected" : ""].filter(Boolean).join(" ");
+          return <button type="button" className={classes} key={key} aria-label={`${new Date(`${key}T12:00:00`).toLocaleDateString()}${items.length ? ", unavailable" : ", available"}`} onClick={() => setSelectedDate(key)}><strong>{day}</strong><span>{allDay ? "Off all day" : items.length ? "Some hours off" : "Open"}</span></button>;
+        })}
+      </div>
+      <section className="private-calendar-details">
+        <strong>{new Date(`${selectedDate}T12:00:00`).toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</strong>
+        {!selectedItems.length && <p>No off time saved for this day.</p>}
+        {selectedItems.map((item) => <div key={item.id}><span>{item.indefinite ? "Offline for a long time" : item.all_day ? "Offline all day" : `${String(item.start_time).slice(0, 5)}–${String(item.end_time).slice(0, 5)}`}</span></div>)}
+      </section>
     </div>
   );
+}
+function localDateKey(date = new Date()) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 export function CalendarAutomation({ onChanged }) {
   const [calendar, setCalendar] = useState({ connected: false });
@@ -62,9 +83,9 @@ export function CalendarAutomation({ onChanged }) {
   async function loadPreview() {
     const { data: auth } = await supabase.auth.getUser();
     if (!auth?.user) return;
-    const today = new Date().toISOString().slice(0, 10);
+    const today = localDateKey();
     const { data, error } = await supabase.from("meetup_availability_blocks")
-      .select("id,block_date,all_day,start_time,end_time,time_zone,source,source_label")
+      .select("id,block_date,all_day,start_time,end_time,time_zone,source,source_label,indefinite")
       .eq("user_id", auth.user.id)
       .or(`indefinite.eq.true,block_date.gte.${today}`)
       .order("block_date")
@@ -166,7 +187,7 @@ export function CalendarAutomation({ onChanged }) {
           {scan && <div className="calendar-scan-review"><strong>Review scan</strong><p>{scan.result.people.length > 1 ? `This schedule contains ${scan.result.people.length} people. Choose which one is you.` : `${scan.result.people[0]?.blocks?.length || 0} unavailable periods found.`}</p>{scan.result.people.length > 1 && <label className="field"><span>Which person are you?</span><select value={selectedPerson} onChange={(event) => setSelectedPerson(event.target.value)}>{scan.result.people.map((person) => <option key={person.name} value={person.name}>{person.name} · {person.blocks.length} periods</option>)}</select></label>}<button type="button" className="button primary" disabled={busy} onClick={applyScan}>Use these unavailable times</button></div>}
         </article>
       </div>
-      {showPreview && <div className="calendar-preview-panel"><h4>Your private availability preview</h4><p className="micro-copy">Only you can see this combined preview.</p><AvailabilityPreview rows={preview}/></div>}
+      {showPreview && <div className="calendar-preview-panel"><h4>Your private availability calendar</h4><p className="micro-copy">Only you can see this calendar. Select a date to check the off time saved for it.</p><AvailabilityPreview rows={preview}/></div>}
     </section>
   );
 }
