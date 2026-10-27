@@ -1237,6 +1237,7 @@ export default function AppSettings({ user }) {
         <section className="panel settings-panel">
           <div className="section-icon"><UserPlus /></div><h2>Account support</h2><p>For account deletion, recovery, or a private problem, open a Captain support ticket in Discord.</p>
           <button className="button secondary" type="button" onClick={() => window.desktop.openExternal("https://discord.gg/Gk3YRYmMfA")}>Open Discord support</button>
+          <button className="button secondary" type="button" onClick={() => window.desktop.openExternal("https://cptspacedust.com/Privacy.html")}><LockKeyhole /> Read privacy policy</button>
         </section>
         <section className="panel settings-panel">
           <div className="section-icon">

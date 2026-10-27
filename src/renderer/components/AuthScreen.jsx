@@ -364,6 +364,22 @@ export default function AuthScreen({
               </span>
             </div>
           )}
+          <div className="auth-links auth-policy-link">
+            <span>
+              By using CrewDeck, you can review how your information is handled in the{" "}
+              <button
+                type="button"
+                onClick={() =>
+                  window.desktop.openExternal(
+                    "https://cptspacedust.com/Privacy.html",
+                  )
+                }
+              >
+                Privacy Policy
+              </button>
+              .
+            </span>
+          </div>
         </div>
       </section>
     </main>

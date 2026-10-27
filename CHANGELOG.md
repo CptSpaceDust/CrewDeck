@@ -11,6 +11,7 @@ Every published CrewDeck release is documented here and copied into its GitHub r
 - Work, school, and event schedule images can be scanned into availability, including multi-person selection and a private phone handoff through a temporary QR code.
 - Members can preview their own combined manual, scanned, and calendar availability before making meetup plans.
 - The installer now offers Space Glass setup choices for background operation, Windows startup, minimized startup, and first-launch app-lock setup.
+- CrewDeck now links to a dedicated privacy policy that explains account, community, Google Calendar, schedule-scan, storage, retention, and deletion practices.
 
 ### Changed
 

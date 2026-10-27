@@ -64,3 +64,13 @@ test("CrewDeck branding is present across app entry points", () => {
   assert.match(updater, /Updating CrewDeck/);
   assert.ok(fs.statSync(icon).size > 1000);
 });
+
+test("CrewDeck exposes the public privacy policy before and after sign in", () => {
+  const auth = read("src", "renderer", "components", "AuthScreen.jsx");
+  const settings = read("src", "renderer", "components", "AppSettings.jsx");
+  const policyUrl = /https:\/\/cptspacedust\.com\/Privacy\.html/;
+  assert.match(auth, policyUrl);
+  assert.match(settings, policyUrl);
+  assert.match(auth, /Privacy Policy/);
+  assert.match(settings, /Read privacy policy/);
+});
