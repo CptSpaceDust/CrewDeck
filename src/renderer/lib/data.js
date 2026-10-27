@@ -321,7 +321,7 @@ export async function getMeetupAvailability() {
     await supabase
       .from("meetup_availability_blocks")
       .select(
-        "id,user_id,block_date,all_day,start_time,end_time,time_zone,indefinite",
+        "id,user_id,block_date,all_day,start_time,end_time,time_zone,indefinite,source,source_label",
       )
       .or(
         `indefinite.eq.true,block_date.gte.${localDateKey(earliestRelevantDay)}`,
@@ -415,16 +415,27 @@ export async function respondToMeetup(meetupId, response) {
   const { error } = await supabase.functions.invoke("send-meetup-email", {
     body: { meetupId, status: response },
   });
+  if (response === "accepted") {
+    await supabase.functions.invoke("calendar-integration", {
+      body: { action: "export_meetups" },
+    }).catch(() => null);
+  }
   return { ...updated, emailSent: !error };
 }
 
 export async function respondToGroupMeetup(meetupId, response) {
-  return unwrap(
+  const updated = unwrap(
     await supabase.rpc("respond_to_group_meetup_invitation", {
       target_meetup_id: meetupId,
       response,
     }),
   );
+  if (response === "accepted") {
+    await supabase.functions.invoke("calendar-integration", {
+      body: { action: "export_meetups" },
+    }).catch(() => null);
+  }
+  return updated;
 }
 
 export async function createMeetup(userId, fields) {

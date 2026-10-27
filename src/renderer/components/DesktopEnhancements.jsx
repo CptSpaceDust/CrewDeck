@@ -280,8 +280,8 @@ export function WhatsNew() {
             <div>
               <strong>Added</strong>
               <p>
-                Attachments now wait above the composer so you can add a caption
-                or remove them before sending.
+                Connect Google Calendar or scan a schedule to fill your private
+                unavailable time, including a QR handoff to your phone.
               </p>
             </div>
           </article>
@@ -290,8 +290,8 @@ export function WhatsNew() {
             <div>
               <strong>Changed</strong>
               <p>
-                Shared Media now shows images, playable videos, voice messages,
-                and internal document previews.
+                Meetup time choices now remove conflicts, and accepted meetups
+                can be added automatically to your chosen Google Calendar.
               </p>
             </div>
           </article>
@@ -300,8 +300,8 @@ export function WhatsNew() {
             <div>
               <strong>Fixed</strong>
               <p>
-                Sent messages no longer become draft history, and unsent drafts
-                clear after a successful send.
+                Past availability cleans itself up, and the new installer gives
+                clear startup, background, and app-lock choices.
               </p>
             </div>
           </article>

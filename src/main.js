@@ -40,6 +40,11 @@ if (
 )
   fs.cpSync(legacyUserData, crewDeckUserData, { recursive: true });
 app.setPath("userData", crewDeckUserData);
+const installerPreferencesPath = path.join(crewDeckUserData, "installer-preferences.json");
+let installerPreferences = { background: 1, startup: 0, startMinimized: 0, appLockSetup: 0, applied: true };
+try {
+  installerPreferences = { ...installerPreferences, ...JSON.parse(fs.readFileSync(installerPreferencesPath, "utf8")) };
+} catch {}
 
 app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
 if (process.platform === "win32") app.setAppUserModelId(APP_USER_MODEL_ID);
@@ -318,6 +323,7 @@ function configurePermissions() {
 }
 
 function createWindow() {
+  const launchedHidden = process.argv.includes("--hidden");
   mainWindow = new BrowserWindow({
     width: 1480,
     height: 940,
@@ -326,7 +332,7 @@ function createWindow() {
     title: "CrewDeck",
     icon: ICON_PATH,
     backgroundColor: "#070b16",
-    show: true,
+    show: !launchedHidden,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
@@ -365,6 +371,11 @@ function createWindow() {
   mainWindow.on("minimize", lockApp);
   mainWindow.on("close", (event) => {
     if (isQuitting) return;
+    if (!Boolean(Number(installerPreferences.background))) {
+      isQuitting = true;
+      app.quit();
+      return;
+    }
     event.preventDefault();
     lockApp();
     mainWindow.hide();
@@ -516,6 +527,12 @@ function setupIpc() {
     });
     return { ok: true, enabled: app.getLoginItemSettings().openAtLogin };
   });
+  ipcMain.handle("installer:get-preferences", () => installerPreferences);
+  ipcMain.handle("installer:acknowledge-preferences", () => {
+    installerPreferences.applied = true;
+    try { fs.writeFileSync(installerPreferencesPath, JSON.stringify(installerPreferences, null, 2)); } catch {}
+    return { ok: true };
+  });
   ipcMain.handle("desktop:open-message-window", (_event, route) => { createMessageWindow(String(route || "Messages.html")); return { ok:true }; });
   ipcMain.handle("desktop:get-share-target", () => {
     if (!pendingShareTarget) return null;
@@ -592,6 +609,13 @@ if (!gotSingleInstanceLock) {
     lockStore = new AppLockStore(
       path.join(app.getPath("userData"), "app-lock.json"),
     );
+    if (!installerPreferences.applied) {
+      app.setLoginItemSettings({
+        openAtLogin: Boolean(Number(installerPreferences.startup)),
+        path: process.execPath,
+        args: Boolean(Number(installerPreferences.startMinimized)) ? ["--hidden"] : [],
+      });
+    }
     locked = lockStore.settings.enabled;
     extractShareTarget(process.argv.slice(1));
     const startupLink = process.argv.find((value) => parseDeepLink(value));

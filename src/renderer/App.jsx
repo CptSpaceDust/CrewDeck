@@ -255,6 +255,13 @@ export default function App() {
   );
   useEffect(() => window.desktop.onNavigate((value) => navigate(value)), []);
   useEffect(() => {
+    window.desktop.installer?.getPreferences().then((preferences) => {
+      if (!preferences || preferences.applied) return;
+      if (Boolean(Number(preferences.appLockSetup))) setPage("settings");
+      window.desktop.installer.acknowledge();
+    });
+  }, []);
+  useEffect(() => {
     const openCall = (event) => setActiveCall(event.detail);
     window.addEventListener("crewdeck-open-call", openCall);
     return () => window.removeEventListener("crewdeck-open-call", openCall);

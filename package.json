@@ -1,6 +1,6 @@
 {
   "name": "crewdeck-desktop",
-  "version": "1.9.5",
+  "version": "1.9.6",
   "private": true,
   "author": "CptSpaceDust",
   "description": "The private desktop home for the CrewDeck community.",
@@ -20,6 +20,7 @@
     "electron-updater": "6.8.9",
     "livekit-client": "2.22.3",
     "lucide-react": "0.468.0",
+    "qrcode": "1.5.4",
     "react": "19.1.1",
     "react-dom": "19.1.1"
   },

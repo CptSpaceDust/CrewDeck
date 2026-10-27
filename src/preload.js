@@ -23,6 +23,10 @@ contextBridge.exposeInMainWorld("desktop", {
     getStartup: () => ipcRenderer.invoke("system:get-startup"),
     setStartup: (enabled) => ipcRenderer.invoke("system:set-startup", enabled),
   },
+  installer: {
+    getPreferences: () => ipcRenderer.invoke("installer:get-preferences"),
+    acknowledge: () => ipcRenderer.invoke("installer:acknowledge-preferences"),
+  },
   openExternal: (url) => ipcRenderer.send("desktop:open-external", url),
   onNavigate: (callback) => subscribe("desktop:navigate", callback),
   openMessageWindow: (route) => ipcRenderer.invoke("desktop:open-message-window", route),

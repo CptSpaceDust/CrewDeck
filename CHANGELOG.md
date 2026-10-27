@@ -2,6 +2,21 @@
 
 Every published CrewDeck release is documented here and copied into its GitHub release notes.
 
+## [1.9.6] - 2026-10-26
+
+### Added
+
+- Google Calendar can import selected timed or all-day events as private unavailable time for the next three months, then refresh automatically after 75 days.
+- Accepted CrewDeck meetups can be added to a chosen Google Calendar with participant, location, link, and instruction details.
+- Work, school, and event schedule images can be scanned into availability, including multi-person selection and a private phone handoff through a temporary QR code.
+- Members can preview their own combined manual, scanned, and calendar availability before making meetup plans.
+- The installer now offers Space Glass setup choices for background operation, Windows startup, minimized startup, and first-launch app-lock setup.
+
+### Changed
+
+- Meetup start-time selectors hide slots that overlap either participant’s unavailable time or an existing accepted meetup.
+- Expired full-day and partial-time availability is cleaned up automatically.
+
 ## [1.9.5] - 2026-10-26
 
 ### Changed

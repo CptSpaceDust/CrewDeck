@@ -7975,3 +7975,26 @@ html[data-color-indicators="labeled"] .presence-chip::before {
 .diagnostic-grid small {
   color: var(--muted);
 }
+.calendar-automation-app {
+  grid-column: 1 / -1;
+  margin-top: 8px;
+  padding-top: 22px;
+  border-top: 1px solid rgba(101, 194, 255, 0.22);
+}
+.calendar-automation-app > header { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:16px; }
+.calendar-automation-app h3,.calendar-automation-app h4,.calendar-automation-app p { margin-top:0; }
+.calendar-automation-cards { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+.calendar-automation-card { min-width:0; padding:18px; border:1px solid rgba(90,184,255,.27); border-radius:18px; background:linear-gradient(145deg,rgba(18,39,73,.84),rgba(7,17,38,.94)); box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 14px 35px rgba(0,0,0,.22); }
+.calendar-automation-card > svg { width:32px; height:32px; padding:8px; margin-bottom:9px; border-radius:12px; color:#071225; background:linear-gradient(145deg,#eaf8ff,#69bdff); box-shadow:0 0 20px rgba(77,170,255,.3); }
+.calendar-automation-card fieldset { margin:14px 0; padding:12px; border:1px solid rgba(111,198,255,.2); border-radius:13px; }
+.calendar-automation-card legend { padding:0 7px; color:#a9dfff; font-weight:800; }
+.calendar-app-choice-list { display:grid; gap:7px; max-height:150px; overflow:auto; }
+.schedule-app-upload { display:grid; place-items:center; min-height:92px; margin:14px 0; padding:15px; border:1px dashed rgba(106,200,255,.58); border-radius:15px; background:rgba(5,18,42,.5); color:#e7f7ff; text-align:center; font-weight:800; cursor:pointer; }
+.schedule-app-upload input { position:absolute; width:1px; height:1px; opacity:0; }
+.calendar-handoff,.calendar-scan-review,.calendar-preview-panel { display:grid; gap:10px; margin-top:14px; padding:15px; border:1px solid rgba(110,200,255,.24); border-radius:15px; background:rgba(4,13,31,.72); }
+.calendar-handoff img { width:min(240px,100%); justify-self:center; border-radius:13px; }
+.calendar-private-preview { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:10px; max-height:340px; overflow:auto; }
+.calendar-private-preview article { display:grid; gap:4px; padding:12px; border:1px solid rgba(98,188,255,.2); border-radius:12px; background:rgba(12,31,59,.72); }
+.calendar-private-preview small { color:#8dccf3; }
+.available-time-select { min-width:0; width:100%; }
+@media (max-width:900px) { .calendar-automation-cards { grid-template-columns:1fr; } .calendar-automation-app > header { flex-direction:column; } }

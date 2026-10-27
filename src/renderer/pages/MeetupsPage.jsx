@@ -36,6 +36,7 @@ import {
   zonedDateTime,
 } from "../lib/time";
 import { confirmInApp, promptInApp } from "../components/InAppDialog";
+import { CalendarAutomation } from "../components/CalendarAutomation";
 import {
   MeetupCountdown,
   MeetupTools,
@@ -187,7 +188,7 @@ function MeetupTemplateControls({ userId, formRef, onNotice }) {
     </section>
   );
 }
-function SpaceTimePicker({ name, defaultValue = "18:00" }) {
+function SpaceTimePicker({ name, defaultValue = "18:00", availableValues = null }) {
   const [initialHours, initialMinutes] = defaultValue.split(":").map(Number);
   const [hour, setHour] = useState(initialHours % 12 || 12);
   const [minute, setMinute] = useState(
@@ -195,6 +196,18 @@ function SpaceTimePicker({ name, defaultValue = "18:00" }) {
   );
   const [period, setPeriod] = useState(initialHours >= 12 ? "PM" : "AM");
   const value = `${String((Number(hour) % 12) + (period === "PM" ? 12 : 0)).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+  if (Array.isArray(availableValues)) {
+    return (
+      <select name={name} className="available-time-select" defaultValue={availableValues.includes(defaultValue) ? defaultValue : availableValues[0] || ""} disabled={!availableValues.length}>
+        {!availableValues.length && <option value="">No available start times</option>}
+        {availableValues.map((slot) => {
+          const [slotHour, slotMinute] = slot.split(":").map(Number);
+          const label = new Date(2000, 0, 1, slotHour, slotMinute).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+          return <option value={slot} key={slot}>{label}</option>;
+        })}
+      </select>
+    );
+  }
   return (
     <div className="space-time-picker">
       <select
@@ -430,6 +443,7 @@ function AvailabilityModal({ user, rows = [], onClose, onSaved }) {
             })}
           </section>
         )}
+        {!longTerm && <CalendarAutomation onChanged={onSaved} />}
       </div>
     </Modal>
   );
@@ -466,6 +480,7 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [recurrence, setRecurrence] = useState("none");
+  const [duration, setDuration] = useState(Number(friendPrefill.preset?.duration || 1));
   const formHeadingRef = useRef(null);
   const requestFormRef = useRef(null);
   const meetups = Array.isArray(meetupLoader.data) ? meetupLoader.data : [];
@@ -517,6 +532,28 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
       return false;
     }
   });
+  const availableStartTimes = selected && selectedPerson
+    ? Array.from({ length: 96 }, (_, index) => index * 15)
+        .filter((startMinutes) => startMinutes + duration * 60 <= 1440)
+        .map((startMinutes) => `${String(Math.floor(startMinutes / 60)).padStart(2, "0")}:${String(startMinutes % 60).padStart(2, "0")}`)
+        .filter((slot) => {
+          const requestedStart = zonedDateTime(selected, slot, localTimeZoneName());
+          const requestedEnd = new Date(requestedStart.getTime() + duration * 3600000);
+          const availabilityConflict = availability.some((item) => {
+            if (!selectedIds.includes(item.user_id)) return false;
+            if (item.user_id === user.id && item.indefinite) return false;
+            const range = safeAvailabilityRange(item);
+            return range ? overlaps(requestedStart, requestedEnd, range[0], range[1]) : false;
+          });
+          const meetupConflict = approved.some((item) => {
+            if (!involves(item, selectedIds)) return false;
+            const existingStart = meetupInstant(item);
+            const existingEnd = new Date(existingStart.getTime() + Number(item.duration || 1) * 3600000);
+            return overlaps(requestedStart, requestedEnd, existingStart, existingEnd);
+          });
+          return !availabilityConflict && !meetupConflict;
+        })
+    : [];
   const loading =
     meetupLoader.loading ||
     membershipLoader.loading ||
@@ -1144,12 +1181,13 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
                     label="Preferred start time"
                     hint={`Your time · ${localTimeZoneName()}`}
                   >
-                    <SpaceTimePicker name="time" defaultValue="18:00" />
+                    <SpaceTimePicker name="time" defaultValue="18:00" availableValues={availableStartTimes} />
                   </Field>
                   <Field label="Duration">
                     <select
                       name="duration"
-                      defaultValue={friendPrefill.preset?.duration || "1"}
+                      value={duration}
+                      onChange={(event) => setDuration(Number(event.target.value))}
                     >
                       {[1, 2, 3, 4, 5].map((hours) => (
                         <option key={hours} value={hours}>
