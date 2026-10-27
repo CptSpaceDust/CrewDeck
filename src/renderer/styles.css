@@ -4569,8 +4569,13 @@ html[data-motion="full"] dialog {
 }
 
 .composer-tools-toggle {
+  width: 42px;
+  height: 42px;
+  min-width: 42px;
+  aspect-ratio: 1;
   display: grid;
   place-items: center;
+  padding: 0;
   border: 1px solid rgba(116, 190, 255, 0.24);
   border-radius: 50%;
   color: #9edbff;
@@ -4662,6 +4667,74 @@ html[data-motion="full"] dialog {
   opacity: 0;
   pointer-events: none;
 }
+.pending-message-attachment {
+  grid-column: 1 / -1;
+  width: fit-content;
+  max-width: min(100%, 24rem);
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid rgba(102, 190, 255, 0.3);
+  border-radius: 0.9rem;
+  background: linear-gradient(
+    145deg,
+    rgba(15, 41, 76, 0.94),
+    rgba(5, 18, 39, 0.96)
+  );
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.28);
+}
+.pending-message-attachment-preview {
+  width: 3.2rem;
+  height: 3.2rem;
+  flex: 0 0 3.2rem;
+  display: grid;
+  overflow: hidden;
+  place-items: center;
+  border: 1px solid rgba(112, 198, 255, 0.24);
+  border-radius: 0.7rem;
+  color: var(--accent, #7bc8ff);
+  background: rgba(2, 10, 24, 0.78);
+}
+.pending-message-attachment-preview img,
+.pending-message-attachment-preview video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.pending-message-attachment-preview svg {
+  width: 1.25rem;
+}
+.pending-message-attachment > span {
+  min-width: 0;
+  display: grid;
+  gap: 0.15rem;
+}
+.pending-message-attachment strong,
+.pending-message-attachment small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pending-message-attachment small {
+  color: var(--text-muted);
+}
+.pending-message-attachment > button {
+  width: 2.15rem;
+  height: 2.15rem;
+  display: grid;
+  flex: 0 0 2.15rem;
+  margin-left: auto;
+  padding: 0;
+  place-items: center;
+  color: #ffacb7;
+  border: 1px solid rgba(255, 120, 140, 0.24);
+  border-radius: 0.65rem;
+  background: rgba(84, 19, 36, 0.46);
+}
+.pending-message-attachment > button svg {
+  width: 1rem;
+}
 .message-attachment-list {
   display: grid;
   gap: 0.45rem;
@@ -4690,7 +4763,6 @@ html[data-motion="full"] dialog {
 .message-media-preview.image {
   display: block;
   padding: 0;
-  cursor: zoom-in;
 }
 .message-media-preview img,
 .message-media-preview video {
@@ -4739,9 +4811,80 @@ html[data-motion="full"] dialog {
   color: var(--text-muted);
 }
 
+.attachment-preview-backdrop {
+  z-index: 180;
+}
+
+.attachment-preview-modal {
+  width: min(900px, 100%);
+  max-height: 92vh;
+  padding: 0;
+  overflow: hidden;
+  background:
+    radial-gradient(
+      circle at 85% 0%,
+      rgba(76, 174, 255, 0.14),
+      transparent 42%
+    ),
+    #071326;
+}
+
+.attachment-preview-modal .modal-header {
+  margin: 0;
+  padding: 16px 18px;
+  border-bottom: 1px solid rgba(104, 190, 255, 0.18);
+  background: rgba(13, 35, 68, 0.7);
+}
+
+.attachment-preview-modal .modal-header > div {
+  display: grid;
+  gap: 3px;
+}
+
+.attachment-preview-modal .modal-header span {
+  color: var(--accent, #75c9ff);
+  font-size: 0.67rem;
+  font-weight: 900;
+  letter-spacing: 0.13em;
+}
+
+.attachment-preview-modal .modal-header svg {
+  width: 1.2rem;
+  height: 1.2rem;
+}
+
+.attachment-preview-body {
+  display: grid;
+  min-height: min(65vh, 580px);
+  padding: 16px;
+  place-items: center;
+  background: rgba(1, 7, 18, 0.72);
+}
+
+.attachment-preview-body iframe {
+  width: 100%;
+  height: min(65vh, 580px);
+  border: 0;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.attachment-preview-body img,
+.attachment-preview-body video {
+  display: block;
+  max-width: 100%;
+  max-height: min(65vh, 580px);
+  border-radius: 12px;
+  object-fit: contain;
+}
+
+.attachment-preview-body audio {
+  width: min(100%, 34rem);
+}
+
 .composer-history-panel {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 0.8rem;
   margin-top: 0.7rem;
   padding: 0.8rem;
@@ -7356,6 +7499,65 @@ html[data-motion="full"] dialog {
   transform: translateY(-1px);
 }
 
+.conversation-media-card {
+  position: relative;
+  min-width: 0;
+  min-height: 8.5rem;
+  overflow: hidden;
+  border: 1px solid rgba(105, 184, 255, 0.23);
+  border-radius: 16px;
+  color: var(--text);
+  background: linear-gradient(
+    145deg,
+    rgba(16, 35, 67, 0.92),
+    rgba(7, 18, 39, 0.95)
+  );
+}
+.conversation-media-card.image img,
+.conversation-media-card.video video {
+  display: block;
+  width: 100%;
+  height: 10rem;
+  object-fit: cover;
+  background: #020711;
+}
+.conversation-media-card.image .conversation-media-type,
+.conversation-media-card.video .conversation-media-type {
+  position: absolute;
+  left: 0.55rem;
+  bottom: 0.55rem;
+  padding: 0.28rem 0.45rem;
+  border-radius: 999px;
+  background: rgba(2, 10, 24, 0.82);
+  backdrop-filter: blur(8px);
+}
+.conversation-media-card.audio {
+  display: grid;
+  align-content: center;
+  gap: 0.8rem;
+  padding: 1rem;
+}
+.conversation-media-card.audio audio {
+  width: 100%;
+}
+.conversation-media-card.document {
+  width: 100%;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 0.65rem;
+  text-align: center;
+}
+.conversation-media-card.document svg {
+  width: 1.7rem;
+  color: var(--accent, #7bc8ff);
+}
+.conversation-media-card.loading {
+  display: grid;
+  place-items: center;
+  color: var(--text-muted);
+}
+
 .conversation-media-gallery strong,
 .conversation-media-gallery small {
   overflow: hidden;
@@ -7669,7 +7871,10 @@ html[data-color-indicators="labeled"] .presence-chip::before {
   gap: 2px;
 }
 .command-palette > div button strong,
-.command-palette > div button small { display: block; line-height: 1.25; }
+.command-palette > div button small {
+  display: block;
+  line-height: 1.25;
+}
 .command-palette > div button small {
   color: var(--muted);
 }

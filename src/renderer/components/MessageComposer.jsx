@@ -21,9 +21,7 @@ import {
 } from "../lib/preferences";
 import {
   cancelScheduledConversationMessage,
-  getMessageDraftVersions,
   getScheduledConversationMessages,
-  saveMessageDraftVersion,
 } from "../lib/crewFeatures";
 
 export const activeConversation = { current: null };
@@ -117,11 +115,11 @@ export default function MessageComposer({
   const [sendAt, setSendAt] = useState("");
   const [expiresInMinutes, setExpiresInMinutes] = useState("");
   const [scheduled, setScheduled] = useState([]);
-  const [versions, setVersions] = useState([]);
   const [toolsOpen, setToolsOpen] = useState(false);
   const [deliveryOpen, setDeliveryOpen] = useState(false);
   const [recording, setRecording] = useState(false);
   const [nativeShareFile, setNativeShareFile] = useState(null);
+  const [pendingAttachment, setPendingAttachment] = useState(null);
   const recorderRef = useRef(null);
   const recordingStartedRef = useRef(0);
   const channelRef = useRef(null);
@@ -148,6 +146,19 @@ export default function MessageComposer({
       );
     });
   }, [id]);
+  useEffect(() => {
+    setPendingAttachment((current) => {
+      if (current?.previewUrl) URL.revokeObjectURL(current.previewUrl);
+      return null;
+    });
+  }, [id, group]);
+  useEffect(
+    () => () => {
+      if (pendingAttachment?.previewUrl)
+        URL.revokeObjectURL(pendingAttachment.previewUrl);
+    },
+    [pendingAttachment],
+  );
   useEffect(() => {
     let alive = true,
       ready = false;
@@ -224,12 +235,12 @@ export default function MessageComposer({
   }, [id, group, user.id]);
   async function loadComposerHistory() {
     const kind = group ? "group" : "dm";
-    const [scheduledRows, versionRows] = await Promise.all([
-      getScheduledConversationMessages(user.id, kind, id),
-      getMessageDraftVersions(user.id, kind, id),
-    ]);
+    const scheduledRows = await getScheduledConversationMessages(
+      user.id,
+      kind,
+      id,
+    );
     setScheduled(scheduledRows || []);
-    setVersions(versionRows || []);
   }
   useEffect(() => {
     if (!toolsOpen) return;
@@ -272,27 +283,46 @@ export default function MessageComposer({
   );
   async function submit(event) {
     event.preventDefault();
-    if (sendingRef.current || !draft.trim() || slowModeSeconds > 0) return;
+    if (
+      sendingRef.current ||
+      (!draft.trim() && !pendingAttachment) ||
+      slowModeSeconds > 0
+    )
+      return;
+    if (pendingAttachment && sendAt) {
+      onNotice?.(
+        "Attachments cannot be scheduled. Clear the schedule or send the attachment now.",
+      );
+      return;
+    }
     sendingRef.current = true;
     setBusy(true);
     try {
       const content = draft.trim();
-      if (
-        (await onSend(event, {
-          silent,
-          sendAt,
-          expiresInMinutes: expiresInMinutes ? Number(expiresInMinutes) : null,
-        })) !== false
-      ) {
-        await saveMessageDraftVersion(
-          user.id,
-          group ? "group" : "dm",
-          id,
-          content,
-        ).catch(() => {});
+      const sent = pendingAttachment
+        ? await onSendAttachment?.(pendingAttachment.file, {
+            silent,
+            durationSeconds: pendingAttachment.durationSeconds,
+            content,
+            expiresInMinutes: expiresInMinutes
+              ? Number(expiresInMinutes)
+              : null,
+          })
+        : await onSend(event, {
+            silent,
+            sendAt,
+            expiresInMinutes: expiresInMinutes
+              ? Number(expiresInMinutes)
+              : null,
+          });
+      if (sent !== false) {
         setDraft("");
         draftRef.current = "";
         saveDraft(user.id, id, group, "");
+        setPendingAttachment((current) => {
+          if (current?.previewUrl) URL.revokeObjectURL(current.previewUrl);
+          return null;
+        });
         channelRef.current?.(false);
         setSilent(false);
         setSendAt("");
@@ -305,17 +335,22 @@ export default function MessageComposer({
       requestAnimationFrame(() => inputRef.current?.focus());
     }
   }
-  async function attachFile(file, durationSeconds = null) {
+  function queueAttachment(file, durationSeconds = null) {
     if (!file || !onSendAttachment) return;
-    setBusy(true);
-    try {
-      await onSendAttachment(file, { silent, durationSeconds });
-      setDeliveryOpen(false);
-    } catch (error) {
-      onNotice?.(error.message || "Unable to attach this file.");
-    } finally {
-      setBusy(false);
+    if (file.size > 10 * 1024 * 1024) {
+      onNotice?.("Choose a file that is 10 MB or smaller.");
+      return;
     }
+    setPendingAttachment((current) => {
+      if (current?.previewUrl) URL.revokeObjectURL(current.previewUrl);
+      return {
+        file,
+        durationSeconds,
+        previewUrl: URL.createObjectURL(file),
+      };
+    });
+    setDeliveryOpen(false);
+    requestAnimationFrame(() => inputRef.current?.focus());
   }
   async function toggleRecording() {
     if (recording) {
@@ -353,7 +388,7 @@ export default function MessageComposer({
       const file = new File([blob], `voice-message-${Date.now()}.webm`, {
         type: blob.type,
       });
-      await attachFile(file, (Date.now() - recordingStartedRef.current) / 1000);
+      queueAttachment(file, (Date.now() - recordingStartedRef.current) / 1000);
     };
     recorder.start();
   }
@@ -369,6 +404,46 @@ export default function MessageComposer({
               : ""}
       </div>
       <form className="composer" onSubmit={submit}>
+        {pendingAttachment && (
+          <div className="pending-message-attachment">
+            <div className="pending-message-attachment-preview">
+              {pendingAttachment.file.type.startsWith("image/") ? (
+                <img
+                  src={pendingAttachment.previewUrl}
+                  alt="Attachment preview"
+                />
+              ) : pendingAttachment.file.type.startsWith("video/") ? (
+                <video src={pendingAttachment.previewUrl} muted playsInline />
+              ) : pendingAttachment.file.type.startsWith("audio/") ? (
+                <Mic />
+              ) : (
+                <Paperclip />
+              )}
+            </div>
+            <span>
+              <strong>
+                {pendingAttachment.durationSeconds
+                  ? "Voice message ready"
+                  : "Attachment ready"}
+              </strong>
+              <small>{pendingAttachment.file.name}</small>
+            </span>
+            <button
+              type="button"
+              aria-label="Remove attachment"
+              title="Remove attachment"
+              onClick={() =>
+                setPendingAttachment((current) => {
+                  if (current?.previewUrl)
+                    URL.revokeObjectURL(current.previewUrl);
+                  return null;
+                })
+              }
+            >
+              <Trash2 />
+            </button>
+          </div>
+        )}
         <button
           type="button"
           className={`composer-tools-toggle${deliveryOpen ? " active" : ""}`}
@@ -411,7 +486,9 @@ export default function MessageComposer({
         />
         <button
           className="send-button"
-          disabled={busy || !draft.trim() || slowModeSeconds > 0}
+          disabled={
+            busy || (!draft.trim() && !pendingAttachment) || slowModeSeconds > 0
+          }
           aria-label="Send message"
         >
           <Send />
@@ -428,7 +505,7 @@ export default function MessageComposer({
                 className="native-share-target"
                 disabled={busy}
                 onClick={async () => {
-                  await attachFile(nativeShareFile);
+                  queueAttachment(nativeShareFile);
                   setNativeShareFile(null);
                 }}
               >
@@ -445,7 +522,7 @@ export default function MessageComposer({
                 onChange={(event) => {
                   const file = event.target.files?.[0];
                   event.target.value = "";
-                  attachFile(file);
+                  queueAttachment(file);
                 }}
               />
             </label>
@@ -500,7 +577,7 @@ export default function MessageComposer({
                 setDeliveryOpen(false);
               }}
             >
-              <History /> Saved & scheduled
+              <History /> Scheduled messages
             </button>
           </div>
         )}
@@ -533,28 +610,6 @@ export default function MessageComposer({
               ))
             ) : (
               <p>No scheduled messages.</p>
-            )}
-          </div>
-          <div>
-            <h4>Recent drafts</h4>
-            {versions.length ? (
-              versions.map((item) => (
-                <button
-                  type="button"
-                  className="draft-version"
-                  key={item.id}
-                  onClick={() => {
-                    setDraft(item.content);
-                    draftRef.current = item.content;
-                    saveDraft(user.id, id, group, item.content);
-                  }}
-                >
-                  <span>{item.content}</span>
-                  <small>{new Date(item.created_at).toLocaleString()}</small>
-                </button>
-              ))
-            ) : (
-              <p>Sent drafts will appear here.</p>
             )}
           </div>
         </section>

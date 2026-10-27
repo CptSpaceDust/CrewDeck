@@ -253,19 +253,17 @@ function ScreenShareTile({ item, callId, userId }) {
   async function point(event) {
     if (!callId) return;
     const box = event.currentTarget.getBoundingClientRect();
-    await supabase
-      .from("call_screen_pointers")
-      .upsert(
-        {
-          call_id: callId,
-          user_id: userId,
-          x: (event.clientX - box.left) / box.width,
-          y: (event.clientY - box.top) / box.height,
-          expires_at: new Date(Date.now() + 4000).toISOString(),
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "call_id,user_id" },
-      );
+    await supabase.from("call_screen_pointers").upsert(
+      {
+        call_id: callId,
+        user_id: userId,
+        x: (event.clientX - box.left) / box.width,
+        y: (event.clientY - box.top) / box.height,
+        expires_at: new Date(Date.now() + 4000).toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "call_id,user_id" },
+    );
   }
   return (
     <article className="call-screen-card">
@@ -952,17 +950,15 @@ export function VoiceCall({ conversation, user, onClose, requestedCallId }) {
     for (const [key, element] of audioElementsRef.current) {
       if (key.startsWith(`${participantId}:`)) element.volume = volume;
     }
-    await supabase
-      .from("friend_audio_profiles")
-      .upsert(
-        {
-          owner_id: user.id,
-          friend_id: participantId,
-          volume,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "owner_id,friend_id" },
-      );
+    await supabase.from("friend_audio_profiles").upsert(
+      {
+        owner_id: user.id,
+        friend_id: participantId,
+        volume,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "owner_id,friend_id" },
+    );
   }
 
   useEffect(() => {
@@ -1080,13 +1076,11 @@ export function VoiceCall({ conversation, user, onClose, requestedCallId }) {
         .from("call_speaker_queue")
         .select("user_id", { count: "exact", head: true })
         .eq("call_id", activeCallId);
-      await supabase
-        .from("call_speaker_queue")
-        .upsert({
-          call_id: activeCallId,
-          user_id: user.id,
-          position: Number(count || 0) + 1,
-        });
+      await supabase.from("call_speaker_queue").upsert({
+        call_id: activeCallId,
+        user_id: user.id,
+        position: Number(count || 0) + 1,
+      });
     }
   }
 
@@ -1906,8 +1900,8 @@ function DirectMessagesPage({
         selected.id,
         user.id,
         selected.person.id,
-        voice ? "Voice message" : "Attachment",
-        null,
+        delivery.content || (voice ? "Voice message" : "Attachment"),
+        replying?.id || null,
         delivery.silent,
         voice
           ? "voice"
@@ -1916,6 +1910,7 @@ function DirectMessagesPage({
             : file.type.startsWith("video/")
               ? "video"
               : "file",
+        delivery.expiresInMinutes,
       );
       await uploadMessageAttachment({
         kind: "dm",
@@ -1927,8 +1922,10 @@ function DirectMessagesPage({
       setMessages((rows) =>
         rows.some((row) => row.id === sent.id) ? rows : [...rows, sent],
       );
+      setReplying(null);
       await reloadConversationFeatures();
       setNotice(voice ? "Voice message sent." : "File shared.");
+      return true;
     } catch (error) {
       if (sent?.id) await deleteMessage(sent.id, user.id).catch(() => {});
       setNotice(error.message);
@@ -2186,11 +2183,12 @@ function DirectMessagesPage({
                               : "a direct message"}
                           </small>
                         )}
-                        {!conversationFeatures.attachments.some(
+                        {(!conversationFeatures.attachments.some(
                           (attachment) => attachment.message_id === item.id,
-                        ) && !["voice", "image", "video", "file"].includes(
-                          item.message_type,
-                        ) && (
+                        ) ||
+                          !["Attachment", "Voice message"].includes(
+                            item.content,
+                          )) && (
                           <p>
                             <FormattedMessage>{item.content}</FormattedMessage>
                           </p>
@@ -3330,8 +3328,8 @@ function GroupMessagesPage({
       sent = await sendGroupMessage(
         selected.id,
         user.id,
-        voice ? "Voice message" : "Attachment",
-        null,
+        delivery.content || (voice ? "Voice message" : "Attachment"),
+        replying?.id || null,
         delivery.silent,
         voice
           ? "voice"
@@ -3340,6 +3338,7 @@ function GroupMessagesPage({
             : file.type.startsWith("video/")
               ? "video"
               : "file",
+        delivery.expiresInMinutes,
       );
       await uploadMessageAttachment({
         kind: "group",
@@ -3351,8 +3350,10 @@ function GroupMessagesPage({
       setMessages((rows) =>
         rows.some((row) => row.id === sent.id) ? rows : [...rows, sent],
       );
+      setReplying(null);
       await reloadConversationFeatures();
       setNotice(voice ? "Voice message sent." : "File shared.");
+      return true;
     } catch (error) {
       if (sent?.id) await deleteGroupMessage(sent.id, user.id).catch(() => {});
       setNotice(error.message);
@@ -3737,8 +3738,9 @@ function GroupMessagesPage({
                           />
                         ) : !conversationFeatures.attachments.some(
                             (attachment) => attachment.message_id === item.id,
-                          ) && !["voice", "image", "video", "file"].includes(
-                            item.message_type,
+                          ) ||
+                          !["Attachment", "Voice message"].includes(
+                            item.content,
                           ) ? (
                           <p>
                             <FormattedMessage>{item.content}</FormattedMessage>

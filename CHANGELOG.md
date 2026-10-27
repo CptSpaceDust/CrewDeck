@@ -2,6 +2,17 @@
 
 Every published CrewDeck release is documented here and copied into its GitHub release notes.
 
+## [1.9.5] - 2026-10-26
+
+### Changed
+
+- Shared images stay inside the conversation instead of opening a browser window.
+- Videos and voice messages continue to play inline, while PDF and text attachments open in a Space Glass document preview.
+- Shared Media uses the same internal preview behavior for every uploaded attachment.
+- Attachments wait above the composer until the member sends or removes them, and can include a text caption.
+- Drafts now restore only unsent text for the matching conversation and clear after a successful send.
+- The composer tools button is a true circle, and Shared Media shows visual image, video, and voice previews.
+
 ## [1.9.4] - 2026-10-19
 
 ### Changed

@@ -173,11 +173,6 @@ export async function uploadMessageAttachment({
   return data.attachment;
 }
 
-export async function openMessageAttachment(attachmentId) {
-  const url = await getMessageAttachmentUrl(attachmentId);
-  window.open(url, "_blank", "noopener,noreferrer");
-}
-
 export async function getMessageAttachmentUrl(attachmentId) {
   const cacheKey = `crewdeck.media-cache.${attachmentId}`;
   const cached = sessionStorage.getItem(cacheKey);
@@ -369,37 +364,6 @@ export async function cancelScheduledConversationMessage(id, userId) {
       .is("delivered_at", null)
       .select("id")
       .maybeSingle(),
-  );
-}
-
-export async function saveMessageDraftVersion(
-  userId,
-  kind,
-  conversationId,
-  content,
-) {
-  const clean = String(content || "").trim();
-  if (!clean) return null;
-  return unwrap(
-    await supabase.from("message_draft_versions").insert({
-      user_id: userId,
-      conversation_kind: kind,
-      conversation_id: conversationId,
-      content: clean,
-    }),
-  );
-}
-
-export async function getMessageDraftVersions(userId, kind, conversationId) {
-  return unwrap(
-    await supabase
-      .from("message_draft_versions")
-      .select("id,content,created_at")
-      .eq("user_id", userId)
-      .eq("conversation_kind", kind)
-      .eq("conversation_id", conversationId)
-      .order("created_at", { ascending: false })
-      .limit(10),
   );
 }
 

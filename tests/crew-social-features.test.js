@@ -49,6 +49,7 @@ test("desktop messaging exposes the selected realtime conversation tools", () =>
     "ConversationFeatures.jsx",
   );
   const messages = read("src", "renderer", "pages", "MessagesPageV2.jsx");
+  const composer = read("src", "renderer", "components", "MessageComposer.jsx");
   const data = read("src", "renderer", "lib", "data.js");
   const crewFeatures = read("src", "renderer", "lib", "crewFeatures.js");
   const combined = `${features}\n${crewFeatures}`;
@@ -67,6 +68,13 @@ test("desktop messaging exposes the selected realtime conversation tools", () =>
   assert.match(features, /message-reaction-summary/);
   assert.match(features, /emoji-picker-popover/);
   assert.match(features, /ConversationDetails/);
+  assert.match(features, /AttachmentPreviewDialog/);
+  assert.match(features, /Open document/);
+  assert.doesNotMatch(features, /Open shared image/);
+  assert.doesNotMatch(features, /openMessageAttachment/);
+  assert.match(composer, /pending-message-attachment/);
+  assert.match(composer, /queueAttachment/);
+  assert.doesNotMatch(composer, /saveMessageDraftVersion/);
   assert.match(crewFeatures, /deleteMessageReminder/);
   assert.doesNotMatch(messages, /call_messages|Call chat/);
   assert.match(messages, /handRaised/);

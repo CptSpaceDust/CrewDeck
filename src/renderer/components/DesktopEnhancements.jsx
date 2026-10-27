@@ -280,8 +280,8 @@ export function WhatsNew() {
             <div>
               <strong>Added</strong>
               <p>
-                Attachment deletion now clears the matching private file and
-                metadata from storage immediately.
+                Attachments now wait above the composer so you can add a caption
+                or remove them before sending.
               </p>
             </div>
           </article>
@@ -290,7 +290,8 @@ export function WhatsNew() {
             <div>
               <strong>Changed</strong>
               <p>
-                Reactions and reminder controls stay beneath shared media.
+                Shared Media now shows images, playable videos, voice messages,
+                and internal document previews.
               </p>
             </div>
           </article>
@@ -299,8 +300,8 @@ export function WhatsNew() {
             <div>
               <strong>Fixed</strong>
               <p>
-                Website attachment previews no longer remain stuck on their
-                loading state.
+                Sent messages no longer become draft history, and unsent drafts
+                clear after a successful send.
               </p>
             </div>
           </article>
