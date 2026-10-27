@@ -16,6 +16,12 @@ test("desktop meetups include calendar automation and conflict-filtered times", 
   assert.match(automation, /AvailabilityPreview rows=\{preview\}/);
 });
 
+test("calendar automation surfaces Edge Function error details", () => {
+  const component = read("src/renderer/components/CalendarAutomation.jsx");
+  assert.match(component, /error\.context instanceof Response/);
+  assert.match(component, /error\.context\.clone\(\)\.json\(\)/);
+});
+
 test("installer offers startup, background, minimized, and app-lock setup choices", () => {
   const installer = read("build/installer.nsh");
   assert.match(installer, /Keep notifications and calls active/);

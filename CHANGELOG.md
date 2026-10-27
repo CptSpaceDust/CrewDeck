@@ -2,6 +2,15 @@
 
 Every published CrewDeck release is documented here and copied into its GitHub release notes.
 
+## [1.9.7] - 2026-10-26
+
+### Fixed
+
+- Schedule scans can create and update their private scan sessions without exposing the private database schema.
+- Temporary Gemini capacity problems automatically retry on other current stable Flash models with bounded timeouts.
+- Calendar automation now uses the same protected private-data bridge instead of failing through the public Data API.
+- Website and desktop calendar tools show the actual server error when a request cannot be completed.
+
 ## [1.9.6] - 2026-10-26
 
 ### Added
