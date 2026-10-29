@@ -53,6 +53,7 @@ import {
   formatDate,
 } from "../components/ui";
 import { confirmInApp, promptInApp } from "../components/InAppDialog";
+import { CommunityBoardWorkspace } from "../components/CommunityBoardWorkspace";
 import { useFormDraft } from "../lib/formDrafts";
 import { supabase } from "../lib/supabase";
 
@@ -558,6 +559,12 @@ export function IdeasPage({ user, profile }) {
           <span>Completed</span>
         </div>
       </section>
+      <CommunityBoardWorkspace
+        kind="idea"
+        user={user}
+        profile={profile}
+        onChanged={reload}
+      />
       {loading ? (
         <Loading />
       ) : error ? (
@@ -797,6 +804,12 @@ export function CollabsPage({ user, profile }) {
         }
       />
       {message && <p className="form-message">{message}</p>}
+      <CommunityBoardWorkspace
+        kind="collaboration"
+        user={user}
+        profile={profile}
+        onChanged={reload}
+      />
       {loading ? (
         <Loading />
       ) : error ? (
@@ -1215,6 +1228,7 @@ export function SupportPage({ profile, onUpdated }) {
       features: ["Larger future projects", "Extra room for community growth"],
     },
   ];
+  const tierOrder = { cadet: 0, crewmate: 1, officer: 2 };
   async function act(tier) {
     setBusy(tier);
     try {
@@ -1290,6 +1304,7 @@ export function SupportPage({ profile, onUpdated }) {
               ))}
             </ul>
             <button
+              type="button"
               className="button primary wide"
               disabled={busy || current === tier.id}
               onClick={() => act(tier.id)}
@@ -1297,13 +1312,16 @@ export function SupportPage({ profile, onUpdated }) {
               {busy === tier.id
                 ? "Working…"
                 : current === tier.id
-                  ? "Current tier"
+                  ? "Current Tier"
                   : current
-                    ? "Change tier"
+                    ? tierOrder[tier.id] < tierOrder[current]
+                      ? "Downgrade"
+                      : "Upgrade"
                     : `Support as ${tier.name}`}
             </button>
             {current === tier.id && (
               <button
+                type="button"
                 className="button danger wide"
                 disabled={busy}
                 onClick={cancel}
@@ -1536,6 +1554,15 @@ export function ProfilePage({ user, profile, onUpdated }) {
         <div className="button-row">
           <button className="button primary" disabled={busy}>
             {busy ? "Saving…" : "Save profile"}
+          </button>
+          <button
+            type="button"
+            className="button secondary"
+            onClick={() =>
+              window.dispatchEvent(new Event("crewdeck-open-onboarding"))
+            }
+          >
+            Personalize CrewDeck
           </button>
           {message && <span className="form-message inline">{message}</span>}
         </div>

@@ -22,6 +22,15 @@ import { playNotificationSound } from "../lib/sounds";
 import { MyModerationAppeals } from "./ModerationAppeals";
 import { supabase } from "../lib/supabase";
 
+function VrOverlaySettings({ user }) {
+  const defaults={enabled:false,state:"compact",opacity:.92,scale:1,width:390,height:520,cards:["call","meetup","requests","world","ready","communication"],streamer_safe:true,privacy_mode:true,shortcut:"Control+Shift+O"};
+  const [value,setValue]=useState(defaults),[message,setMessage]=useState("");
+  useEffect(()=>{supabase.from("vr_overlay_preferences").select("*").eq("user_id",user.id).maybeSingle().then(({data})=>data&&setValue({...defaults,...data}));},[user.id]);
+  async function save(next){setValue(next);const{error}=await supabase.from("vr_overlay_preferences").upsert({user_id:user.id,...next,updated_at:new Date().toISOString()});if(error){setMessage(error.message);return;}await window.desktop.overlay.setPreferences(next);setMessage("Overlay settings saved.");}
+  const update=(key,next)=>save({...value,[key]:next});
+  return <section className="panel settings-panel vr-overlay-settings"><div className="section-icon"><MonitorSpeaker/></div><h2>VR overlay</h2><p>Keep calls, meetups, ready checks, and quick communication visible in a compact desktop overlay while you play.</p><label className="check-field"><input type="checkbox" checked={value.enabled} onChange={e=>update("enabled",e.target.checked)}/><span>Enable the always-on-top overlay</span></label><div className="settings-grid compact"><Field label="Layout"><select value={value.state} onChange={e=>update("state",e.target.value)}><option value="compact">Compact</option><option value="expanded">Expanded</option><option value="hidden">Hidden</option></select></Field><Field label="Shortcut"><input value={value.shortcut} onChange={e=>setValue(v=>({...v,shortcut:e.target.value}))} onBlur={()=>save(value)}/></Field><Field label={`Opacity ${Math.round(value.opacity*100)}%`}><input type="range" min=".35" max="1" step=".05" value={value.opacity} onChange={e=>update("opacity",Number(e.target.value))}/></Field><Field label={`Scale ${Math.round(value.scale*100)}%`}><input type="range" min=".7" max="1.6" step=".05" value={value.scale} onChange={e=>update("scale",Number(e.target.value))}/></Field></div><fieldset><legend>Overlay cards</legend><div className="overlay-card-choices">{["call","meetup","requests","world","ready","communication"].map(card=><label className="check-field" key={card}><input type="checkbox" checked={value.cards.includes(card)} onChange={e=>update("cards",e.target.checked?[...value.cards,card]:value.cards.filter(item=>item!==card))}/><span>{card}</span></label>)}</div></fieldset><label className="check-field"><input type="checkbox" checked={value.privacy_mode} onChange={e=>update("privacy_mode",e.target.checked)}/><span>Hide private message content</span></label><label className="check-field"><input type="checkbox" checked={value.streamer_safe} onChange={e=>update("streamer_safe",e.target.checked)}/><span>Streamer safe names and join details</span></label><div className="button-row"><button className="button primary" type="button" onClick={()=>window.desktop.overlay.open()}>Open preview</button><button className="button secondary" type="button" onClick={()=>window.desktop.overlay.close()}>Hide overlay</button></div>{message&&<p className="micro-copy" role="status">{message}</p>}</section>;
+}
+
 function AudioDevices({ preferences, preference }) {
   const [inputs, setInputs] = useState([]);
   const [outputs, setOutputs] = useState([]);
@@ -548,6 +557,7 @@ export default function AppSettings({ user }) {
         description="Personalize CrewDeck, choose how calls sound, and manage privacy and desktop behavior."
       />
       <div className="settings-grid">
+        <VrOverlaySettings user={user} />
         <div className="settings-group-heading">
           <span>01</span>
           <div>
@@ -567,6 +577,15 @@ export default function AppSettings({ user }) {
             Choose which friend features appear and set the defaults used when
             you plan a meetup from the Friends page.
           </p>
+          <button
+            type="button"
+            className="button secondary"
+            onClick={() =>
+              window.dispatchEvent(new Event("crewdeck-open-onboarding"))
+            }
+          >
+            <UserPlus /> Edit onboarding answers
+          </button>
           <form
             className="stack-form"
             onSubmit={saveFriendSettings}

@@ -26,6 +26,7 @@ import {
 } from "../lib/data";
 import { useLoader } from "../lib/hooks";
 import { supabase } from "../lib/supabase";
+import { crewEvents } from "../lib/crewEvents";
 import {
   availabilityInstantRange,
   formatMeetupLocal,
@@ -37,6 +38,8 @@ import {
 } from "../lib/time";
 import { confirmInApp, promptInApp } from "../components/InAppDialog";
 import { CalendarAutomation } from "../components/CalendarAutomation";
+import { CrewEventsPanel } from "../components/CrewEventsPanel";
+import { AvailabilityOverlap } from "../components/AvailabilityOverlap";
 import {
   MeetupCountdown,
   MeetupTools,
@@ -188,7 +191,11 @@ function MeetupTemplateControls({ userId, formRef, onNotice }) {
     </section>
   );
 }
-function SpaceTimePicker({ name, defaultValue = "18:00", availableValues = null }) {
+function SpaceTimePicker({
+  name,
+  defaultValue = "18:00",
+  availableValues = null,
+}) {
   const [initialHours, initialMinutes] = defaultValue.split(":").map(Number);
   const [hour, setHour] = useState(initialHours % 12 || 12);
   const [minute, setMinute] = useState(
@@ -198,12 +205,33 @@ function SpaceTimePicker({ name, defaultValue = "18:00", availableValues = null 
   const value = `${String((Number(hour) % 12) + (period === "PM" ? 12 : 0)).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
   if (Array.isArray(availableValues)) {
     return (
-      <select name={name} className="available-time-select" defaultValue={availableValues.includes(defaultValue) ? defaultValue : availableValues[0] || ""} disabled={!availableValues.length}>
-        {!availableValues.length && <option value="">No available start times</option>}
+      <select
+        name={name}
+        className="available-time-select"
+        defaultValue={
+          availableValues.includes(defaultValue)
+            ? defaultValue
+            : availableValues[0] || ""
+        }
+        disabled={!availableValues.length}
+      >
+        {!availableValues.length && (
+          <option value="">No available start times</option>
+        )}
         {availableValues.map((slot) => {
           const [slotHour, slotMinute] = slot.split(":").map(Number);
-          const label = new Date(2000, 0, 1, slotHour, slotMinute).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-          return <option value={slot} key={slot}>{label}</option>;
+          const label = new Date(
+            2000,
+            0,
+            1,
+            slotHour,
+            slotMinute,
+          ).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+          return (
+            <option value={slot} key={slot}>
+              {label}
+            </option>
+          );
         })}
       </select>
     );
@@ -316,7 +344,8 @@ function AvailabilityModal({ user, rows = [], onClose, onSaved }) {
   }
   async function save(event) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     setBusy(true);
     setMessage("");
     try {
@@ -327,7 +356,7 @@ function AvailabilityModal({ user, rows = [], onClose, onSaved }) {
         end_time: form.get("end"),
         time_zone: localTimeZoneName(),
       });
-      event.currentTarget.reset();
+      formElement.reset();
       setAllDay(true);
       await onSaved();
     } catch (error) {
@@ -341,7 +370,11 @@ function AvailabilityModal({ user, rows = [], onClose, onSaved }) {
     await onSaved();
   }
   return (
-    <Modal title="My availability" onClose={onClose}>
+    <Modal
+      title="My availability"
+      onClose={onClose}
+      className="availability-modal"
+    >
       <div className="availability-layout">
         <form className="availability-form" onSubmit={save}>
           {!longTerm && (
@@ -468,25 +501,37 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
   );
   const profileLoader = useLoader(getProfiles, []);
   const availabilityLoader = useLoader(getMeetupAvailability, []);
+  const crewEventLoader = useLoader(() => crewEvents.list(), []);
   const [currentMonth, setCurrentMonth] = useState(
     () => new Date(new Date().getFullYear(), new Date().getMonth(), 1),
   );
   const [selectedPerson, setSelectedPerson] = useState(
     friendPrefill.personId || "",
   );
+  const [planningKind, setPlanningKind] = useState(
+    friendPrefill.kind === "event" ? "event" : "meetup",
+  );
+  const [selectedParticipants, setSelectedParticipants] = useState([]);
   const [selected, setSelected] = useState(null);
+  const [preferredTime, setPreferredTime] = useState("18:00");
   const [showFormHint, setShowFormHint] = useState(false);
   const [availabilityOpen, setAvailabilityOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [recurrence, setRecurrence] = useState("none");
-  const [duration, setDuration] = useState(Number(friendPrefill.preset?.duration || 1));
+  const [duration, setDuration] = useState(
+    Number(friendPrefill.preset?.duration || 1),
+  );
+  const [minimumAttendance, setMinimumAttendance] = useState("");
   const formHeadingRef = useRef(null);
   const requestFormRef = useRef(null);
   const meetups = Array.isArray(meetupLoader.data) ? meetupLoader.data : [];
   const profiles = Array.isArray(profileLoader.data) ? profileLoader.data : [];
   const availability = Array.isArray(availabilityLoader.data)
     ? availabilityLoader.data
+    : [];
+  const visibleCrewEvents = Array.isArray(crewEventLoader.data)
+    ? crewEventLoader.data
     : [];
   const memberships = Array.isArray(membershipLoader.data)
     ? membershipLoader.data
@@ -513,12 +558,17 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
   });
   const [participantSettings, reloadParticipantSettings] =
     useMeetupSettings(myMeetups);
-  const selectedIds = [user.id, selectedPerson].filter(Boolean);
+  const selectedIds = [
+    ...new Set(
+      [user.id, selectedPerson, ...selectedParticipants].filter(Boolean),
+    ),
+  ];
   const approved = meetups.filter((item) => item.status === "approved");
   const selectedBlocks = availability.filter(
     (item) =>
       selected &&
-      item.user_id === selectedPerson &&
+      item.user_id ===
+        (selectedPerson || (planningKind === "event" ? user.id : "")) &&
       availabilityOverlapsDay(item, selected),
   );
   const selectedBusyMeetups = approved.filter((item) => {
@@ -532,38 +582,62 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
       return false;
     }
   });
-  const availableStartTimes = selected && selectedPerson
-    ? Array.from({ length: 96 }, (_, index) => index * 15)
-        .filter((startMinutes) => startMinutes + duration * 60 <= 1440)
-        .map((startMinutes) => `${String(Math.floor(startMinutes / 60)).padStart(2, "0")}:${String(startMinutes % 60).padStart(2, "0")}`)
-        .filter((slot) => {
-          const requestedStart = zonedDateTime(selected, slot, localTimeZoneName());
-          const requestedEnd = new Date(requestedStart.getTime() + duration * 3600000);
-          const availabilityConflict = availability.some((item) => {
-            if (!selectedIds.includes(item.user_id)) return false;
-            if (item.user_id === user.id && item.indefinite) return false;
-            const range = safeAvailabilityRange(item);
-            return range ? overlaps(requestedStart, requestedEnd, range[0], range[1]) : false;
-          });
-          const meetupConflict = approved.some((item) => {
-            if (!involves(item, selectedIds)) return false;
-            const existingStart = meetupInstant(item);
-            const existingEnd = new Date(existingStart.getTime() + Number(item.duration || 1) * 3600000);
-            return overlaps(requestedStart, requestedEnd, existingStart, existingEnd);
-          });
-          return !availabilityConflict && !meetupConflict;
-        })
-    : [];
+  const availableStartTimes =
+    selected && (planningKind === "event" || selectedPerson)
+      ? Array.from({ length: 96 }, (_, index) => index * 15)
+          .filter((startMinutes) => startMinutes + duration * 60 <= 1440)
+          .map(
+            (startMinutes) =>
+              `${String(Math.floor(startMinutes / 60)).padStart(2, "0")}:${String(startMinutes % 60).padStart(2, "0")}`,
+          )
+          .filter((slot) => {
+            const requestedStart = zonedDateTime(
+              selected,
+              slot,
+              localTimeZoneName(),
+            );
+            const requestedEnd = new Date(
+              requestedStart.getTime() + duration * 3600000,
+            );
+            const availabilityConflict = availability.some((item) => {
+              if (!selectedIds.includes(item.user_id)) return false;
+              if (item.user_id === user.id && item.indefinite) return false;
+              const range = safeAvailabilityRange(item);
+              return range
+                ? overlaps(requestedStart, requestedEnd, range[0], range[1])
+                : false;
+            });
+            const meetupConflict = approved.some((item) => {
+              if (!involves(item, selectedIds)) return false;
+              const existingStart = meetupInstant(item);
+              const existingEnd = new Date(
+                existingStart.getTime() + Number(item.duration || 1) * 3600000,
+              );
+              return overlaps(
+                requestedStart,
+                requestedEnd,
+                existingStart,
+                existingEnd,
+              );
+            });
+            return (
+              planningKind === "event" ||
+              (!availabilityConflict && !meetupConflict)
+            );
+          })
+      : [];
   const loading =
     meetupLoader.loading ||
     membershipLoader.loading ||
     profileLoader.loading ||
     availabilityLoader.loading;
+  const allLoading = loading || crewEventLoader.loading;
   const error =
     meetupLoader.error ||
     membershipLoader.error ||
     profileLoader.error ||
     availabilityLoader.error;
+  const allError = error || crewEventLoader.error;
 
   async function reloadAll() {
     await Promise.all([
@@ -571,6 +645,7 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
       membershipLoader.reload(),
       profileLoader.reload(),
       availabilityLoader.reload(),
+      crewEventLoader.reload(),
     ]);
   }
 
@@ -579,6 +654,11 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
     setRecurrence("none");
     setShowFormHint(false);
   }, [selectedPerson]);
+  useEffect(() => {
+    setSelected(null);
+    setRecurrence("none");
+    setShowFormHint(false);
+  }, [planningKind]);
   useEffect(() => {
     if (!selected || loading || !formHeadingRef.current) return;
     const observer = new IntersectionObserver(
@@ -590,19 +670,25 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
   }, [selected, loading]);
 
   const dayState = (key) => {
+    const calendarPerson =
+      selectedPerson || (planningKind === "event" ? user.id : "");
     const blocks = availability.filter(
       (item) =>
-        item.user_id === selectedPerson && availabilityOverlapsDay(item, key),
+        item.user_id === calendarPerson && availabilityOverlapsDay(item, key),
     );
-    const scheduled = approved.some((item) => {
-      try {
-        return (
-          meetupLocalDateKey(item) === key && involves(item, [selectedPerson])
-        );
-      } catch {
-        return false;
-      }
-    });
+    const scheduled =
+      approved.some((item) => {
+        try {
+          return (
+            meetupLocalDateKey(item) === key && involves(item, [calendarPerson])
+          );
+        } catch {
+          return false;
+        }
+      }) ||
+      visibleCrewEvents.some(
+        (event) => dateKey(new Date(event.starts_at)) === key,
+      );
     if (blocks.some((item) => item.all_day)) return "offline";
     if (scheduled) return "scheduled";
     if (blocks.length) return "partial";
@@ -615,7 +701,9 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
     setBusy(true);
     setMessage("");
     try {
-      if (!selectedPerson) throw new Error("Choose a crew member first.");
+      const isEvent = planningKind === "event";
+      if (!isEvent && !selectedPerson)
+        throw new Error("Choose a crew member first.");
       if (!selected || dayState(selected) === "offline")
         throw new Error("Please select an open day.");
       const start = minutes(form.get("time"));
@@ -639,7 +727,7 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
         const [blockStart, blockEnd] = range;
         return overlaps(requestedStart, requestedEnd, blockStart, blockEnd);
       });
-      if (overlap)
+      if (overlap && !isEvent)
         throw new Error(
           "That time overlaps unavailable hours. Choose another time.",
         );
@@ -656,14 +744,39 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
           existingEnd,
         );
       });
-      if (meetupConflict)
+      if (meetupConflict && !isEvent)
         throw new Error(
           "That time overlaps another meetup. Choose a different start time.",
         );
       const blocked = await restrictionMessage(user.id, "meetups");
       if (blocked) throw new Error(blocked);
-      await createMeetup(user.id, {
-        with_user_id: selectedPerson,
+      const eventFields = {
+        with_user_id: selectedPerson || null,
+        kind: isEvent ? "event" : "meetup",
+        event_title: isEvent
+          ? String(form.get("event_title") || "").trim()
+          : null,
+        event_description: isEvent
+          ? String(form.get("event_description") || "").trim() || null
+          : null,
+        event_visibility: isEvent
+          ? String(form.get("event_visibility") || "invite_only")
+          : "invite_only",
+        event_tags: isEvent
+          ? String(form.get("event_tags") || "")
+              .split(",")
+              .map((tag) => tag.trim())
+              .filter(Boolean)
+              .slice(0, 8)
+          : [],
+        auto_waitlist: isEvent && form.get("auto_waitlist") === "on",
+        rsvp_deadline:
+          isEvent && form.get("rsvp_deadline")
+            ? new Date(String(form.get("rsvp_deadline"))).toISOString()
+            : null,
+        capacity: isEvent
+          ? Math.min(500, Math.max(2, Number(form.get("capacity") || 10)))
+          : undefined,
         meetup_date: selected,
         start_time: form.get("time"),
         time_zone: localTimeZoneName(),
@@ -679,11 +792,51 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
         time_flexibility: form.get("flexibility"),
         recurrence_rule: form.get("recurrence"),
         recurrence_count: Number(form.get("recurrence_count") || 1),
-      });
+      };
+      if (isEvent) {
+        const invitedNames = String(form.get("participants") || "")
+          .split(/[\n,]/)
+          .map((value) => value.trim().replace(/^@/, "").toLowerCase())
+          .filter(Boolean);
+        const invitedIds = [
+          selectedPerson,
+          ...selectedParticipants,
+          ...profiles
+            .filter((person) =>
+              invitedNames.includes(person.username?.toLowerCase()),
+            )
+            .map((person) => person.id),
+        ].filter(Boolean);
+        await crewEvents.create(
+          {
+            title: eventFields.event_title,
+            description: eventFields.event_description || "",
+            banner_path: String(form.get("event_banner") || "").trim(),
+            tags: eventFields.event_tags,
+            location_name: eventFields.location_name || "",
+            join_url: eventFields.join_url || "",
+            instructions: eventFields.join_instructions || "",
+            visibility: eventFields.event_visibility,
+            selected_group_id: String(form.get("selected_group_id") || ""),
+            starts_at: requestedStart.toISOString(),
+            duration_minutes: eventFields.duration * 60,
+            time_zone: eventFields.time_zone,
+            capacity: eventFields.capacity,
+            minimum_attendance: String(form.get("minimum_attendance") || ""),
+            auto_waitlist: eventFields.auto_waitlist,
+            rsvp_deadline: eventFields.rsvp_deadline || "",
+            recurrence_rule: eventFields.recurrence_rule,
+            recurrence_count: eventFields.recurrence_count,
+          },
+          invitedIds,
+        );
+      } else await createMeetup(user.id, eventFields);
       setMessage(
-        captainApprovalRequired
-          ? "Invitation sent. After the Captain accepts, they can give final approval."
-          : `Invitation sent. The meetup will be confirmed when ${selectedProfile?.username || "they"} accepts.`,
+        isEvent
+          ? "Crew Event created. Invited members can now respond."
+          : captainApprovalRequired
+            ? "Invitation sent. After the Captain accepts, they can give final approval."
+            : `Invitation sent. The meetup will be confirmed when ${selectedProfile?.username || "they"} accepts.`,
       );
       setSelected(null);
       setRecurrence("none");
@@ -772,9 +925,11 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
   return (
     <div className="page meetup-page">
       <PageHeader
-        eyebrow={myMeetupsOnly ? "My meetups" : "Meetup calendar"}
+        eyebrow={myMeetupsOnly ? "My Plans" : "Meetup calendar"}
         title={
-          myMeetupsOnly ? "Your meetups and invitations" : "Plan time together"
+          myMeetupsOnly
+            ? "Your meetups, events, and invitations"
+            : "Plan time together"
         }
         description={
           myMeetupsOnly
@@ -803,27 +958,104 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
           </div>
         }
       />
+      {myMeetupsOnly && (
+        <nav className="my-plans-tabs" aria-label="Plan type">
+          <button
+            className="button secondary"
+            onClick={() =>
+              document
+                .getElementById("private-meetup-plan-list")
+                ?.scrollIntoView({ behavior: "smooth" })
+            }
+          >
+            Meetups
+          </button>
+          <button
+            className="button secondary"
+            onClick={() =>
+              document
+                .getElementById("crew-events-plan-list")
+                ?.scrollIntoView({ behavior: "smooth" })
+            }
+          >
+            Events
+          </button>
+        </nav>
+      )}
+      {myMeetupsOnly && <CrewEventsPanel user={user} profile={profile} />}
       {message && <p className="form-message meetup-message">{message}</p>}
-      {loading ? (
+      {allLoading ? (
         <Loading />
-      ) : error ? (
-        <ErrorState message={String(error)} retry={reloadAll} />
+      ) : allError ? (
+        <ErrorState message={String(allError)} retry={reloadAll} />
       ) : (
         <>
           {!myMeetupsOnly && (
             <>
-              <section className="panel meetup-person-picker">
+              <section
+                className="meetup-planning-mode"
+                aria-labelledby="meetup-planning-mode-title"
+              >
                 <div>
-                  <h2>Who are you meeting?</h2>
+                  <span className="eyebrow">Planning mode</span>
+                  <h2 id="meetup-planning-mode-title">
+                    What are you planning?
+                  </h2>
                   <p>
-                    The calendar shows each person’s availability based on how
-                    they’ve configured it.
+                    {planningKind === "event"
+                      ? "Plan a larger activity with event details, capacity, visibility, and optional invitees."
+                      : "Invite one person to plan private time together."}
                   </p>
                 </div>
-                <Field label="Crew member">
+                <div
+                  className="meetup-segmented-control"
+                  role="group"
+                  aria-label="Planning mode"
+                >
+                  {[
+                    ["meetup", "Private Meetup"],
+                    ["event", "Crew Event"],
+                  ].map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      className={planningKind === value ? "active" : ""}
+                      aria-pressed={planningKind === value}
+                      onClick={() => setPlanningKind(value)}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </section>
+              <section className="panel meetup-person-picker">
+                <div>
+                  <h2>
+                    {planningKind === "event"
+                      ? "Who should be invited first?"
+                      : "Who are you meeting?"}
+                  </h2>
+                  <p>
+                    {planningKind === "event"
+                      ? "Choose an optional first invitee. More members can be added in the event details."
+                      : "The calendar shows each person’s availability based on how they’ve configured it."}
+                  </p>
+                </div>
+                <Field
+                  label={
+                    planningKind === "event"
+                      ? "First invitee · Optional"
+                      : "Crew member"
+                  }
+                >
                   <select
                     value={selectedPerson}
-                    onChange={(event) => setSelectedPerson(event.target.value)}
+                    onChange={(event) => {
+                      setSelectedPerson(event.target.value);
+                      setSelectedParticipants((current) =>
+                        current.filter((id) => id !== event.target.value),
+                      );
+                    }}
                   >
                     <option value="">Choose someone…</option>
                     {people.map((person) => (
@@ -833,7 +1065,52 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
                     ))}
                   </select>
                 </Field>
+                <fieldset className="meetup-participant-picker">
+                  <legend>More participants · Optional</legend>
+                  <p>
+                    Select everyone who should be included in schedule
+                    comparison.
+                  </p>
+                  <div>
+                    {people
+                      .filter((person) => person.id !== selectedPerson)
+                      .map((person) => (
+                        <label key={person.id}>
+                          <input
+                            type="checkbox"
+                            checked={selectedParticipants.includes(person.id)}
+                            onChange={(event) =>
+                              setSelectedParticipants((current) =>
+                                event.target.checked
+                                  ? [...new Set([...current, person.id])]
+                                  : current.filter((id) => id !== person.id),
+                              )
+                            }
+                          />
+                          {person.username}
+                        </label>
+                      ))}
+                  </div>
+                </fieldset>
               </section>
+              <AvailabilityOverlap
+                participantIds={selectedIds}
+                profiles={profiles}
+                availability={availability}
+                meetups={meetups}
+                duration={duration}
+                minimumAttendance={
+                  planningKind === "event"
+                    ? minimumAttendance
+                    : selectedIds.length
+                }
+                selectedDate={selected}
+                onUseTime={(date, time) => {
+                  setSelected(date);
+                  setPreferredTime(time);
+                  setShowFormHint(true);
+                }}
+              />
               <section className="panel calendar-card">
                 <header>
                   <button
@@ -896,7 +1173,9 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
                     const state = dayState(key);
                     const past = date < today;
                     const disabled =
-                      past || !selectedPerson || state === "offline";
+                      past ||
+                      (planningKind !== "event" && !selectedPerson) ||
+                      state === "offline";
                     const labels = {
                       offline: "Offline",
                       partial: "Partly off",
@@ -915,9 +1194,10 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
                         }}
                       >
                         <strong>{day}</strong>
-                        {!past && selectedPerson && (
-                          <span>{labels[state]}</span>
-                        )}
+                        {!past &&
+                          (planningKind === "event" || selectedPerson) && (
+                            <span>{labels[state]}</span>
+                          )}
                       </button>
                     );
                   })}
@@ -928,9 +1208,14 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
                   <span className="partial">Some hours offline</span>
                   <span className="scheduled">Already has a meetup</span>
                 </div>
-                {!selectedPerson && (
+                {!selectedPerson && planningKind !== "event" && (
                   <p className="calendar-prompt">
                     Choose a crew member to open the calendar.
+                  </p>
+                )}
+                {planningKind === "event" && !selectedPerson && (
+                  <p className="calendar-prompt">
+                    Choose a date to start planning the event.
                   </p>
                 )}
               </section>
@@ -956,14 +1241,17 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
             </>
           )}
           {myMeetupsOnly && (
-            <section className="my-meetups-section">
+            <section
+              className="my-meetups-section"
+              id="private-meetup-plan-list"
+            >
               <MeetupCountdown
                 meetups={myMeetups}
                 userId={user.id}
                 profiles={profiles}
               />
               <MeetupAttendanceSummary meetups={myMeetups} userId={user.id} />
-              <h2 className="section-title">My Meetups & Invitations</h2>
+              <h2 className="section-title">Private Meetups & Invitations</h2>
               {myMeetups.length ? (
                 <div className="timeline">
                   {myMeetups.map((item) => {
@@ -1004,13 +1292,29 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
                             </span>
                           </div>
                           <h3>
-                            {invited ? "Invitation from" : "Meetup with"}{" "}
-                            {personName(profiles, otherId)}
+                            {item.kind === "event" ? (
+                              item.event_title || "Crew Event"
+                            ) : (
+                              <>
+                                {invited ? "Invitation from" : "Meetup with"}{" "}
+                                {personName(profiles, otherId)}
+                              </>
+                            )}
                           </h3>
                           <p>
                             {item.meetup_type || "VRChat meetup"} ·{" "}
-                            {item.message || "No notes."}
+                            {item.kind === "event"
+                              ? item.event_description ||
+                                item.message ||
+                                "No description."
+                              : item.message || "No notes."}
                           </p>
+                          {item.kind === "event" && (
+                            <small>
+                              {item.event_visibility?.replaceAll("_", " ")} ·
+                              Capacity {item.capacity}
+                            </small>
+                          )}
                           {item.location_name && (
                             <p className="meetup-location">
                               <strong>Location:</strong> {item.location_name}
@@ -1123,7 +1427,11 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
               <div className="meetup-form-heading" ref={formHeadingRef}>
                 <span>📅</span>
                 <div>
-                  <h2>Invite {personName(profiles, selectedPerson)}</h2>
+                  <h2>
+                    {planningKind === "event"
+                      ? "Create a Crew Event"
+                      : `Invite ${personName(profiles, selectedPerson)}`}
+                  </h2>
                   <p>
                     {new Date(`${selected}T12:00:00`).toLocaleDateString(
                       undefined,
@@ -1137,6 +1445,104 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
                   </p>
                 </div>
               </div>
+              {planningKind === "event" && (
+                <section className="meetup-event-fields">
+                  <h3>Crew Event</h3>
+                  <Field label="Event title">
+                    <input
+                      name="event_title"
+                      maxLength="120"
+                      placeholder="Friday world hop"
+                      required
+                    />
+                  </Field>
+                  <Field label="Description" hint="Optional">
+                    <textarea
+                      name="event_description"
+                      rows="3"
+                      maxLength="3000"
+                      placeholder="What the crew will be doing"
+                    />
+                  </Field>
+                  <div className="form-grid">
+                    <Field label="Who can discover it?">
+                      <select
+                        name="event_visibility"
+                        defaultValue="invite_only"
+                      >
+                        <option value="invite_only">
+                          Invited members only
+                        </option>
+                        <option value="selected_group">Selected group</option>
+                        <option value="friends">Friends of the host</option>
+                        <option value="crew_wide">Everyone in the crew</option>
+                      </select>
+                    </Field>
+                    <Field label="Capacity">
+                      <input
+                        name="capacity"
+                        type="number"
+                        min="2"
+                        max="500"
+                        defaultValue="10"
+                      />
+                    </Field>
+                  </div>
+                  <div className="form-grid">
+                    <Field label="Event banner URL" hint="Optional">
+                      <input
+                        name="event_banner"
+                        type="url"
+                        placeholder="https://…"
+                      />
+                    </Field>
+                    <Field
+                      label="Selected group ID"
+                      hint="For selected-group visibility"
+                    >
+                      <input
+                        name="selected_group_id"
+                        placeholder="Group conversation ID"
+                      />
+                    </Field>
+                  </div>
+                  <Field label="Minimum attendance" hint="Optional">
+                    <input
+                      name="minimum_attendance"
+                      type="number"
+                      min="2"
+                      max="500"
+                      value={minimumAttendance}
+                      onChange={(event) =>
+                        setMinimumAttendance(event.target.value)
+                      }
+                    />
+                  </Field>
+                  <div className="form-grid">
+                    <Field label="Tags" hint="Optional, comma separated">
+                      <input
+                        name="event_tags"
+                        maxLength="200"
+                        placeholder="VRChat, relaxed, exploration"
+                      />
+                    </Field>
+                    <Field label="RSVP deadline" hint="Optional">
+                      <input name="rsvp_deadline" type="datetime-local" />
+                    </Field>
+                  </div>
+                  <label className="check-field">
+                    <input
+                      name="auto_waitlist"
+                      type="checkbox"
+                      defaultChecked
+                    />
+                    <span>
+                      Start a waitlist automatically when the event reaches
+                      capacity
+                    </span>
+                  </label>
+                </section>
+              )}
               <MeetupTemplateControls
                 userId={user.id}
                 formRef={requestFormRef}
@@ -1181,13 +1587,20 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
                     label="Preferred start time"
                     hint={`Your time · ${localTimeZoneName()}`}
                   >
-                    <SpaceTimePicker name="time" defaultValue="18:00" availableValues={availableStartTimes} />
+                    <SpaceTimePicker
+                      key={`${selected}-${preferredTime}-${availableStartTimes.join("|")}`}
+                      name="time"
+                      defaultValue={preferredTime}
+                      availableValues={availableStartTimes}
+                    />
                   </Field>
                   <Field label="Duration">
                     <select
                       name="duration"
                       value={duration}
-                      onChange={(event) => setDuration(Number(event.target.value))}
+                      onChange={(event) =>
+                        setDuration(Number(event.target.value))
+                      }
                     >
                       {[1, 2, 3, 4, 5].map((hours) => (
                         <option key={hours} value={hours}>
@@ -1230,7 +1643,14 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
               <section>
                 <h3>Details</h3>
                 <Field label="Additional participant usernames" hint="Optional">
-                  <textarea name="participants" rows="3" />
+                  <textarea
+                    name="participants"
+                    rows="3"
+                    defaultValue={selectedParticipants
+                      .map((id) => personName(profiles, id))
+                      .join(", ")}
+                    key={selectedParticipants.join("|")}
+                  />
                 </Field>
                 <div className="form-grid">
                   <Field label="Location or world name" hint="Optional">
@@ -1302,10 +1722,17 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
               <div className="meetup-warning">
                 <strong>What happens next</strong>
                 <p>
-                  {personName(profiles, selectedPerson)} receives an invitation.{" "}
-                  {captainApprovalRequired
-                    ? "Because this request includes the Captain, they also have the final approval."
-                    : "When they accept, the meetup is confirmed automatically."}
+                  {planningKind === "event" ? (
+                    "Invited members receive an event invitation. Crew-wide events remain pending until the Captain approves them."
+                  ) : (
+                    <>
+                      {personName(profiles, selectedPerson)} receives an
+                      invitation.{" "}
+                      {captainApprovalRequired
+                        ? "Because this request includes the Captain, they also have the final approval."
+                        : "When they accept, the meetup is confirmed automatically."}
+                    </>
+                  )}
                 </p>
               </div>
               <div className="modal-actions">
@@ -1320,7 +1747,11 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
                   Cancel
                 </button>
                 <button className="button primary" disabled={busy}>
-                  {busy ? "Sending…" : "Send meetup invitation"}
+                  {busy
+                    ? "Saving…"
+                    : planningKind === "event"
+                      ? "Create Crew Event"
+                      : "Send meetup invitation"}
                 </button>
               </div>
             </form>

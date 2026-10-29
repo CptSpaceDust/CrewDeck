@@ -9,6 +9,7 @@ import {
   Wrench,
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
+import { communityBoards } from "../lib/communityBoards";
 import { Field } from "./ui";
 
 export default function CaptainOperations({ user, embedded = false }) {
@@ -74,10 +75,21 @@ export default function CaptainOperations({ user, embedded = false }) {
         .from("guideline_versions")
         .select("*")
         .order("created_at", { ascending: false }),
-      supabase.from("community_announcements").select("*").order("publish_at", { ascending:false }),
-      supabase.from("bug_reports").select("*").order("created_at", { ascending:false }).limit(50),
-      supabase.from("help_requests").select("*").order("created_at", { ascending:false }).limit(50),
-      supabase.from("community_calendar_events").select("*").order("starts_at", { ascending:false }).limit(50),
+      supabase
+        .from("community_announcements")
+        .select("*")
+        .order("publish_at", { ascending: false }),
+      communityBoards
+        .listPosts("bug", { includeArchived: true, limit: 50 })
+        .then((data) => ({ data })),
+      communityBoards
+        .listPosts("help", { includeArchived: true, limit: 50 })
+        .then((data) => ({ data })),
+      supabase
+        .from("community_calendar_events")
+        .select("*")
+        .order("starts_at", { ascending: false })
+        .limit(50),
     ]);
     setState(system.data);
     setAudit(history.data || []);
@@ -108,7 +120,10 @@ export default function CaptainOperations({ user, embedded = false }) {
       created_by: user.id,
     });
     setNotice(result.error?.message || "Announcement saved.");
-    if (!result.error) { event.currentTarget.reset(); load(); }
+    if (!result.error) {
+      event.currentTarget.reset();
+      load();
+    }
   }
   async function maintenance() {
     const result = await supabase
@@ -125,9 +140,27 @@ export default function CaptainOperations({ user, embedded = false }) {
     setNotice(result.error?.message || "Maintenance status updated.");
   }
   async function createCalendarEvent(event) {
-    event.preventDefault(); const form = new FormData(event.currentTarget);
-    const result = await supabase.from("community_calendar_events").insert({ created_by:user.id, title:form.get("title"), description:form.get("description") || null, category:form.get("category"), starts_at:new Date(form.get("starts_at")).toISOString(), ends_at:form.get("ends_at") ? new Date(form.get("ends_at")).toISOString() : null, location:form.get("location") || null, join_url:form.get("join_url") || null });
-    setNotice(result.error?.message || "Community calendar event saved."); if (!result.error) { event.currentTarget.reset(); load(); }
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const result = await supabase
+      .from("community_calendar_events")
+      .insert({
+        created_by: user.id,
+        title: form.get("title"),
+        description: form.get("description") || null,
+        category: form.get("category"),
+        starts_at: new Date(form.get("starts_at")).toISOString(),
+        ends_at: form.get("ends_at")
+          ? new Date(form.get("ends_at")).toISOString()
+          : null,
+        location: form.get("location") || null,
+        join_url: form.get("join_url") || null,
+      });
+    setNotice(result.error?.message || "Community calendar event saved.");
+    if (!result.error) {
+      event.currentTarget.reset();
+      load();
+    }
   }
   async function moderate(event) {
     event.preventDefault();
@@ -235,8 +268,13 @@ export default function CaptainOperations({ user, embedded = false }) {
     if (!result.error) load();
   }
   async function openBugScreenshot(path) {
-    const { data, error } = await supabase.storage.from("bug-screenshots").createSignedUrl(path, 120);
-    if (error || !data?.signedUrl) { setNotice(error?.message || "Screenshot could not be opened."); return; }
+    const { data, error } = await supabase.storage
+      .from("bug-screenshots")
+      .createSignedUrl(path, 120);
+    if (error || !data?.signedUrl) {
+      setNotice(error?.message || "Screenshot could not be opened.");
+      return;
+    }
     window.desktop?.openExternal?.(data.signedUrl);
   }
   const profileNames = Object.fromEntries(
@@ -276,10 +314,40 @@ export default function CaptainOperations({ user, embedded = false }) {
         <section className="panel captain-announcement-library">
           <Megaphone />
           <h3>Active & scheduled announcements</h3>
-          <p>Review exactly what members will see and remove outdated notices.</p>
+          <p>
+            Review exactly what members will see and remove outdated notices.
+          </p>
           <div>
-            {announcements.map((item) => <article key={item.id}><span><strong>{item.title}</strong><small>{item.target} · {new Date(item.publish_at).toLocaleString()}</small><p>{item.body}</p></span><button className="button danger" type="button" onClick={async () => { const { error } = await supabase.from("community_announcements").delete().eq("id", item.id); setNotice(error?.message || "Announcement removed."); if (!error) load(); }}>Delete</button></article>)}
-            {!announcements.length && <p className="micro-copy">No announcements are active or scheduled.</p>}
+            {announcements.map((item) => (
+              <article key={item.id}>
+                <span>
+                  <strong>{item.title}</strong>
+                  <small>
+                    {item.target} · {new Date(item.publish_at).toLocaleString()}
+                  </small>
+                  <p>{item.body}</p>
+                </span>
+                <button
+                  className="button danger"
+                  type="button"
+                  onClick={async () => {
+                    const { error } = await supabase
+                      .from("community_announcements")
+                      .delete()
+                      .eq("id", item.id);
+                    setNotice(error?.message || "Announcement removed.");
+                    if (!error) load();
+                  }}
+                >
+                  Delete
+                </button>
+              </article>
+            ))}
+            {!announcements.length && (
+              <p className="micro-copy">
+                No announcements are active or scheduled.
+              </p>
+            )}
           </div>
         </section>
         <div className="panel captain-system-card">
@@ -338,15 +406,170 @@ export default function CaptainOperations({ user, embedded = false }) {
         </div>
       </div>
       <section className="panel captain-community-queue">
-        <header><div><Flag /><span><strong>Community queue</strong><small>Bug reports and help requests in one operational view.</small></span></div><button className="button secondary" onClick={load}>Refresh queue</button></header>
+        <header>
+          <div>
+            <Flag />
+            <span>
+              <strong>Community queue</strong>
+              <small>
+                Bug reports and help requests in one operational view.
+              </small>
+            </span>
+          </div>
+          <button className="button secondary" onClick={load}>
+            Refresh queue
+          </button>
+        </header>
         <div className="captain-community-queue-grid">
-          <div><h3>Bug reports</h3>{bugReports.map((item) => <article key={item.id}><span><strong>{item.title}</strong><small>{item.platform} · {item.page_name} · {item.status}</small></span>{item.screenshot_path && <button className="button ghost" type="button" onClick={() => openBugScreenshot(item.screenshot_path)}>Screenshot</button>}<select value={item.status} onChange={async (event) => { await supabase.from("bug_reports").update({ status:event.target.value, updated_at:new Date().toISOString() }).eq("id", item.id); load(); }}><option value="open">Open</option><option value="investigating">Investigating</option><option value="fixed">Fixed</option><option value="closed">Closed</option></select></article>)}</div>
-          <div><h3>Help requests</h3>{helpRequests.map((item) => <article key={item.id}><span><strong>{item.title}</strong><small>{item.category} · {item.status}</small></span><select value={item.status} onChange={async (event) => { await supabase.from("help_requests").update({ status:event.target.value, updated_at:new Date().toISOString() }).eq("id", item.id); load(); }}><option value="open">Open</option><option value="claimed">Claimed</option><option value="completed">Completed</option><option value="closed">Closed</option></select></article>)}</div>
+          <div>
+            <h3>Bug reports</h3>
+            {bugReports.map((item) => (
+              <article key={item.id}>
+                <span>
+                  <strong>{item.title}</strong>
+                  <small>
+                    {item.metadata?.platform || "app"} ·{" "}
+                    {item.metadata?.page_name || "Unknown page"} · {item.status}
+                  </small>
+                </span>
+                {item.metadata?.screenshot_path && (
+                  <button
+                    className="button ghost"
+                    type="button"
+                    onClick={() =>
+                      openBugScreenshot(item.metadata.screenshot_path)
+                    }
+                  >
+                    Screenshot
+                  </button>
+                )}
+                <select
+                  value={item.status}
+                  onChange={async (event) => {
+                    await communityBoards.updatePost(item.id, {
+                      status: event.target.value,
+                    });
+                    load();
+                  }}
+                >
+                  <option>Open</option>
+                  <option>Investigating</option>
+                  <option>Fixing</option>
+                  <option>Testing</option>
+                  <option>Fixed</option>
+                  <option>Closed</option>
+                </select>
+              </article>
+            ))}
+          </div>
+          <div>
+            <h3>Help requests</h3>
+            {helpRequests.map((item) => (
+              <article key={item.id}>
+                <span>
+                  <strong>{item.title}</strong>
+                  <small>
+                    {item.tags?.[0] || "general"} · {item.status}
+                  </small>
+                </span>
+                <select
+                  value={item.status}
+                  onChange={async (event) => {
+                    await communityBoards.updatePost(item.id, {
+                      status: event.target.value,
+                    });
+                    load();
+                  }}
+                >
+                  <option>Open</option>
+                  <option>Claimed</option>
+                  <option>In progress</option>
+                  <option>Completed</option>
+                  <option>Reopened</option>
+                  <option>Closed</option>
+                </select>
+              </article>
+            ))}
+          </div>
         </div>
       </section>
       <section className="panel captain-calendar-manager">
-        <header><div><Megaphone /><span><strong>Community calendar</strong><small>Publish events, deadlines, and maintenance periods to the shared calendar.</small></span></div></header>
-        <div className="captain-community-queue-grid"><form className="stack-form" onSubmit={createCalendarEvent}><Field label="Title"><input name="title" minLength="2" maxLength="160" required /></Field><div className="form-grid"><Field label="Category"><select name="category"><option value="community">Community event</option><option value="deadline">Project deadline</option><option value="maintenance">Maintenance</option></select></Field><Field label="Starts"><input name="starts_at" type="datetime-local" required /></Field><Field label="Ends (optional)"><input name="ends_at" type="datetime-local" /></Field><Field label="Location"><input name="location" maxLength="300" /></Field></div><Field label="Join link"><input name="join_url" type="url" /></Field><Field label="Details"><textarea name="description" rows="3" maxLength="3000" /></Field><button className="button primary">Add to calendar</button></form><div className="captain-event-list">{calendarEvents.map((item) => <article key={item.id}><span><strong>{item.title}</strong><small>{item.category} · {new Date(item.starts_at).toLocaleString()}</small></span><button className="button danger" type="button" onClick={async () => { const { error } = await supabase.from("community_calendar_events").delete().eq("id", item.id); setNotice(error?.message || "Calendar event removed."); if (!error) load(); }}>Delete</button></article>)}{!calendarEvents.length && <p className="micro-copy">No Captain-created calendar events yet.</p>}</div></div>
+        <header>
+          <div>
+            <Megaphone />
+            <span>
+              <strong>Community calendar</strong>
+              <small>
+                Publish events, deadlines, and maintenance periods to the shared
+                calendar.
+              </small>
+            </span>
+          </div>
+        </header>
+        <div className="captain-community-queue-grid">
+          <form className="stack-form" onSubmit={createCalendarEvent}>
+            <Field label="Title">
+              <input name="title" minLength="2" maxLength="160" required />
+            </Field>
+            <div className="form-grid">
+              <Field label="Category">
+                <select name="category">
+                  <option value="community">Community event</option>
+                  <option value="deadline">Project deadline</option>
+                  <option value="maintenance">Maintenance</option>
+                </select>
+              </Field>
+              <Field label="Starts">
+                <input name="starts_at" type="datetime-local" required />
+              </Field>
+              <Field label="Ends (optional)">
+                <input name="ends_at" type="datetime-local" />
+              </Field>
+              <Field label="Location">
+                <input name="location" maxLength="300" />
+              </Field>
+            </div>
+            <Field label="Join link">
+              <input name="join_url" type="url" />
+            </Field>
+            <Field label="Details">
+              <textarea name="description" rows="3" maxLength="3000" />
+            </Field>
+            <button className="button primary">Add to calendar</button>
+          </form>
+          <div className="captain-event-list">
+            {calendarEvents.map((item) => (
+              <article key={item.id}>
+                <span>
+                  <strong>{item.title}</strong>
+                  <small>
+                    {item.category} ·{" "}
+                    {new Date(item.starts_at).toLocaleString()}
+                  </small>
+                </span>
+                <button
+                  className="button danger"
+                  type="button"
+                  onClick={async () => {
+                    const { error } = await supabase
+                      .from("community_calendar_events")
+                      .delete()
+                      .eq("id", item.id);
+                    setNotice(error?.message || "Calendar event removed.");
+                    if (!error) load();
+                  }}
+                >
+                  Delete
+                </button>
+              </article>
+            ))}
+            {!calendarEvents.length && (
+              <p className="micro-copy">
+                No Captain-created calendar events yet.
+              </p>
+            )}
+          </div>
+        </div>
       </section>
       <div className="captain-operations-grid captain-case-grid">
         <form className="panel stack-form" onSubmit={createCase}>

@@ -91,14 +91,14 @@ export function useMessageAlerts(userId) {
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "dm_messages" },
         ({ new: message }) => {
-          receive(message, false).catch(console.error);
+          receive(message, false).catch(() => {});
         },
       )
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "group_messages" },
         ({ new: message }) => {
-          receive(message, true).catch(console.error);
+          receive(message, true).catch(() => {});
         },
       )
       .subscribe();

@@ -1,6 +1,7 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
+import VrOverlayWindow from "./components/VrOverlayWindow";
 import "./styles.css";
 import "./space-glass.css";
 import { applyPreferences } from "./lib/preferences";
@@ -43,11 +44,12 @@ if (!window.desktop) {
       lockNow: async () => ({ ok: false }),
       onState: () => () => {},
     },
+    overlay: { open:async()=>({ok:false}), close:async()=>({ok:true}), setPreferences:async()=>({ok:true}), update:()=>{}, onState:()=>()=>{}, command:()=>{}, onCommand:()=>()=>{} },
   };
 }
 
 createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    <App />
+    {new URLSearchParams(location.search).get("overlay") === "1" ? <VrOverlayWindow /> : <App />}
   </React.StrictMode>,
 );

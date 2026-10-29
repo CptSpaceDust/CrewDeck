@@ -33,6 +33,15 @@ contextBridge.exposeInMainWorld("desktop", {
   shareTarget: { get: () => ipcRenderer.invoke("desktop:get-share-target") },
   repair: () => ipcRenderer.invoke("desktop:repair"),
   globalPtt: { enable: (accelerator) => ipcRenderer.invoke("desktop:set-global-ptt", accelerator), onToggle: (callback) => subscribe("desktop:global-ptt", callback) },
+  overlay: {
+    open: () => ipcRenderer.invoke("overlay:open"),
+    close: () => ipcRenderer.invoke("overlay:close"),
+    setPreferences: (value) => ipcRenderer.invoke("overlay:set-preferences", value),
+    update: (value) => ipcRenderer.send("overlay:update", value),
+    onState: (callback) => subscribe("overlay:state", callback),
+    command: (value) => ipcRenderer.send("overlay:command", value),
+    onCommand: (callback) => subscribe("overlay:command", callback),
+  },
   onDeepLink: (callback) => subscribe("auth:deep-link", callback),
   screenShare: {
     listSources: () => ipcRenderer.invoke("screen-share:list-sources"),

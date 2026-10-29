@@ -93,7 +93,9 @@ export default function FriendsPage({
     };
     const [suggested, feed] = await Promise.all([
       nextSettings.recommendations_enabled
-        ? supabase.rpc("get_friend_recommendations", { result_limit: 12 })
+        ? supabase.rpc("get_onboarding_member_recommendations", {
+            result_limit: 12,
+          })
         : Promise.resolve({ data: [] }),
       nextSettings.activity_feed_enabled
         ? supabase.rpc("get_friend_activity_feed", { result_limit: 30 })
@@ -411,7 +413,7 @@ export default function FriendsPage({
             <Sparkles />
             <div>
               <h2>Suggested crew</h2>
-              <p>Based on mutual friends and shared games</p>
+              <p>Based on shared interests from members who opted in</p>
             </div>
           </header>
           <div className="friend-suggestion-grid">

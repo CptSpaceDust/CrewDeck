@@ -1,131 +1,19 @@
-import { Bell, CheckCheck } from "lucide-react";
-import { useState } from "react";
-import {
-  clearNotifications,
-  getNotifications,
-  markNotificationRead,
-} from "../lib/data";
-import { useLoader } from "../lib/hooks";
-import {
-  Empty,
-  ErrorState,
-  Loading,
-  PageHeader,
-  formatDate,
-} from "../components/ui";
-import { confirmInApp } from "../components/InAppDialog";
+import { Bell, Bookmark, CheckCheck, Clock3, ExternalLink, Inbox, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { bulkInbox, getCrewInbox, performInboxAction, saveInboxState } from "../lib/crewInbox";
+import { markNotificationRead } from "../lib/data";
+import { supabase } from "../lib/supabase";
+import { Empty, ErrorState, Loading, PageHeader, formatDate } from "../components/ui";
 
-export default function NotificationsPage({ user, onNavigate }) {
-  const [filter, setFilter] = useState("all");
-  const { data, loading, error, reload } = useLoader(
-    () => getNotifications(user.id),
-    [user.id],
-  );
-
-  function refreshBadge() {
-    window.dispatchEvent(new CustomEvent("notifications-changed"));
-  }
-
-  async function open(item) {
-    if (!item.is_read) {
-      await markNotificationRead(item.id, user.id);
-      refreshBadge();
-    }
-    if (item.link) onNavigate(item.link);
-    else reload();
-  }
-
-  async function clearAll() {
-    const approved = await confirmInApp(
-      "This removes every notification from your activity feed.",
-      {
-        title: "Clear all notifications?",
-        confirmLabel: "Clear all",
-      },
-    );
-    if (!approved) return;
-    await clearNotifications(user.id);
-    await reload();
-    refreshBadge();
-  }
-  const filtered = (data || []).filter((item) => {
-    if (filter === "all") return true;
-    const type = String(
-      item.type || item.notification_type || "",
-    ).toLowerCase();
-    return filter === "messages"
-      ? type.includes("message")
-      : filter === "calls"
-        ? type.includes("call")
-        : filter === "meetups"
-          ? type.includes("meetup")
-          : filter === "moderation"
-            ? /moderation|restriction|warning|appeal/.test(type)
-            : true;
-  });
-
-  return (
-    <div className="page">
-      <PageHeader
-        eyebrow="Activity"
-        title="Notifications"
-        description="Messages, meetup updates, ideas, calls, and community activity in one signal feed."
-        action={
-          data?.length ? (
-            <button className="button secondary" onClick={clearAll}>
-              <CheckCheck /> Clear All
-            </button>
-          ) : null
-        }
-      />
-      <div className="notification-filters">
-        {["all", "messages", "calls", "meetups", "moderation"].map((value) => (
-          <button
-            className={filter === value ? "active" : ""}
-            onClick={() => setFilter(value)}
-            key={value}
-          >
-            {value}
-          </button>
-        ))}
-      </div>
-      {loading ? (
-        <Loading />
-      ) : error ? (
-        <ErrorState message={error} retry={reload} />
-      ) : data?.length ? (
-        <div className="notification-list">
-          {filtered.map((item) => (
-            <button
-              className={`${item.is_read ? "panel notification-row" : "panel notification-row unread"}${item.priority > 0 ? " priority" : ""}`}
-              onClick={() => open(item)}
-              key={item.id}
-            >
-              <span className="notification-icon">
-                {item.is_read ? <CheckCheck /> : <Bell />}
-              </span>
-              <span>
-                <strong>{item.title}</strong>
-                {item.priority > 0 && (
-                  <em className="notification-priority">Close friend</em>
-                )}
-                <p>{item.message}</p>
-                <small>
-                  {formatDate(item.created_at, {
-                    hour: "numeric",
-                    minute: "2-digit",
-                  })}
-                </small>
-              </span>
-            </button>
-          ))}
-        </div>
-      ) : (
-        <Empty
-          title="All quiet in orbit"
-          body="New community activity will appear here."
-        />
-      )}
-    </div>
-  );
+const sections=["all","messages","calls","meetups","community","friends","moderation","saved"];
+export default function NotificationsPage({user,onNavigate}){
+  const [items,setItems]=useState([]),[loading,setLoading]=useState(true),[error,setError]=useState(""),[filter,setFilter]=useState("all"),[selected,setSelected]=useState(new Set()),[notice,setNotice]=useState("");
+  async function load(){try{setError("");setItems(await getCrewInbox(user.id));}catch(e){setError(e.message);}finally{setLoading(false);}}
+  useEffect(()=>{load();const channel=supabase.channel(`crew-inbox-${user.id}`).on("postgres_changes",{event:"*",schema:"public",table:"notifications",filter:`user_id=eq.${user.id}`},load).on("postgres_changes",{event:"*",schema:"public",table:"crew_inbox_state",filter:`user_id=eq.${user.id}`},load).subscribe();return()=>supabase.removeChannel(channel);},[user.id]);
+  const shown=useMemo(()=>items.filter(item=>filter==="all"?true:filter==="saved"?item.inbox_state?.saved_for_later:item.category===filter),[items,filter]);
+  const toggle=id=>setSelected(current=>{const next=new Set(current);next.has(id)?next.delete(id):next.add(id);return next;});
+  async function apply(action){await bulkInbox(user.id,[...selected],action);setSelected(new Set());await load();window.dispatchEvent(new CustomEvent("notifications-changed"));}
+  async function open(item){if(!item.is_read)await markNotificationRead(item.id,user.id);if(item.link)onNavigate(item.link);await load();}
+  async function inline(item,action){try{await performInboxAction(item,action,user.id);setNotice("Action completed.");await load();}catch(e){setNotice(e.message);}}
+  return <div className="page crew-inbox-page"><PageHeader eyebrow="Action center" title="Crew Inbox" description="Messages, calls, meetups, community activity, friends, and moderation in one place." action={selected.size?<div className="inbox-bulk-actions"><button className="button secondary" onClick={()=>apply("read")}><CheckCheck/>Read</button><button className="button secondary" onClick={()=>apply("save")}><Bookmark/>Later</button><button className="button danger" onClick={()=>apply("dismiss")}><Trash2/>Dismiss</button></div>:null}/><button className="button secondary inbox-clear-all" type="button" onClick={async()=>{await bulkInbox(user.id,items.map(item=>item.id),"dismiss");await load();window.dispatchEvent(new CustomEvent("notifications-changed"));}}>Clear All</button>{notice&&<p className="inbox-notice" role="status">{notice}</p>}<nav className="notification-filters" aria-label="Inbox sections">{sections.map(value=><button className={filter===value?"active":""} onClick={()=>setFilter(value)} key={value}>{value}</button>)}</nav>{loading?<Loading/>:error?<ErrorState message={error} retry={load}/>:shown.length?<div className="notification-list crew-inbox-list">{shown.map(item=>{const actions=item.action_data||{};return <article className={`${item.is_read?"panel notification-row":"panel notification-row unread"}${item.priority>0?" priority":""}`} key={item.id}><label className="inbox-select"><input type="checkbox" checked={selected.has(item.id)} onChange={()=>toggle(item.id)}/><span className="sr-only">Select {item.title}</span></label><span className="notification-icon">{item.is_read?<CheckCheck/>:<Bell/>}</span><div className="inbox-copy"><span className="inbox-category">{item.category}</span><strong>{item.title}</strong><p>{item.message}</p><small>{formatDate(item.created_at,{hour:"numeric",minute:"2-digit"})}</small><div className="inbox-inline-actions">{actions.meetup_id&&<><button onClick={()=>inline({...item,action_data:{...actions,response:"accepted"}},"meetup")}>Accept meetup</button><button onClick={()=>inline({...item,action_data:{...actions,response:"declined"}},"meetup")}>Decline</button></>}{actions.event_id&&<button onClick={()=>inline(item,"event")}>RSVP {actions.response||"attending"}</button>}{actions.requester_id&&<><button onClick={()=>inline({...item,action_data:{...actions,response:"accepted"}},"friend")}>Accept friend</button><button onClick={()=>inline({...item,action_data:{...actions,response:"declined"}},"friend")}>Decline</button></>}{actions.poll_id&&actions.option_id&&<button onClick={()=>inline(item,"poll")}>Vote</button>}{item.category==="calls"&&item.link&&<button onClick={()=>open(item)}>Join call</button>}<button onClick={()=>open(item)}><ExternalLink/>Open</button><button onClick={async()=>{await saveInboxState(user.id,item.id,{saved_for_later:!item.inbox_state?.saved_for_later});await load();}}><Bookmark/>{item.inbox_state?.saved_for_later?"Unsave":"Later"}</button><button onClick={async()=>{await saveInboxState(user.id,item.id,{snoozed_until:new Date(Date.now()+3600000).toISOString()});await load();}}><Clock3/>1 hour</button></div></div></article>;})}</div>:<Empty title="Inbox clear" body="Nothing in this section needs your attention." icon={Inbox}/>}</div>;
 }

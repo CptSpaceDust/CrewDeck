@@ -46,6 +46,7 @@ import {
 import UpdateOverlay from "./components/UpdateVisual";
 import { InAppDialogHost } from "./components/InAppDialog";
 import CommandPalette from "./components/CommandPalette";
+import PersonalizedOnboarding from "./components/PersonalizedOnboarding";
 import {
   ConnectivityBanner,
   CommunityStatus,
@@ -103,6 +104,7 @@ function parseNavigation(value) {
     view: url.searchParams.get("view"),
     call: url.searchParams.get("call"),
     startCall: url.searchParams.get("start_call") === "1",
+    message: url.searchParams.get("message"),
   };
 }
 
@@ -121,9 +123,7 @@ async function consumeDeepLink(link, setRecovery) {
       if (error) throw error;
     }
     setRecovery(true);
-  } catch (error) {
-    console.error("Could not open recovery link", error);
-  }
+  } catch {}
 }
 
 export default function App() {
@@ -268,6 +268,7 @@ export default function App() {
   }, []);
   useEffect(() => {
     incomingCallRef.current = incomingCall;
+    window.desktop?.overlay?.update?.({request:incomingCall?{id:incomingCall.id,name:incomingCall.title||"Crew member"}:null});
     if (!incomingCall) return;
     const timeout = window.setTimeout(() => {
       stopRingtone();
@@ -275,6 +276,11 @@ export default function App() {
     }, 90000);
     return () => window.clearTimeout(timeout);
   }, [incomingCall]);
+  useEffect(() => window.desktop?.overlay?.onCommand?.(command => {
+    if(command?.type==="request") closeIncomingCall(command.response==="accept");
+    if(command?.type==="navigate"&&command.route) navigate(command.route);
+  }), [session?.user?.id, profile?.username]);
+  useEffect(()=>{if(!session?.user?.id)return;supabase.from("vr_overlay_preferences").select("*").eq("user_id",session.user.id).maybeSingle().then(({data})=>{if(data?.enabled&&data.state!=="hidden"){window.desktop.overlay.setPreferences(data);window.desktop.overlay.open();}});},[session?.user?.id]);
   useEffect(() => {
     if (!toast) return;
     const timeout = window.setTimeout(() => setToast(null), 5000);
@@ -386,12 +392,14 @@ export default function App() {
         );
     }
     const refreshUnread = async () => {
-      const { count } = await supabase
+      const [{ data: notifications }, { data: states }] = await Promise.all([supabase
         .from("notifications")
-        .select("id", { count: "exact", head: true })
+        .select("id")
         .eq("user_id", userId)
-        .eq("is_read", false);
-      if (alive) setUnread(count || 0);
+        .eq("is_read", false),supabase.from("crew_inbox_state").select("notification_id,snoozed_until,dismissed_at").eq("user_id",userId)]);
+      const hidden=new Map((states||[]).map(item=>[item.notification_id,item]));
+      const count=(notifications||[]).filter(item=>{const state=hidden.get(item.id);return !state?.dismissed_at&&(!state?.snoozed_until||Date.parse(state.snoozed_until)<=Date.now());}).length;
+      if (alive) setUnread(count);
     };
     const pollNotifications = async () => {
       const { data, error } = await supabase
@@ -451,7 +459,7 @@ export default function App() {
             return;
           }
           if (["INSERT", "UPDATE"].includes(payload.eventType))
-            deliver(payload.new).catch(console.error);
+            deliver(payload.new).catch(() => {});
         },
       )
       .subscribe((status) => {
@@ -528,7 +536,7 @@ export default function App() {
   }
   const content = useMemo(() => {
     if (!session?.user || !profile) return null;
-    const props = { user: session.user, profile };
+    const props = { user: session.user, profile, onNavigate: navigate };
     switch (page) {
       case "captain":
         return <CaptainPage {...props} />;
@@ -628,6 +636,7 @@ export default function App() {
       <UpdateOverlay />
       <InAppDialogHost />
       <WhatsNew />
+      <PersonalizedOnboarding user={session.user} />
       <InactivityLock enabled={lock.enabled} />
       <Sidebar
         page={page}
@@ -642,7 +651,7 @@ export default function App() {
           <div className="desktop-drag-region" />
           <CommunityStatus />
           <div className="topbar-actions">
-            <CommandPalette onNavigate={selectPage} />
+            <CommandPalette onNavigate={navigate} user={session.user} />
             <button
               className={page === "messages" ? "active" : ""}
               title="Messages"

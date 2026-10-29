@@ -163,8 +163,9 @@ export function conversationUnreadCount(id, group = false) {
   return Number(readJson(UNREAD_KEY, {})[conversationKey(id, group)] || 0);
 }
 export function totalMessageUnread() {
-  return Object.values(readJson(UNREAD_KEY, {})).reduce(
-    (sum, value) => sum + Number(value || 0),
+  const archived = new Set(readJson("cptspacedust.desktop.archived-conversations.v1", []));
+  return Object.entries(readJson(UNREAD_KEY, {})).reduce(
+    (sum, [key, value]) => sum + (archived.has(key) ? 0 : Number(value || 0)),
     0,
   );
 }

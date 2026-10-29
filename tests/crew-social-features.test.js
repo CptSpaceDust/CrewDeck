@@ -74,6 +74,25 @@ test("desktop messaging exposes the selected realtime conversation tools", () =>
   assert.doesNotMatch(features, /openMessageAttachment/);
   assert.match(composer, /pending-message-attachment/);
   assert.match(composer, /queueAttachment/);
+  assert.match(composer, /pendingAttachments\.map/);
+  assert.match(composer, /<progress/);
+  assert.match(composer, /multiple/);
+  assert.match(crewFeatures, /request\.upload\.onprogress/);
+  assert.match(data, /send_message_with_attachments/);
+  assert.doesNotMatch(crewFeatures, /linkMessageAttachments/);
+  const directAttachmentFlow = messages.slice(
+    messages.indexOf("async function sendAttachment"),
+    messages.indexOf(
+      "async function refreshMessages",
+      messages.indexOf("async function sendAttachment"),
+    ),
+  );
+  assert.ok(
+    directAttachmentFlow.indexOf("await uploadMessageAttachment") <
+      directAttachmentFlow.indexOf("sent = await sendMessage"),
+    "direct message attachments must upload before the message is sent",
+  );
+  assert.match(directAttachmentFlow, /staged\.map\(\(item\) => item\.id\)/);
   assert.doesNotMatch(composer, /saveMessageDraftVersion/);
   assert.match(crewFeatures, /deleteMessageReminder/);
   assert.doesNotMatch(messages, /call_messages|Call chat/);
@@ -144,7 +163,7 @@ test("friend hub stays private, opt-in, and available in the packaged app", () =
   ]) {
     assert.match(desktop, new RegExp(marker));
   }
-  assert.match(desktop, /get_friend_recommendations/);
+  assert.match(desktop, /get_onboarding_member_recommendations/);
   assert.match(desktop, /get_friend_activity_feed/);
   assert.match(desktop, /start_call=1/);
 });

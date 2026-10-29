@@ -6,6 +6,8 @@ import {
   BellOff,
   BellRing,
   BarChart3,
+  Archive,
+  ArchiveRestore,
   Edit3,
   Maximize2,
   Minimize2,
@@ -13,6 +15,7 @@ import {
   MicOff,
   Hand,
   Hash,
+  History,
   Headphones,
   Monitor,
   MonitorUp,
@@ -33,6 +36,9 @@ import {
 } from "lucide-react";
 import EditMessageButton from "../components/EditMessageButton";
 import GroupPolls, { InlineGroupPoll } from "../components/GroupPolls";
+import DecisionRecords from "../components/DecisionRecords";
+import InternalLinkPreviews from "../components/InternalLinkPreviews";
+import { UnreadDivider, UnreadNavigator, useUnreadNavigation } from "../components/MessageNavigation";
 import {
   ConversationDetails,
   ConversationNotificationControl,
@@ -78,11 +84,13 @@ import {
   sendGroupMessage,
   sendMessage,
 } from "../lib/data";
+import { getConversationArchives, setConversationArchive } from "../lib/decisionArchive";
 import { supabase } from "../lib/supabase";
 import { playCallEventSound, startRingtone, stopRingtone } from "../lib/sounds";
 import {
   changeGroupRole,
   markMessageRead,
+  removeStagedMessageAttachment,
   scheduleConversationMessage,
   uploadMessageAttachment,
 } from "../lib/crewFeatures";
@@ -1095,6 +1103,22 @@ export function VoiceCall({ conversation, user, onClose, requestedCallId }) {
     });
   }
 
+  useEffect(() => {
+    const speaker = participants.find((participant) => speaking.has(participant.identity));
+    window.desktop?.overlay?.update?.({call:{id:activeCallId,title:callTitle,connected,muted,deafened,speaking:speaker?participantProfile(speaker,speaker===participants[0]).username:"",participants:participants.length}});
+  }, [activeCallId, callTitle, connected, muted, deafened, participants, speaking]);
+
+  useEffect(() => window.desktop?.overlay?.onCommand?.(async command => {
+    if (command?.type === "toggle-mic") await toggleMic();
+    if (command?.type === "toggle-deafen") {
+      const next=!deafened; setDeafened(next);
+      roomRef.current?.remoteParticipants.forEach(participant=>participant.audioTrackPublications.forEach(publication=>publication.audioTrack?.setVolume(next?0:1)));
+      await updateCallControl({deafened:next});
+    }
+  }), [deafened, muted, activeCallId]);
+
+  useEffect(() => () => window.desktop?.overlay?.update?.({call:null}), []);
+
   if (minimized) {
     const active =
       participants.find((participant) => speaking.has(participant.identity)) ||
@@ -1619,6 +1643,7 @@ function DirectMessagesPage({
   route,
   onRouteConsumed,
   onShowGroups,
+  onNavigate,
 }) {
   const [conversations, setConversations] = useState([]);
   const [requests, setRequests] = useState([]);
@@ -1628,6 +1653,8 @@ function DirectMessagesPage({
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [query, setQuery] = useState("");
+  const [archives, setArchives] = useState([]);
+  const [showArchived, setShowArchived] = useState(false);
   const [, setReadRevision] = useState(0);
   const [replying, setReplying] = useState(null);
   const [deleting, setDeleting] = useState(null);
@@ -1649,12 +1676,14 @@ function DirectMessagesPage({
   }, []);
   async function loadAll() {
     try {
-      const [items, pending] = await Promise.all([
+      const [items, pending, savedArchives] = await Promise.all([
         getConversations(user.id),
         getMessageRequests(user.id),
+        getConversationArchives(user.id),
       ]);
       setConversations(items);
       setRequests(pending);
+      setArchives(savedArchives.filter((item) => item.conversation_kind === "dm"));
       setSelected((current) =>
         current
           ? items.find((x) => x.id === current.id) || items[0] || null
@@ -1791,21 +1820,38 @@ function DirectMessagesPage({
     scrollMessageStream(endRef);
   }, [messages.length]);
   useEffect(() => {
+    if (!route?.message || !messages.some((item) => item.id === route.message)) return;
+    requestAnimationFrame(() => document.querySelector(`[data-nav-message="${CSS.escape(route.message)}"]`)?.scrollIntoView({ block: "center" }));
+  }, [route?.message, messages.length]);
+  useEffect(() => {
     const last = messages.at(-1);
     if (selected?.id && last)
       markMessageRead("dm", selected.id, last.id, user.id).catch(() => {});
   }, [selected?.id, messages.at(-1)?.id, user.id]);
-  const visible = useMemo(
-    () =>
-      conversations.filter((x) =>
-        x.person?.username?.toLowerCase().includes(query.toLowerCase()),
-      ),
-    [conversations, query],
-  );
+  const visible = useMemo(() => {
+    const archived = new Set(archives.filter((item) => item.archived_at).map((item) => item.conversation_id));
+    return conversations.filter((x) =>
+      archived.has(x.id) === showArchived && x.person?.username?.toLowerCase().includes(query.toLowerCase()),
+    );
+  }, [conversations, query, archives, showArchived]);
+  useEffect(() => {
+    if (selected && !visible.some((item) => item.id === selected.id)) setSelected(visible[0] || null);
+  }, [showArchived, archives, query]);
+  async function changeArchive(conversationId, archived, autoDays = null) {
+    await setConversationArchive("dm", conversationId, archived, autoDays);
+    await loadAll();
+    setNotice(archived ? "Conversation archived." : "Conversation restored.");
+  }
   const byId = useMemo(
     () => Object.fromEntries(messages.map((x) => [x.id, x])),
     [messages],
   );
+  const unreadNavigation = useUnreadNavigation({ kind: "dm", conversationId: selected?.id, messages, userId: user.id });
+  useEffect(() => {
+    if (!selected?.id || !messages.length) return undefined;
+    const timer = setTimeout(() => unreadNavigation.markCurrentRead().catch(() => {}), 1800);
+    return () => clearTimeout(timer);
+  }, [selected?.id, messages.at(-1)?.id]);
   async function respond(request, status) {
     try {
       const id = await respondToMessageRequest(
@@ -1868,6 +1914,9 @@ function DirectMessagesPage({
         delivery.silent,
         "text",
         delivery.expiresInMinutes,
+        null,
+        delivery.mentionIds || [],
+        delivery.broadcastKind || null,
       );
       setMessages((rows) =>
         rows.some((row) => row.id === sent.id) ? rows : [...rows, sent],
@@ -1889,47 +1938,75 @@ function DirectMessagesPage({
     setMessages((rows) => rows.filter((x) => x.id !== item.id));
     setReplying((current) => (current?.id === item.id ? null : current));
   }
-  async function sendAttachment(file, delivery = {}) {
+  async function sendAttachment(attachments, delivery = {}) {
     if (!selected) return;
     let sent = null;
+    const staged = [];
     try {
       const blocked = await restrictionMessage(user.id, "messaging");
       if (blocked) throw new Error(blocked);
-      const voice = file.type.startsWith("audio/") && delivery.durationSeconds;
+      for (const attachment of attachments) {
+        staged.push(
+          await uploadMessageAttachment({
+            kind: "dm",
+            conversationId: selected.id,
+            file: attachment.file,
+            durationSeconds: attachment.durationSeconds,
+            onProgress: (progress) =>
+              delivery.onProgress?.(attachment.uploadId, progress),
+          }),
+        );
+      }
+      const first = attachments[0];
+      const voice =
+        attachments.length === 1 &&
+        first.file.type.startsWith("audio/") &&
+        first.durationSeconds;
       sent = await sendMessage(
         selected.id,
         user.id,
         selected.person.id,
-        delivery.content || (voice ? "Voice message" : "Attachment"),
+        delivery.content ||
+          (voice
+            ? "Voice message"
+            : attachments.length > 1
+              ? `${attachments.length} attachments`
+              : "Attachment"),
         replying?.id || null,
         delivery.silent,
         voice
           ? "voice"
-          : file.type.startsWith("image/")
+          : first.file.type.startsWith("image/")
             ? "image"
-            : file.type.startsWith("video/")
+            : first.file.type.startsWith("video/")
               ? "video"
               : "file",
         delivery.expiresInMinutes,
+        staged.map((item) => item.id),
+        delivery.mentionIds || [],
+        delivery.broadcastKind || null,
       );
-      await uploadMessageAttachment({
-        kind: "dm",
-        conversationId: selected.id,
-        messageId: sent.id,
-        file,
-        durationSeconds: delivery.durationSeconds,
-      });
       setMessages((rows) =>
         rows.some((row) => row.id === sent.id) ? rows : [...rows, sent],
       );
       setReplying(null);
       await reloadConversationFeatures();
-      setNotice(voice ? "Voice message sent." : "File shared.");
+      setNotice(
+        voice
+          ? "Voice message sent."
+          : `${attachments.length} file${attachments.length === 1 ? "" : "s"} shared.`,
+      );
       return true;
     } catch (error) {
       if (sent?.id) await deleteMessage(sent.id, user.id).catch(() => {});
+      await Promise.allSettled(
+        staged.map((item) => removeStagedMessageAttachment(item.id)),
+      );
       setNotice(error.message);
-      throw error;
+      attachments.forEach((attachment) =>
+        delivery.onProgress?.(attachment.uploadId, 0, false),
+      );
+      return false;
     }
   }
   async function refreshMessages() {
@@ -1992,6 +2069,9 @@ function DirectMessagesPage({
       <div className="message-mode-tabs">
         <button className="active">DM Messages</button>
         <button onClick={onShowGroups}>Group Messages</button>
+        <button className={showArchived ? "active" : ""} onClick={() => setShowArchived((value) => !value)}>
+          {showArchived ? <ArchiveRestore /> : <Archive />} {showArchived ? "Back to active" : "Archived"}
+        </button>
       </div>
       {notice && <p className="form-message">{notice}</p>}
       {requests.length > 0 && (
@@ -2141,6 +2221,9 @@ function DirectMessagesPage({
                     preference={conversationFeatures.preferences}
                     onPreferenceChanged={reloadConversationFeatures}
                     onNotice={setNotice}
+                    archived={archives.some((item) => item.conversation_id === selected.id && item.archived_at)}
+                    archivePreference={archives.find((item) => item.conversation_id === selected.id)}
+                    onArchive={changeArchive}
                   />
                 </div>
               </header>
@@ -2158,10 +2241,11 @@ function DirectMessagesPage({
                     messageDayKey(messages[index - 1].created_at) !==
                       messageDayKey(item.created_at);
                   return (
-                    <div className="message-with-divider" key={item.id}>
+                    <div className="message-with-divider" key={item.id} data-nav-message={item.id}>
                       {startsDay && (
                         <MessageDayDivider value={item.created_at} />
                       )}
+                      {unreadNavigation.firstUnreadId === item.id && <UnreadDivider />}
                       <div
                         className={
                           item.sender_id === user.id
@@ -2174,6 +2258,7 @@ function DirectMessagesPage({
                           message={item}
                           messages={messages}
                           people={[profile, selected.person]}
+                          mentions={unreadNavigation.mentions}
                         />
                         {item.forwarded_from_kind && (
                           <small className="forwarded-message-label">
@@ -2189,9 +2274,12 @@ function DirectMessagesPage({
                           !["Attachment", "Voice message"].includes(
                             item.content,
                           )) && (
+                          <>
                           <p>
-                            <FormattedMessage>{item.content}</FormattedMessage>
+                            <FormattedMessage mentions={unreadNavigation.mentions.filter((mention) => mention.message_id === item.id)}>{item.content}</FormattedMessage>
                           </p>
+                          <InternalLinkPreviews content={item.content} userId={user.id} kind="dm" conversationId={selected.id} messageId={item.id} onNavigate={onNavigate} canDismiss={item.sender_id===user.id}/>
+                          </>
                         )}
                         <div className="message-footer">
                           <time>
@@ -2210,6 +2298,7 @@ function DirectMessagesPage({
                             >
                               <Reply />
                             </button>
+                            <button onClick={() => unreadNavigation.markUnread(item).catch((error) => setNotice(error.message))} title="Mark unread from here"><CheckCheck /></button>
                             {item.sender_id === user.id && (
                               <>
                                 <EditMessageButton
@@ -2244,6 +2333,7 @@ function DirectMessagesPage({
                           reactions={conversationFeatures.reactions}
                           receipts={conversationFeatures.receipts}
                           attachments={conversationFeatures.attachments}
+                          mentions={unreadNavigation.mentions}
                           onChanged={reloadConversationFeatures}
                           onNotice={setNotice}
                         />
@@ -2253,6 +2343,7 @@ function DirectMessagesPage({
                 })}
                 <div ref={endRef} />
               </div>
+              <UnreadNavigator navigation={unreadNavigation} />
               {replying && (
                 <div className="reply-bar">
                   <span>
@@ -2825,6 +2916,9 @@ function DirectActionsMenu({
   preference,
   onPreferenceChanged,
   onNotice,
+  archived,
+  archivePreference,
+  onArchive,
 }) {
   const [open, setOpen] = useState(false);
   const [preferencesOpen, setPreferencesOpen] = useState(false);
@@ -2893,6 +2987,19 @@ function DirectActionsMenu({
               </button>
               <button
                 type="button"
+                className="group-actions-menu-item"
+                onClick={() => { setOpen(false); onArchive(conversationId, !archived, archivePreference?.auto_archive_days || null); }}
+              >
+                {archived ? <ArchiveRestore /> : <Archive />} {archived ? "Restore conversation" : "Archive conversation"}
+              </button>
+              <label className="group-actions-menu-item archive-auto-setting">
+                <span>Auto archive</span>
+                <select value={archivePreference?.auto_archive_days || ""} onChange={(event) => onArchive(conversationId, archived, event.target.value ? Number(event.target.value) : null)}>
+                  <option value="">Off</option><option value="7">7 days</option><option value="14">14 days</option><option value="30">30 days</option><option value="60">60 days</option><option value="90">90 days</option>
+                </select>
+              </label>
+              <button
+                type="button"
                 className="group-actions-menu-item danger"
                 onClick={() => {
                   setOpen(false);
@@ -2946,9 +3053,13 @@ function GroupActionsMenu({
   onLeave,
   preference,
   onPreferenceChanged,
+  archived,
+  archivePreference,
+  onArchive,
 }) {
   const [open, setOpen] = useState(false);
   const [pollsOpen, setPollsOpen] = useState(false);
+  const [decisionsOpen, setDecisionsOpen] = useState(false);
   const [preferencesOpen, setPreferencesOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [menuPosition, setMenuPosition] = useState(null);
@@ -3017,6 +3128,9 @@ function GroupActionsMenu({
               >
                 <BarChart3 /> Polls
               </button>
+              <button type="button" className="group-actions-menu-item" onClick={() => { setOpen(false); setDecisionsOpen(true); }}>
+                <History /> Decision records
+              </button>
               <button
                 type="button"
                 className="group-actions-menu-item"
@@ -3038,6 +3152,10 @@ function GroupActionsMenu({
                   onClosed={() => setOpen(false)}
                 />
               )}
+              <button type="button" className="group-actions-menu-item" onClick={() => { setOpen(false); onArchive(group.id, !archived, archivePreference?.auto_archive_days || null); }}>
+                {archived ? <ArchiveRestore /> : <Archive />} {archived ? "Restore group" : "Archive group"}
+              </button>
+              <label className="group-actions-menu-item archive-auto-setting"><span>Auto archive</span><select value={archivePreference?.auto_archive_days || ""} onChange={(event) => onArchive(group.id, archived, event.target.value ? Number(event.target.value) : null)}><option value="">Off</option><option value="7">7 days</option><option value="14">14 days</option><option value="30">30 days</option><option value="60">60 days</option><option value="90">90 days</option></select></label>
               <button
                 type="button"
                 className="group-actions-menu-item danger"
@@ -3061,6 +3179,7 @@ function GroupActionsMenu({
         open={pollsOpen}
         onClose={() => setPollsOpen(false)}
       />
+      <DecisionRecords groupId={group.id} canManage={canManage} open={decisionsOpen} onClose={() => setDecisionsOpen(false)} onNotice={onNotice} userId={user.id} onNavigate={onNavigate} />
       {preferencesOpen && (
         <Modal
           title="Group notifications"
@@ -3099,6 +3218,7 @@ function GroupMessagesPage({
   route,
   onRouteConsumed,
   onShowDms,
+  onNavigate,
 }) {
   const [groups, setGroups] = useState([]);
   const [invites, setInvites] = useState([]);
@@ -3111,6 +3231,8 @@ function GroupMessagesPage({
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [query, setQuery] = useState("");
+  const [archives, setArchives] = useState([]);
+  const [showArchived, setShowArchived] = useState(false);
   const [, setReadRevision] = useState(0);
   const [replying, setReplying] = useState(null);
   const [deleting, setDeleting] = useState(null);
@@ -3128,12 +3250,14 @@ function GroupMessagesPage({
   }, [route?.group, groups.length]);
   async function loadGroups(targetId) {
     try {
-      const [rows, pendingInvites] = await Promise.all([
+      const [rows, pendingInvites, savedArchives] = await Promise.all([
         getGroupConversations(user.id),
         getPendingGroupInvites(),
+        getConversationArchives(user.id),
       ]);
       setGroups(rows);
       setInvites(pendingInvites || []);
+      setArchives(savedArchives.filter((item) => item.conversation_kind === "group"));
       setSelected(
         (current) =>
           rows.find((item) => item.id === (targetId || current?.id)) ||
@@ -3239,6 +3363,10 @@ function GroupMessagesPage({
     scrollMessageStream(endRef);
   }, [messages.length]);
   useEffect(() => {
+    if (!route?.message || !messages.some((item) => item.id === route.message)) return;
+    requestAnimationFrame(() => document.querySelector(`[data-nav-message="${CSS.escape(route.message)}"]`)?.scrollIntoView({ block: "center" }));
+  }, [route?.message, messages.length]);
+  useEffect(() => {
     const last = messages.at(-1);
     if (selected?.id && last)
       markMessageRead("group", selected.id, last.id, user.id).catch(() => {});
@@ -3258,9 +3386,24 @@ function GroupMessagesPage({
     () => Object.fromEntries(messages.map((item) => [item.id, item])),
     [messages],
   );
-  const visible = groups.filter((item) =>
-    item.name?.toLowerCase().includes(query.toLowerCase()),
-  );
+  const unreadNavigation = useUnreadNavigation({ kind: "group", conversationId: selected?.id, messages, userId: user.id });
+  useEffect(() => {
+    if (!selected?.id || !messages.length) return undefined;
+    const timer = setTimeout(() => unreadNavigation.markCurrentRead().catch(() => {}), 1800);
+    return () => clearTimeout(timer);
+  }, [selected?.id, messages.at(-1)?.id]);
+  const visible = groups.filter((item) => {
+    const isArchived = archives.some((archive) => archive.conversation_id === item.id && archive.archived_at);
+    return isArchived === showArchived && item.name?.toLowerCase().includes(query.toLowerCase());
+  });
+  useEffect(() => {
+    if (selected && !visible.some((item) => item.id === selected.id)) setSelected(visible[0] || null);
+  }, [showArchived, archives, query]);
+  async function changeArchive(conversationId, archived, autoDays = null) {
+    await setConversationArchive("group", conversationId, archived, autoDays);
+    await loadGroups(conversationId);
+    setNotice(archived ? "Group archived." : "Group restored.");
+  }
   async function send(event, delivery = {}) {
     event.preventDefault();
     const input = event.currentTarget.elements.message;
@@ -3292,6 +3435,9 @@ function GroupMessagesPage({
         delivery.silent,
         "text",
         delivery.expiresInMinutes,
+        null,
+        delivery.mentionIds || [],
+        delivery.broadcastKind || null,
       );
       setMessages((rows) =>
         rows.some((row) => row.id === sent.id) ? rows : [...rows, sent],
@@ -3318,46 +3464,74 @@ function GroupMessagesPage({
     setMessages((rows) => rows.filter((row) => row.id !== item.id));
     setReplying((current) => (current?.id === item.id ? null : current));
   }
-  async function sendAttachment(file, delivery = {}) {
+  async function sendAttachment(attachments, delivery = {}) {
     if (!selected) return;
     let sent = null;
+    const staged = [];
     try {
       const blocked = await restrictionMessage(user.id, "messaging");
       if (blocked) throw new Error(blocked);
-      const voice = file.type.startsWith("audio/") && delivery.durationSeconds;
+      for (const attachment of attachments) {
+        staged.push(
+          await uploadMessageAttachment({
+            kind: "group",
+            conversationId: selected.id,
+            file: attachment.file,
+            durationSeconds: attachment.durationSeconds,
+            onProgress: (progress) =>
+              delivery.onProgress?.(attachment.uploadId, progress),
+          }),
+        );
+      }
+      const first = attachments[0];
+      const voice =
+        attachments.length === 1 &&
+        first.file.type.startsWith("audio/") &&
+        first.durationSeconds;
       sent = await sendGroupMessage(
         selected.id,
         user.id,
-        delivery.content || (voice ? "Voice message" : "Attachment"),
+        delivery.content ||
+          (voice
+            ? "Voice message"
+            : attachments.length > 1
+              ? `${attachments.length} attachments`
+              : "Attachment"),
         replying?.id || null,
         delivery.silent,
         voice
           ? "voice"
-          : file.type.startsWith("image/")
+          : first.file.type.startsWith("image/")
             ? "image"
-            : file.type.startsWith("video/")
+            : first.file.type.startsWith("video/")
               ? "video"
               : "file",
         delivery.expiresInMinutes,
+        staged.map((item) => item.id),
+        delivery.mentionIds || [],
+        delivery.broadcastKind || null,
       );
-      await uploadMessageAttachment({
-        kind: "group",
-        conversationId: selected.id,
-        messageId: sent.id,
-        file,
-        durationSeconds: delivery.durationSeconds,
-      });
       setMessages((rows) =>
         rows.some((row) => row.id === sent.id) ? rows : [...rows, sent],
       );
       setReplying(null);
       await reloadConversationFeatures();
-      setNotice(voice ? "Voice message sent." : "File shared.");
+      setNotice(
+        voice
+          ? "Voice message sent."
+          : `${attachments.length} file${attachments.length === 1 ? "" : "s"} shared.`,
+      );
       return true;
     } catch (error) {
       if (sent?.id) await deleteGroupMessage(sent.id, user.id).catch(() => {});
+      await Promise.allSettled(
+        staged.map((item) => removeStagedMessageAttachment(item.id)),
+      );
       setNotice(error.message);
-      throw error;
+      attachments.forEach((attachment) =>
+        delivery.onProgress?.(attachment.uploadId, 0, false),
+      );
+      return false;
     }
   }
   async function refreshMessages() {
@@ -3493,6 +3667,7 @@ function GroupMessagesPage({
       <div className="message-mode-tabs">
         <button onClick={onShowDms}>DM Messages</button>
         <button className="active">Group Messages</button>
+        <button className={showArchived ? "active" : ""} onClick={() => setShowArchived((value) => !value)}>{showArchived ? <ArchiveRestore /> : <Archive />} {showArchived ? "Back to active" : "Archived"}</button>
       </div>
       {notice && <p className="form-message">{notice}</p>}
       {invites.length > 0 && (
@@ -3662,6 +3837,9 @@ function GroupMessagesPage({
                     onLeave={leave}
                     preference={conversationFeatures.preferences}
                     onPreferenceChanged={reloadConversationFeatures}
+                    archived={archives.some((item) => item.conversation_id === selected.id && item.archived_at)}
+                    archivePreference={archives.find((item) => item.conversation_id === selected.id)}
+                    onArchive={changeArchive}
                     onChanged={async () => {
                       const group = await getGroupDetails(selected.id);
                       setDetails(group);
@@ -3698,10 +3876,11 @@ function GroupMessagesPage({
                     messageDayKey(messages[index - 1].created_at) !==
                       messageDayKey(item.created_at);
                   return (
-                    <div className="message-with-divider" key={item.id}>
+                    <div className="message-with-divider" key={item.id} data-nav-message={item.id}>
                       {startsDay && (
                         <MessageDayDivider value={item.created_at} />
                       )}
+                      {unreadNavigation.firstUnreadId === item.id && <UnreadDivider />}
                       <div
                         className={
                           item.sender_id === user.id
@@ -3719,6 +3898,7 @@ function GroupMessagesPage({
                           message={item}
                           messages={messages}
                           people={Object.values(profiles)}
+                          mentions={unreadNavigation.mentions}
                         />
                         {item.forwarded_from_kind && (
                           <small className="forwarded-message-label">
@@ -3742,9 +3922,12 @@ function GroupMessagesPage({
                           !["Attachment", "Voice message"].includes(
                             item.content,
                           ) ? (
+                          <>
                           <p>
-                            <FormattedMessage>{item.content}</FormattedMessage>
+                            <FormattedMessage mentions={unreadNavigation.mentions.filter((mention) => mention.message_id === item.id)}>{item.content}</FormattedMessage>
                           </p>
+                          <InternalLinkPreviews content={item.content} userId={user.id} kind="group" conversationId={selected.id} messageId={item.id} onNavigate={onNavigate} canDismiss={item.sender_id===user.id}/>
+                          </>
                         ) : null}
                         <div className="message-footer">
                           <time>
@@ -3764,6 +3947,7 @@ function GroupMessagesPage({
                             >
                               <Reply />
                             </button>
+                            <button onClick={() => unreadNavigation.markUnread(item).catch((error) => setNotice(error.message))} title="Mark unread from here"><CheckCheck /></button>
                             {item.sender_id === user.id && (
                               <>
                                 <EditMessageButton
@@ -3804,6 +3988,7 @@ function GroupMessagesPage({
                           reactions={conversationFeatures.reactions}
                           receipts={conversationFeatures.receipts}
                           attachments={conversationFeatures.attachments}
+                          mentions={unreadNavigation.mentions}
                           canPin={
                             myGroupRole === "owner" ||
                             myGroupRole === "moderator"
@@ -3817,6 +4002,7 @@ function GroupMessagesPage({
                 })}
                 <div ref={endRef} />
               </div>
+              <UnreadNavigator navigation={unreadNavigation} />
               {replying && (
                 <div className="reply-bar">
                   <span>
@@ -3838,6 +4024,7 @@ function GroupMessagesPage({
                 onSend={send}
                 onSendAttachment={sendAttachment}
                 onNotice={setNotice}
+                canBroadcast={myGroupRole === "owner" || myGroupRole === "moderator"}
               />
             </>
           ) : (

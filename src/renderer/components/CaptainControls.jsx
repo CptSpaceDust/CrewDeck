@@ -6,7 +6,8 @@ import { Modal, Field } from "./ui";
 import CaptainMusic from "./CaptainMusic";
 import CaptainMessages from "./CaptainMessages";
 import { meetupInstant } from "../lib/time";
-import { Megaphone } from "lucide-react";
+import { Megaphone, WandSparkles } from "lucide-react";
+import CaptainAutomationStudio from "./CaptainAutomationStudio";
 
 export const restrictionNames = {
   site: "Site access",
@@ -352,6 +353,16 @@ export default function CaptainControls({
         </button>
       </section>
       <fieldset className="captain-controls" disabled={busy}>
+        <CaptainSection
+          id="automation-studio"
+          icon={<WandSparkles />}
+          title="Captain Automation Studio"
+          description="Build, test, preview, and audit automatic moderation and repair rules."
+          status="Safe rule engine"
+          tone="blue"
+        >
+          <CaptainAutomationStudio user={user} profiles={data.crew || []} />
+        </CaptainSection>
         <CaptainSection
           id="community-operations"
           icon={<Megaphone />}

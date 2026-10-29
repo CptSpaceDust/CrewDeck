@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
+  AtSign,
   BellOff,
   CalendarClock,
   History,
@@ -26,27 +27,36 @@ import {
 
 export const activeConversation = { current: null };
 
-export function FormattedMessage({ children }) {
-  const source = String(children ?? "");
+function formattedParts(source, prefix = "format") {
   const parts = [];
   const pattern = /\*\*([^*\n]+)\*\*|\*([^*\n]+)\*|\|\|([^|\n]+)\|\|/g;
   let cursor = 0;
   for (const match of source.matchAll(pattern)) {
     parts.push(source.slice(cursor, match.index));
-    parts.push(
-      match[1] !== undefined ? (
-        <strong key={match.index}>
-          <em>{match[1]}</em>
-        </strong>
-      ) : match[2] !== undefined ? (
-        <em key={match.index}>{match[2]}</em>
-      ) : (
-        <strong key={match.index}>{match[3]}</strong>
-      ),
-    );
+    parts.push(match[1] !== undefined ? <strong key={`${prefix}-${match.index}`}><em>{match[1]}</em></strong> : match[2] !== undefined ? <em key={`${prefix}-${match.index}`}>{match[2]}</em> : <strong key={`${prefix}-${match.index}`}>{match[3]}</strong>);
     cursor = match.index + match[0].length;
   }
   parts.push(source.slice(cursor));
+  return parts;
+}
+
+export function FormattedMessage({ children, mentions = [] }) {
+  const source = String(children ?? "");
+  if (!mentions.length) return <span className="formatted-message">{formattedParts(source)}</span>;
+  const tokens = mentions.map((mention) => ({ ...mention, token: mention.mention_kind === "user" ? `@${mention.username_snapshot}` : `@${mention.mention_kind}` })).sort((a, b) => b.token.length - a.token.length);
+  const pattern = new RegExp(tokens.map((item) => item.token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|"), "gi");
+  const parts = [];
+  let cursor = 0;
+  for (const match of source.matchAll(pattern)) {
+    parts.push(...formattedParts(source.slice(cursor, match.index), `before-${match.index}`));
+    const mention = tokens.find((item) => item.token.toLowerCase() === match[0].toLowerCase());
+    const label = mention?.mention_kind === "user" ? mention.username_snapshot : mention?.mention_kind;
+    parts.push(mention?.account_deleted
+      ? <span key={`mention-${match.index}`} className="message-mention deleted" aria-label="Mentioned former member"><AtSign />Former member</span>
+      : <a key={`mention-${match.index}`} className="message-mention" href={`Profile.html?id=${encodeURIComponent(mention?.mentioned_user_id || "")}`} aria-label={`Mentioned ${label || "former member"}`}><AtSign />{label}</a>);
+    cursor = match.index + match[0].length;
+  }
+  parts.push(...formattedParts(source.slice(cursor), "after"));
   return <span className="formatted-message">{parts}</span>;
 }
 
@@ -55,6 +65,7 @@ export function MessageReplyQuote({
   messages,
   people,
   className = "message-reply-quote",
+  mentions = [],
 }) {
   if (!message.is_reply && !message.reply_to_id) return null;
   const original = messages.find((item) => item.id === message.reply_to_id);
@@ -69,7 +80,7 @@ export function MessageReplyQuote({
       </strong>
       <span>
         {original ? (
-          <FormattedMessage>{original.content}</FormattedMessage>
+          <FormattedMessage mentions={mentions.filter((mention) => mention.message_id === original.id)}>{original.content}</FormattedMessage>
         ) : (
           "Deleted or expired"
         )}
@@ -103,6 +114,7 @@ export default function MessageComposer({
   onSendAttachment,
   onNotice,
   blockedUntil = 0,
+  canBroadcast = false,
 }) {
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
@@ -119,9 +131,13 @@ export default function MessageComposer({
   const [deliveryOpen, setDeliveryOpen] = useState(false);
   const [recording, setRecording] = useState(false);
   const [nativeShareFile, setNativeShareFile] = useState(null);
-  const [pendingAttachment, setPendingAttachment] = useState(null);
+  const [pendingAttachments, setPendingAttachments] = useState([]);
+  const [selectedMentions, setSelectedMentions] = useState([]);
+  const [mentionQuery, setMentionQuery] = useState(null);
+  const [broadcastKind, setBroadcastKind] = useState(null);
   const recorderRef = useRef(null);
   const recordingStartedRef = useRef(0);
+  const pendingAttachmentsRef = useRef([]);
   const channelRef = useRef(null);
   const inputRef = useRef(null);
   const sendingRef = useRef(false);
@@ -147,17 +163,21 @@ export default function MessageComposer({
     });
   }, [id]);
   useEffect(() => {
-    setPendingAttachment((current) => {
-      if (current?.previewUrl) URL.revokeObjectURL(current.previewUrl);
-      return null;
+    setPendingAttachments((current) => {
+      current.forEach((item) => URL.revokeObjectURL(item.previewUrl));
+      return [];
     });
   }, [id, group]);
+  useEffect(() => {
+    pendingAttachmentsRef.current = pendingAttachments;
+  }, [pendingAttachments]);
   useEffect(
     () => () => {
-      if (pendingAttachment?.previewUrl)
-        URL.revokeObjectURL(pendingAttachment.previewUrl);
+      pendingAttachmentsRef.current.forEach((item) =>
+        URL.revokeObjectURL(item.previewUrl),
+      );
     },
-    [pendingAttachment],
+    [],
   );
   useEffect(() => {
     let alive = true,
@@ -169,6 +189,9 @@ export default function MessageComposer({
     draftRef.current = savedDraft;
     markConversationRead(id, group);
     setTypers({});
+    setSelectedMentions([]);
+    setMentionQuery(null);
+    setBroadcastKind(null);
     const channel = supabase.channel(
       group ? `group-chat-${id}` : `conversation-${id}`,
       { config: { private: true } },
@@ -285,11 +308,11 @@ export default function MessageComposer({
     event.preventDefault();
     if (
       sendingRef.current ||
-      (!draft.trim() && !pendingAttachment) ||
+      (!draft.trim() && !pendingAttachments.length) ||
       slowModeSeconds > 0
     )
       return;
-    if (pendingAttachment && sendAt) {
+    if (pendingAttachments.length && sendAt) {
       onNotice?.(
         "Attachments cannot be scheduled. Clear the schedule or send the attachment now.",
       );
@@ -299,18 +322,38 @@ export default function MessageComposer({
     setBusy(true);
     try {
       const content = draft.trim();
-      const sent = pendingAttachment
-        ? await onSendAttachment?.(pendingAttachment.file, {
-            silent,
-            durationSeconds: pendingAttachment.durationSeconds,
-            content,
-            expiresInMinutes: expiresInMinutes
-              ? Number(expiresInMinutes)
-              : null,
-          })
+      const sent = pendingAttachments.length
+        ? await onSendAttachment?.(
+            pendingAttachments.map(
+              ({ file, durationSeconds, id: uploadId }) => ({
+                file,
+                durationSeconds,
+                uploadId,
+              }),
+            ),
+            {
+              silent,
+              content,
+              mentionIds: selectedMentions.map((item) => item.id),
+              broadcastKind,
+              expiresInMinutes: expiresInMinutes
+                ? Number(expiresInMinutes)
+                : null,
+              onProgress: (uploadId, progress, uploading = true) =>
+                setPendingAttachments((current) =>
+                  current.map((item) =>
+                    item.id === uploadId
+                      ? { ...item, uploading, progress }
+                      : item,
+                  ),
+                ),
+            },
+          )
         : await onSend(event, {
             silent,
             sendAt,
+            mentionIds: selectedMentions.map((item) => item.id),
+            broadcastKind,
             expiresInMinutes: expiresInMinutes
               ? Number(expiresInMinutes)
               : null,
@@ -319,14 +362,17 @@ export default function MessageComposer({
         setDraft("");
         draftRef.current = "";
         saveDraft(user.id, id, group, "");
-        setPendingAttachment((current) => {
-          if (current?.previewUrl) URL.revokeObjectURL(current.previewUrl);
-          return null;
+        setPendingAttachments((current) => {
+          current.forEach((item) => URL.revokeObjectURL(item.previewUrl));
+          return [];
         });
         channelRef.current?.(false);
         setSilent(false);
         setSendAt("");
         setExpiresInMinutes("");
+        setSelectedMentions([]);
+        setBroadcastKind(null);
+        setMentionQuery(null);
         if (toolsOpen) await loadComposerHistory().catch(() => {});
       }
     } finally {
@@ -341,13 +387,22 @@ export default function MessageComposer({
       onNotice?.("Choose a file that is 10 MB or smaller.");
       return;
     }
-    setPendingAttachment((current) => {
-      if (current?.previewUrl) URL.revokeObjectURL(current.previewUrl);
-      return {
-        file,
-        durationSeconds,
-        previewUrl: URL.createObjectURL(file),
-      };
+    setPendingAttachments((current) => {
+      if (current.length >= 10) {
+        onNotice?.("You can attach up to 10 files to one message.");
+        return current;
+      }
+      return [
+        ...current,
+        {
+          id: crypto.randomUUID(),
+          file,
+          durationSeconds,
+          previewUrl: URL.createObjectURL(file),
+          progress: 0,
+          uploading: false,
+        },
+      ];
     });
     setDeliveryOpen(false);
     requestAnimationFrame(() => inputRef.current?.focus());
@@ -392,6 +447,21 @@ export default function MessageComposer({
     };
     recorder.start();
   }
+  const mentionSuggestions = mentionQuery === null ? [] : [
+    ...(canBroadcast ? [{ id: "everyone", username: "everyone", broadcast: true }, { id: "here", username: "here", broadcast: true }] : []),
+    ...people.filter((person) => person.id !== user.id),
+  ].filter((person) => person.username?.toLowerCase().startsWith(mentionQuery.toLowerCase())).slice(0, 8);
+  function chooseMention(person) {
+    const textarea = inputRef.current;
+    const cursor = textarea?.selectionStart ?? draft.length;
+    const before = draft.slice(0, cursor).replace(/@[a-zA-Z0-9_]*$/, `@${person.username} `);
+    const next = before + draft.slice(cursor);
+    setDraft(next); draftRef.current = next; saveDraft(user.id, id, group, next);
+    if (person.broadcast) setBroadcastKind(person.id);
+    else setSelectedMentions((current) => current.some((item) => item.id === person.id) ? current : [...current, person]);
+    setMentionQuery(null);
+    requestAnimationFrame(() => { textarea?.focus(); textarea?.setSelectionRange(before.length, before.length); });
+  }
   return (
     <>
       <div className="desktop-typing" role="status" aria-live="polite">
@@ -404,44 +474,97 @@ export default function MessageComposer({
               : ""}
       </div>
       <form className="composer" onSubmit={submit}>
-        {pendingAttachment && (
-          <div className="pending-message-attachment">
-            <div className="pending-message-attachment-preview">
-              {pendingAttachment.file.type.startsWith("image/") ? (
-                <img
-                  src={pendingAttachment.previewUrl}
-                  alt="Attachment preview"
+        {(selectedMentions.length > 0 || broadcastKind) && <div className="composer-mention-chips" aria-label="Mentions in this message">{broadcastKind && <button type="button" onClick={() => setBroadcastKind(null)} aria-label={`Remove ${broadcastKind} mention`}><AtSign />{broadcastKind} · {people.filter((person) => person.id !== user.id).length} eligible ×</button>}{selectedMentions.map((person) => <button type="button" key={person.id} onClick={() => setSelectedMentions((current) => current.filter((item) => item.id !== person.id))} aria-label={`Remove mention for ${person.username}`}><AtSign />{person.username} ×</button>)}</div>}
+        {pendingAttachments.length > 0 && (
+          <div
+            className="pending-message-attachments"
+            aria-label="Attachments waiting to send"
+          >
+            {pendingAttachments.map((pendingAttachment) => (
+              <div
+                className="pending-message-attachment"
+                key={pendingAttachment.id}
+              >
+                <div className="pending-message-attachment-preview">
+                  {pendingAttachment.file.type.startsWith("image/") ? (
+                    <img
+                      src={pendingAttachment.previewUrl}
+                      alt="Attachment preview"
+                    />
+                  ) : pendingAttachment.file.type.startsWith("video/") ? (
+                    <video
+                      src={pendingAttachment.previewUrl}
+                      muted
+                      playsInline
+                    />
+                  ) : pendingAttachment.file.type.startsWith("audio/") ? (
+                    <Mic />
+                  ) : (
+                    <Paperclip />
+                  )}
+                </div>
+                <span>
+                  <strong>
+                    {pendingAttachment.durationSeconds
+                      ? "Voice message ready"
+                      : "Attachment ready"}
+                  </strong>
+                  <small>{pendingAttachment.file.name}</small>
+                  {pendingAttachment.uploading && (
+                    <>
+                      <progress
+                        max="100"
+                        value={pendingAttachment.progress}
+                        aria-label={`Upload progress for ${pendingAttachment.file.name}`}
+                      />
+                      <small className="message-upload-progress-label">
+                        {Math.round(pendingAttachment.progress)}%
+                      </small>
+                    </>
+                  )}
+                </span>
+                <button
+                  type="button"
+                  disabled={busy}
+                  aria-label={`Remove ${pendingAttachment.file.name}`}
+                  title="Remove attachment"
+                  onClick={() =>
+                    setPendingAttachments((current) => {
+                      const match = current.find(
+                        (item) => item.id === pendingAttachment.id,
+                      );
+                      if (match) URL.revokeObjectURL(match.previewUrl);
+                      return current.filter(
+                        (item) => item.id !== pendingAttachment.id,
+                      );
+                    })
+                  }
+                >
+                  <Trash2 />
+                </button>
+              </div>
+            ))}
+            {pendingAttachments.some((item) => item.uploading) && (
+              <div
+                className="message-upload-total"
+                role="status"
+                aria-live="polite"
+              >
+                <span>
+                  Uploading {pendingAttachments.length} attachment
+                  {pendingAttachments.length === 1 ? "" : "s"}
+                </span>
+                <progress
+                  max="100"
+                  value={
+                    pendingAttachments.reduce(
+                      (sum, item) => sum + item.progress,
+                      0,
+                    ) / pendingAttachments.length
+                  }
                 />
-              ) : pendingAttachment.file.type.startsWith("video/") ? (
-                <video src={pendingAttachment.previewUrl} muted playsInline />
-              ) : pendingAttachment.file.type.startsWith("audio/") ? (
-                <Mic />
-              ) : (
-                <Paperclip />
-              )}
-            </div>
-            <span>
-              <strong>
-                {pendingAttachment.durationSeconds
-                  ? "Voice message ready"
-                  : "Attachment ready"}
-              </strong>
-              <small>{pendingAttachment.file.name}</small>
-            </span>
-            <button
-              type="button"
-              aria-label="Remove attachment"
-              title="Remove attachment"
-              onClick={() =>
-                setPendingAttachment((current) => {
-                  if (current?.previewUrl)
-                    URL.revokeObjectURL(current.previewUrl);
-                  return null;
-                })
-              }
-            >
-              <Trash2 />
-            </button>
+              </div>
+            )}
           </div>
         )}
         <button
@@ -463,10 +586,24 @@ export default function MessageComposer({
           placeholder={placeholder}
           onChange={(event) => {
             setDraft(event.target.value);
+            const nextValue = event.target.value.toLowerCase();
+            setSelectedMentions((current) =>
+              current.filter((person) =>
+                nextValue.includes(`@${person.username}`.toLowerCase()),
+              ),
+            );
+            if (
+              broadcastKind &&
+              !nextValue.includes(`@${broadcastKind}`.toLowerCase())
+            )
+              setBroadcastKind(null);
             draftRef.current = event.target.value;
             saveDraft(user.id, id, group, event.target.value);
             lastInput.current = Date.now();
             channelRef.current?.(Boolean(event.target.value.trim()));
+            const cursor = event.target.selectionStart;
+            const match = event.target.value.slice(0, cursor).match(/@([a-zA-Z0-9_]*)$/);
+            setMentionQuery(match ? match[1] : null);
           }}
           onBlur={() => {
             lastInput.current = 0;
@@ -484,10 +621,13 @@ export default function MessageComposer({
             }
           }}
         />
+        {mentionSuggestions.length > 0 && <div className="mention-suggestion-menu" role="listbox" aria-label="Mention a conversation member">{mentionSuggestions.map((person) => <button type="button" role="option" key={person.id} onMouseDown={(event) => event.preventDefault()} onClick={() => chooseMention(person)} aria-label={person.broadcast ? `Mention ${person.username}; ${people.filter((item) => item.id !== user.id).length} eligible recipients` : `Mention ${person.username}`}><AtSign /><span><strong>@{person.username}</strong><small>{person.broadcast ? `${people.filter((item) => item.id !== user.id).length} eligible recipients` : "Mention this member"}</small></span></button>)}</div>}
         <button
           className="send-button"
           disabled={
-            busy || (!draft.trim() && !pendingAttachment) || slowModeSeconds > 0
+            busy ||
+            (!draft.trim() && !pendingAttachments.length) ||
+            slowModeSeconds > 0
           }
           aria-label="Send message"
         >
@@ -517,12 +657,13 @@ export default function MessageComposer({
               <span>Attach file</span>
               <input
                 type="file"
+                multiple
                 accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,video/quicktime,audio/*,application/pdf,text/plain"
                 disabled={busy}
                 onChange={(event) => {
-                  const file = event.target.files?.[0];
+                  const files = [...(event.target.files || [])];
                   event.target.value = "";
-                  queueAttachment(file);
+                  files.forEach((file) => queueAttachment(file));
                 }}
               />
             </label>

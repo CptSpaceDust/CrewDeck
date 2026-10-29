@@ -53,7 +53,7 @@ test("What’s Changed contains Added, Changed, and Fixed summaries", () => {
   assert.match(source, /<strong>Added<\/strong>/);
   assert.match(source, /<strong>Changed<\/strong>/);
   assert.match(source, /<strong>Fixed<\/strong>/);
-  assert.match(source, /compact private calendar/);
-  assert.match(source, /Move between months/);
-  assert.match(source, /matching full-day, partial/);
+  assert.match(source, /Universal Crew Search/);
+  assert.match(source, /actionable Crew Inbox/);
+  assert.match(source, /configurable VR overlay/);
 });

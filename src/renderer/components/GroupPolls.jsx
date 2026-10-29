@@ -11,6 +11,7 @@ import { sendGroupMessage } from "../lib/data";
 import { supabase } from "../lib/supabase";
 import { confirmInApp } from "./InAppDialog";
 import { Field, Modal } from "./ui";
+import { savePollDecision } from "../lib/decisionArchive";
 
 export function PollCard({
   poll,
@@ -34,6 +35,7 @@ export function PollCard({
     Boolean(poll.closed_at) ||
     (poll.closes_at && new Date(poll.closes_at) <= new Date());
   const [busy, setBusy] = useState(false);
+  const [deciding, setDeciding] = useState(false);
   async function remove() {
     const approved = await confirmInApp(
       "This closed poll and all of its votes will be permanently removed.",
@@ -116,12 +118,41 @@ export function PollCard({
             Close poll
           </button>
         )}
+        {ended && canModerate && (
+          <button className="poll-close" disabled={busy} onClick={() => setDeciding(true)}>
+            Save decision
+          </button>
+        )}
         {ended && isOwner && (
           <button className="poll-delete" disabled={busy} onClick={remove}>
             <Trash2 /> {busy ? "Deleting…" : "Delete poll"}
           </button>
         )}
       </footer>
+      {deciding && (
+        <Modal title="Save poll as a decision" onClose={() => setDeciding(false)}>
+          <form className="stack-form" onSubmit={async (event) => {
+            event.preventDefault();
+            setBusy(true);
+            const values = new FormData(event.currentTarget);
+            try {
+              await savePollDecision(poll.id, {
+                decision: values.get("decision"),
+                nextAction: values.get("nextAction"),
+                actionType: values.get("actionType") || null,
+              });
+              setDeciding(false);
+              onNotice?.("Decision saved to searchable group history.");
+            } catch (error) { onNotice?.(error.message); }
+            finally { setBusy(false); }
+          }}>
+            <Field label="Decision"><textarea name="decision" minLength="3" maxLength="1200" defaultValue={poll.question} required /></Field>
+            <Field label="Optional next action"><textarea name="nextAction" maxLength="1000" placeholder="What should the group do next?" /></Field>
+            <Field label="Turn next action into"><select name="actionType" defaultValue=""><option value="">Nothing yet</option><option value="meetup">Meetup</option><option value="event">Event</option><option value="board_post">Board post</option><option value="project_task">Project task</option></select></Field>
+            <button className="button primary" disabled={busy}>{busy ? "Saving…" : "Save decision"}</button>
+          </form>
+        </Modal>
+      )}
     </article>
   );
 }

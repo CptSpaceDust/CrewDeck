@@ -136,22 +136,57 @@ export async function getConversationFeatures(kind, conversationId, userId) {
 export async function uploadMessageAttachment({
   kind,
   conversationId,
-  messageId,
+  messageId = null,
   file,
   durationSeconds = null,
+  onProgress,
 }) {
   if (!file || file.size > 10 * 1024 * 1024)
     throw new Error("Choose a file that is 10 MB or smaller.");
   const base64 = await new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onerror = () => reject(new Error("Unable to read this file."));
-    reader.onload = () => resolve(String(reader.result).split(",")[1] || "");
+    reader.onprogress = (event) => {
+      if (event.lengthComputable)
+        onProgress?.(Math.round((event.loaded / event.total) * 25));
+    };
+    reader.onload = () => {
+      onProgress?.(25);
+      resolve(String(reader.result).split(",")[1] || "");
+    };
     reader.readAsDataURL(file);
   });
-  const { data, error } = await supabase.functions.invoke(
-    "message-file-access",
-    {
-      body: {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session?.access_token)
+    throw new Error("Sign in again before uploading files.");
+  const data = await new Promise((resolve, reject) => {
+    const request = new XMLHttpRequest();
+    request.open(
+      "POST",
+      `${supabase.supabaseUrl}/functions/v1/message-file-access`,
+    );
+    request.setRequestHeader("Authorization", `Bearer ${session.access_token}`);
+    request.setRequestHeader("apikey", supabase.supabaseKey);
+    request.setRequestHeader("Content-Type", "application/json");
+    request.upload.onprogress = (event) => {
+      if (event.lengthComputable)
+        onProgress?.(25 + Math.round((event.loaded / event.total) * 70));
+    };
+    request.onerror = () =>
+      reject(new Error("The attachment upload could not reach the server."));
+    request.onload = () => {
+      let value = null;
+      try {
+        value = JSON.parse(request.responseText || "{}");
+      } catch {}
+      if (request.status < 200 || request.status >= 300)
+        reject(new Error(value?.error || "Unable to upload this attachment."));
+      else resolve(value);
+    };
+    request.send(
+      JSON.stringify({
         action: "upload",
         conversationKind: kind,
         conversationId,
@@ -160,17 +195,27 @@ export async function uploadMessageAttachment({
         mimeType: file.type,
         base64,
         durationSeconds,
-      },
-    },
+      }),
+    );
+  });
+  if (data?.error) throw new Error(data.error);
+  onProgress?.(100);
+  return data.attachment;
+}
+
+export async function removeStagedMessageAttachment(attachmentId) {
+  if (!attachmentId) return;
+  const { data, error } = await supabase.functions.invoke(
+    "message-file-access",
+    { body: { action: "delete", attachmentId } },
   );
   if (error) {
     const detail = await error.context?.json?.().catch(() => null);
     throw new Error(
-      detail?.error || error.message || "Unable to upload this attachment.",
+      detail?.error || error.message || "Unable to remove a staged attachment.",
     );
   }
   if (data?.error) throw new Error(data.error);
-  return data.attachment;
 }
 
 export async function getMessageAttachmentUrl(attachmentId) {
@@ -274,6 +319,7 @@ export async function remindAboutMessage(
   conversationId,
   message,
   remindAt,
+  mentions = [],
 ) {
   return unwrap(
     await supabase.from("message_reminders").insert({
@@ -282,6 +328,12 @@ export async function remindAboutMessage(
       conversation_id: conversationId,
       message_id: message.id,
       message_excerpt: String(message.content || "").slice(0, 900),
+      mention_snapshot: mentions.map((mention) => ({
+        mentioned_user_id: mention.mentioned_user_id,
+        username_snapshot: mention.username_snapshot,
+        account_deleted: Boolean(mention.account_deleted),
+        mention_kind: mention.mention_kind,
+      })),
       remind_at: remindAt,
     }),
   );
@@ -291,7 +343,7 @@ export async function getMessageReminders(userId, kind, conversationId) {
   return unwrap(
     await supabase
       .from("message_reminders")
-      .select("id,message_id,message_excerpt,remind_at,delivered_at,created_at")
+      .select("id,message_id,message_excerpt,mention_snapshot,remind_at,delivered_at,created_at")
       .eq("user_id", userId)
       .eq("conversation_kind", kind)
       .eq("conversation_id", conversationId)

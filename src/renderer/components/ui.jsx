@@ -1,5 +1,6 @@
 import { RefreshCw } from "lucide-react";
 import { createPortal } from "react-dom";
+import { useEffect, useRef } from "react";
 import { MayuLoader } from "./MayuLoader";
 
 export function Avatar({ profile, size = 44 }) {
@@ -36,7 +37,7 @@ export function PageHeader({ eyebrow, title, description, action }) {
 
 export function Loading({ label = "Loading transmission…" }) {
   return (
-    <div className="state-panel">
+    <div className="state-panel" role="status" aria-live="polite">
       <MayuLoader label={label} compact />
     </div>
   );
@@ -44,10 +45,10 @@ export function Loading({ label = "Loading transmission…" }) {
 
 export function ErrorState({ message, retry }) {
   return (
-    <div className="state-panel error">
+    <div className="state-panel error" role="alert">
       <p>{message}</p>
       {retry && (
-        <button className="button secondary" onClick={retry}>
+        <button type="button" className="button secondary" onClick={retry}>
           <RefreshCw size={16} />
           Try again
         </button>
@@ -65,17 +66,57 @@ export function Empty({ title, body }) {
   );
 }
 
-export function Modal({ title, onClose, children }) {
+export function Modal({ title, onClose, children, className = "" }) {
+  const dialogRef = useRef(null);
+  const onCloseRef = useRef(onClose);
+  useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
+  useEffect(() => {
+    const previousFocus = document.activeElement;
+    const dialog = dialogRef.current;
+    const focusableSelector = 'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])';
+    const focusables = () => [...(dialog?.querySelectorAll(focusableSelector) || [])].filter((element) => element.getClientRects().length);
+    (focusables()[0] || dialog)?.focus();
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onCloseRef.current?.();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const items = focusables();
+      if (!items.length) {
+        event.preventDefault();
+        dialog?.focus();
+        return;
+      }
+      const first = items[0];
+      const last = items.at(-1);
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      if (previousFocus instanceof HTMLElement && previousFocus.isConnected) previousFocus.focus();
+    };
+  }, []);
   return createPortal(
     <div
       className="modal-backdrop"
       onMouseDown={(event) => event.target === event.currentTarget && onClose()}
     >
       <section
-        className="modal"
+        ref={dialogRef}
+        className={["modal", className].filter(Boolean).join(" ")}
         role="dialog"
         aria-modal="true"
         aria-label={title}
+        tabIndex={-1}
       >
         <div className="modal-header">
           <h2>{title}</h2>

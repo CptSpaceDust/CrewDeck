@@ -151,7 +151,7 @@ test("long-term away blocks invitations to a member but not meetups they organiz
     ),
     "utf8",
   );
-  assert.match(page, /item\.user_id === selectedPerson/);
+  assert.match(page, /const calendarPerson\s*=\s*selectedPerson/);
   assert.match(page, /item\.user_id === user\.id && item\.indefinite/);
   assert.match(migrations, /block\.user_id = new\.with_user_id/);
   assert.match(
@@ -205,4 +205,78 @@ test("meetup recurrence state belongs to the calendar form", () => {
     /const \[recurrence, setRecurrence\] = useState\("none"\)/,
   );
   assert.match(calendarSource, /value=\{recurrence\}/);
+});
+
+test("manual off-time submission keeps its form reference after awaiting Supabase", () => {
+  const source = fs.readFileSync(
+    require.resolve("../src/renderer/pages/MeetupsPage.jsx"),
+    "utf8",
+  );
+  const availabilityStart = source.indexOf("function AvailabilityModal");
+  const calendarStart = source.indexOf("export default function MeetupsPage");
+  const availabilitySource = source.slice(availabilityStart, calendarStart);
+  assert.match(availabilitySource, /const formElement = event\.currentTarget/);
+  assert.match(availabilitySource, /formElement\.reset\(\)/);
+  assert.doesNotMatch(availabilitySource, /event\.currentTarget\.reset\(\)/);
+});
+
+test("Crew Events have a distinct planning mode and event payload", () => {
+  const page = fs.readFileSync(
+    require.resolve("../src/renderer/pages/MeetupsPage.jsx"),
+    "utf8",
+  );
+  const data = fs.readFileSync(
+    require.resolve("../src/renderer/lib/data.js"),
+    "utf8",
+  );
+  assert.match(page, /\[planningKind, setPlanningKind\]/);
+  assert.match(page, /Private Meetup/);
+  assert.match(page, /Crew Event/);
+  assert.match(page, /event_title/);
+  assert.match(page, /with_user_id: selectedPerson \|\| null/);
+  assert.match(data, /fields\.kind === "event"/);
+  assert.match(data, /Math\.min\(100, Math\.max\(2/);
+});
+
+test("desktop Crew Events have RSVP, host, check-in, and approval controls", () => {
+  const engine = fs.readFileSync("src/renderer/lib/crewEvents.js", "utf8");
+  const panel = fs.readFileSync(
+    "src/renderer/components/CrewEventsPanel.jsx",
+    "utf8",
+  );
+  const page = fs.readFileSync("src/renderer/pages/MeetupsPage.jsx", "utf8");
+  for (const operation of [
+    "respond_to_crew_event",
+    "transfer_crew_event_host",
+    "cancel_crew_event",
+    "crew_event_notification_settings",
+  ])
+    assert.match(engine, new RegExp(operation));
+  for (const control of [
+    "interested",
+    "maybe",
+    "attending",
+    "declined",
+    "Check-in",
+    "Approve crew-wide event",
+    "Transfer to",
+    "Cancel event",
+  ])
+    assert.match(panel, new RegExp(control, "i"));
+  assert.match(page, /My Plans/);
+  assert.match(page, /crew-events-plan-list/);
+});
+
+test("desktop schedule comparison covers groups and suggested times", () => {
+  const overlap = fs.readFileSync(
+    "src/renderer/components/AvailabilityOverlap.jsx",
+    "utf8",
+  );
+  const page = fs.readFileSync("src/renderer/pages/MeetupsPage.jsx", "utf8");
+  assert.match(overlap, /Compare schedules/);
+  assert.match(overlap, /Best shared times/);
+  assert.match(overlap, /participantIds\.filter/);
+  assert.match(overlap, /Use this time/);
+  assert.match(page, /selectedParticipants/);
+  assert.match(page, /planningKind === "event" \|\|/);
 });

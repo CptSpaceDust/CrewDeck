@@ -2,6 +2,24 @@
 
 Every published CrewDeck release is documented here and copied into its GitHub release notes.
 
+## [2.0.0] - 2026-10-29
+
+### Added
+
+- Universal Crew Search finds permitted messages, people, files, meetups, events, polls, decisions, community posts, groups, and announcements with filters, saved searches, keyboard navigation, and direct links.
+- Crew Inbox turns notifications into realtime sections with inline meetup, event, friend, poll, and call actions plus snooze, saved items, and bulk controls.
+- CrewDeck links in conversations now render permission checked Space Glass previews that refresh as their source changes.
+- The desktop VR overlay provides compact call, speaker, meetup, request, world plan, ready check, and communication cards with privacy controls and an always-on-top fallback.
+
+### Changed
+
+- Unread counts and reminder emails now honor dismissed and snoozed Crew Inbox items.
+- Community boards, Crew Events, onboarding, Captain Automation Studio, decision records, conversation archives, unread navigation, and rich mentions now share their production database foundations.
+
+### Fixed
+
+- Crew Event backfill uses the legacy meetup creation time when an older row has no update timestamp.
+
 ## [1.9.8] - 2026-10-27
 
 ### Changed

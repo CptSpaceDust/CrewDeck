@@ -62,6 +62,9 @@ let pendingDisplaySourceId = "";
 let pendingShareTarget = "";
 const messageWindows = new Set();
 const activeNotifications = new Set();
+let overlayWindow;
+let overlayState = {};
+let overlayShortcut = "Control+Shift+O";
 let updateState = {
   status: "idle",
   currentVersion: app.getVersion(),
@@ -402,6 +405,28 @@ function createMessageWindow(route = "Messages.html") {
   return child;
 }
 
+function createOverlayWindow(show = true) {
+  if (overlayWindow && !overlayWindow.isDestroyed()) {
+    if (show) overlayWindow.showInactive();
+    return overlayWindow;
+  }
+  overlayWindow = new BrowserWindow({ width:390,height:520,minWidth:280,minHeight:180,maxWidth:900,maxHeight:1000,title:"CrewDeck VR Overlay",icon:ICON_PATH,transparent:true,frame:false,alwaysOnTop:true,skipTaskbar:true,resizable:true,show:false,backgroundColor:"#00000000",webPreferences:{preload:path.join(__dirname,"preload.js"),contextIsolation:true,nodeIntegration:false,sandbox:true,backgroundThrottling:false} });
+  overlayWindow.setAlwaysOnTop(true,"screen-saver");
+  overlayWindow.setVisibleOnAllWorkspaces(true,{visibleOnFullScreen:true});
+  overlayWindow.on("close",event=>{if(isQuitting)return;event.preventDefault();overlayWindow.hide();});
+  overlayWindow.on("closed",()=>{overlayWindow=null;});
+  overlayWindow.webContents.on("did-finish-load",()=>overlayWindow.webContents.send("overlay:state",overlayState));
+  overlayWindow.loadURL(isDevelopment?"http://127.0.0.1:5173/?overlay=1":`${APP_ORIGIN}/index.html?overlay=1`);
+  if(show)overlayWindow.once("ready-to-show",()=>overlayWindow?.showInactive());
+  return overlayWindow;
+}
+
+function registerOverlayShortcut(accelerator=overlayShortcut){
+  if(overlayShortcut)globalShortcut.unregister(overlayShortcut);
+  overlayShortcut=String(accelerator||"Control+Shift+O");
+  try{return globalShortcut.register(overlayShortcut,()=>{const window=createOverlayWindow(false);window.isVisible()?window.hide():window.showInactive();});}catch{return false;}
+}
+
 function extractShareTarget(argv = []) {
   const candidate = argv.find((value) => { try { return fs.statSync(value).isFile(); } catch { return false; } });
   if (candidate && fs.statSync(candidate).size <= 10 * 1024 * 1024) pendingShareTarget = candidate;
@@ -534,6 +559,13 @@ function setupIpc() {
     return { ok: true };
   });
   ipcMain.handle("desktop:open-message-window", (_event, route) => { createMessageWindow(String(route || "Messages.html")); return { ok:true }; });
+  ipcMain.handle("overlay:open",()=>{createOverlayWindow(true);return{ok:true};});
+  ipcMain.handle("overlay:close",()=>{overlayWindow?.hide();return{ok:true};});
+  ipcMain.handle("overlay:set-preferences",(_event,value={})=>{const window=createOverlayWindow(false);if(Number.isFinite(value.width)&&Number.isFinite(value.height))window.setSize(Math.round(value.width),Math.round(value.height));if(Number.isFinite(value.opacity))window.setOpacity(Math.max(.35,Math.min(1,value.opacity)));if(value.shortcut)registerOverlayShortcut(value.shortcut);return{ok:true};});
+  ipcMain.on("overlay:update",(_event,value={})=>{overlayState={...overlayState,...value};overlayWindow?.webContents.send("overlay:state",overlayState);});
+  ipcMain.on("overlay:command",(_event,value)=>{
+    for(const window of BrowserWindow.getAllWindows()) if(window!==overlayWindow) window.webContents.send("overlay:command",value);
+  });
   ipcMain.handle("desktop:get-share-target", () => {
     if (!pendingShareTarget) return null;
     const target = pendingShareTarget; pendingShareTarget = "";
@@ -625,6 +657,7 @@ if (!gotSingleInstanceLock) {
     setupIpc();
     createWindow();
     createTray();
+    registerOverlayShortcut();
     configureUpdater();
   });
 }

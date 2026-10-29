@@ -1,25 +1,31 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { CalendarDays, Command, MessageCircle, Settings, Users, Wrench } from "lucide-react";
+import { Bookmark, CalendarDays, Command, File, Hash, Heart, MessageCircle, Search, Settings, Trash2, UserRound, Users, Wrench } from "lucide-react";
+import { deleteCrewSearch, loadRecentSearches, loadSavedSearches, parseCrewSearch, rememberCrewSearch, saveCrewSearch, searchCrewDeck } from "../lib/universalSearch";
+import { promptInApp } from "./InAppDialog";
 
 const commands = [
-  ["messages", "Open messages", "Conversations and group chats", MessageCircle],
-  ["meetups", "Open meetup calendar", "Plan time with the crew", CalendarDays],
-  ["community-calendar", "Open community calendar", "See all community dates", CalendarDays],
-  ["crew", "Open crew directory", "Find a community member", Users],
-  ["help-requests", "Open help board", "Ask for or claim help", Wrench],
-  ["settings", "Open settings", "Appearance, privacy, audio, and notifications", Settings],
+  ["messages", "Open messages", "Conversations and group chats", MessageCircle], ["meetups", "Open meetup calendar", "Plan time with the crew", CalendarDays], ["community-calendar", "Open community calendar", "See all community dates", CalendarDays], ["crew", "Open crew directory", "Find a community member", Users], ["help-requests", "Open help board", "Ask for or claim help", Wrench], ["support", "Support the Captain", "View support tiers", Heart], ["settings", "Open settings", "Appearance, privacy, audio, and notifications", Settings],
 ];
+const FILTERS = ["from:","before:","after:","in:","has:file","has:poll","is:unread","is:pinned","mentions:me"];
+const icons = { people:UserRound, dm:MessageCircle, "group-message":MessageCircle, attachments:File, groups:Users };
 
-export default function CommandPalette({ onNavigate }) {
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const inputRef = useRef();
-  useEffect(() => {
-    const key = (event) => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") { event.preventDefault(); setOpen((value) => !value); } if (event.key === "Escape") setOpen(false); };
-    addEventListener("keydown", key); return () => removeEventListener("keydown", key);
-  }, []);
-  useEffect(() => { if (open) requestAnimationFrame(() => inputRef.current?.focus()); }, [open]);
-  const shown = useMemo(() => commands.filter(([,title,detail]) => `${title} ${detail}`.toLowerCase().includes(query.toLowerCase())), [query]);
-  if (!open) return <button className="command-palette-launch" title="Command palette · Ctrl+K" onClick={() => setOpen(true)}><Command /></button>;
-  return <div className="command-palette-backdrop" onMouseDown={(event) => event.target === event.currentTarget && setOpen(false)}><section className="command-palette" role="dialog" aria-modal="true" aria-label="Command palette"><header><Command /><input ref={inputRef} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Go anywhere in CrewDeck…" /></header><div>{shown.map(([id,title,detail,Icon]) => <button key={id} onClick={() => { onNavigate(id); setOpen(false); setQuery(""); }}><Icon /><span><strong>{title}</strong><small>{detail}</small></span></button>)}<button onClick={() => { window.desktop.openMessageWindow("Messages.html"); setOpen(false); }}><MessageCircle /><span><strong>Open messages in a new window</strong><small>Keep a conversation beside the rest of CrewDeck</small></span></button></div><footer><span>Ctrl K</span> to open · <span>Esc</span> to close</footer></section></div>;
+function Mark({ text, query }) {
+  const term = parseCrewSearch(query).text;
+  if (!term) return text;
+  const index = String(text || "").toLowerCase().indexOf(term.toLowerCase());
+  return index < 0 ? text : <>{String(text).slice(0,index)}<mark>{String(text).slice(index,index+term.length)}</mark>{String(text).slice(index+term.length)}</>;
+}
+
+export default function CommandPalette({ onNavigate, user }) {
+  const [open,setOpen]=useState(false), [query,setQuery]=useState(""), [results,setResults]=useState([]), [saved,setSaved]=useState([]), [recent,setRecent]=useState([]), [busy,setBusy]=useState(false), [cursor,setCursor]=useState(0),[page,setPage]=useState(0);
+  const inputRef=useRef(),dialogRef=useRef(),previousFocus=useRef();
+  useEffect(()=>{const key=e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="k"){e.preventDefault();setOpen(v=>!v);}if(e.key==="Escape")setOpen(false);};addEventListener("keydown",key);return()=>removeEventListener("keydown",key);},[]);
+  useEffect(()=>{if(open){previousFocus.current=document.activeElement;const trap=event=>{if (event.key !== "Tab")return;const focusable=[...dialogRef.current.querySelectorAll("button,input,[href]")].filter(node=>!node.disabled);if(!focusable.length)return;const first=focusable[0],last=focusable.at(-1);if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}};addEventListener("keydown",trap);requestAnimationFrame(()=>inputRef.current?.focus());return()=>{removeEventListener("keydown",trap);previousFocus.current?.focus?.();};}},[open]);
+  useEffect(()=>{if(open&&user?.id){loadSavedSearches(user.id).then(setSaved).catch(()=>{});setRecent(loadRecentSearches(user.id));}},[open,user?.id]);
+  useEffect(()=>{if(!open||query.trim().length<2){setResults([]);return;}setBusy(true);const timer=setTimeout(()=>searchCrewDeck(query,{offset:page*12}).then(value=>{setResults(value);setRecent(rememberCrewSearch(user?.id,query));}).catch(()=>setResults([])).finally(()=>setBusy(false)),280);return()=>clearTimeout(timer);},[open,query,page,user?.id]);
+  const shown=useMemo(()=>commands.filter(([,title,detail])=>`${title} ${detail}`.toLowerCase().includes(query.toLowerCase())),[query]);
+  const openRoute=(route)=>{rememberCrewSearch(user?.id,query);onNavigate(route);setOpen(false);setQuery("");};
+  async function save(){const name=await promptInApp("Name this search.",query.slice(0,40),{title:"Save Crew search",inputLabel:"Name",confirmLabel:"Save"});if(!name)return;await saveCrewSearch(user.id,name,query);setSaved(await loadSavedSearches(user.id));}
+  if(!open)return <button type="button" className="command-palette-launch" title="Crew search · Ctrl+K" aria-label="Open universal Crew search" onClick={()=>setOpen(true)}><Command /></button>;
+  return <div className="command-palette-backdrop" onMouseDown={e=>e.target===e.currentTarget&&setOpen(false)}><section ref={dialogRef} className="command-palette universal-search" role="dialog" aria-modal="true" aria-label="Search CrewDeck pages and actions"><header><Search/><input ref={inputRef} aria-label="Search all permitted CrewDeck content" value={query} onChange={e=>{setQuery(e.target.value);setCursor(0);setPage(0);}} onKeyDown={e=>{if(e.key==="ArrowDown"){e.preventDefault();setCursor(v=>Math.min(v+1,results.length-1));}if(e.key==="ArrowUp"){e.preventDefault();setCursor(v=>Math.max(v-1,0));}if(e.key==="Enter"&&results[cursor])openRoute(results[cursor].route);}} placeholder="Search messages, people, meetups, files…"/><button disabled={!query.trim()} onClick={save} title="Save search"><Bookmark/></button></header><div className="crew-search-filters" aria-label="Search filters">{FILTERS.map(filter=><button key={filter} onClick={()=>setQuery(value=>`${value.trim()} ${filter}`.trim())}>{filter}</button>)}{query.match(/\b(?:from|before|after|in|has|is|mentions):\S+/gi)?.map(filter=><button className="active" key={`active-${filter}`} title="Remove filter" onClick={()=>setQuery(value=>value.replace(filter,"").replace(/\s+/g," ").trim())}>{filter} ×</button>)}</div><div className="crew-search-results" role="listbox" aria-live="polite">{busy&&<p className="micro-copy">Searching permitted CrewDeck content…</p>}{!query&&recent.length>0&&<section><h3>Recent searches</h3>{recent.map(item=><button key={item} onClick={()=>setQuery(item)}><Search/><span><strong>{item}</strong></span></button>)}</section>}{!query&&saved.length>0&&<section><h3>Saved searches</h3>{saved.map(item=><div className="saved-search-row" key={item.id}><button onClick={()=>setQuery(item.query)}><Bookmark/><span><strong>{item.name}</strong><small>{item.query}</small></span></button><button title="Delete saved search" onClick={async()=>{await deleteCrewSearch(item.id,user.id);setSaved(await loadSavedSearches(user.id));}}><Trash2/></button></div>)}</section>}{query.length<2&&shown.map(([id,title,detail,Icon])=><button type="button" key={id} onClick={()=>openRoute(id)}><Icon/><span><strong>{title}</strong><small>{detail}</small></span></button>)}{results.map((item,index)=>{const Icon=icons[item.kind]||Hash;return <button type="button" role="option" aria-selected={index===cursor} className={index===cursor?"selected":""} key={`${item.kind}-${item.id}`} onClick={()=>openRoute(item.route)}><Icon/><span><strong><Mark text={item.title} query={query}/></strong><small>{item.source} · <Mark text={String(item.preview||"").slice(0,180)} query={query}/></small></span></button>;})}{query.trim().length>=2&&!busy&&!results.length&&<p className="micro-copy">No permitted results matched this search.</p>}</div>{query.trim().length>=2&&<div className="button-row"><button disabled={page===0} onClick={()=>setPage(value=>Math.max(0,value-1))}>Previous</button><button disabled={results.length<12} onClick={()=>setPage(value=>value+1)}>More results</button></div>}<footer><span>↑ ↓</span> navigate · <span>Enter</span> open · <span>Esc</span> close</footer></section></div>;
 }

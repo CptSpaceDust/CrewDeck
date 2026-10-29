@@ -1,4 +1,6 @@
 import { supabase } from "./supabase";
+import { registerMessageMentions } from "./messageNavigation";
+import { communityBoards } from "./communityBoards";
 import { localDateKey, meetupInstant, zonedDateTime } from "./time";
 
 function unwrap(result) {
@@ -111,17 +113,22 @@ export async function updatePresence(userId) {
 }
 
 export async function getIdeas() {
-  const ideas = unwrap(
-    await supabase
-      .from("ideas")
-      .select("*")
-      .order("created_at", { ascending: false }),
-  );
+  const ideas = await communityBoards.listPosts("idea");
   const votes = unwrap(
     await supabase.from("idea_votes").select("idea_id,user_id"),
   );
   return (ideas || []).map((idea) => ({
     ...idea,
+    user_id: idea.author_id,
+    username:
+      idea.author?.username || idea.metadata?.legacy_username || "Crew member",
+    description: idea.body,
+    status:
+      {
+        Idea: "Pending",
+        Discussing: "Considering",
+        Building: "Working On",
+      }[idea.status] || idea.status,
     votes: (votes || []).filter((vote) => vote.idea_id === idea.id),
   }));
 }
@@ -169,7 +176,7 @@ export async function getIdeaLimit(userId) {
 }
 
 export async function deleteIdea(idea) {
-  unwrap(await supabase.from("ideas").delete().eq("id", idea.id));
+  await communityBoards.deletePost(idea.id);
   const date = new Date().toISOString().split("T")[0];
   const limit = unwrap(
     await supabase
@@ -189,23 +196,15 @@ export async function deleteIdea(idea) {
 }
 
 export async function updateIdeaStatus(id, status) {
-  return unwrap(
-    await supabase
-      .from("ideas")
-      .update({ status })
-      .eq("id", id)
-      .select()
-      .single(),
-  );
+  const next =
+    { Pending: "Idea", Considering: "Discussing", "Working On": "Building" }[
+      status
+    ] || status;
+  return communityBoards.updatePost(id, { status: next });
 }
 
 export async function getCollabs() {
-  const posts = unwrap(
-    await supabase
-      .from("collab_posts")
-      .select("*")
-      .order("created_at", { ascending: false }),
-  );
+  const posts = await communityBoards.listPosts("collaboration");
   const comments = unwrap(
     await supabase
       .from("collab_comments")
@@ -231,7 +230,14 @@ export async function getCollabs() {
   );
   return (posts || []).map((item) => ({
     ...item,
-    profile: byId[item.user_id],
+    user_id: item.author_id,
+    description: item.body,
+    category: item.metadata?.category || item.tags?.[0] || "Other",
+    looking_for: item.metadata?.looking_for || "",
+    status:
+      { Active: "In Progress", Completed: "Filled" }[item.status] ||
+      item.status,
+    profile: item.author || byId[item.author_id],
     comments: (comments || [])
       .filter((comment) => comment.post_id === item.id)
       .map((comment) => ({ ...comment, profile: byId[comment.user_id] })),
@@ -239,29 +245,41 @@ export async function getCollabs() {
 }
 
 export async function createCollab(userId, fields) {
-  return unwrap(
-    await supabase
-      .from("collab_posts")
-      .insert({ user_id: userId, ...fields })
-      .select()
-      .single(),
-  );
+  const status =
+    { "In Progress": "Active", Filled: "Completed" }[fields.status] ||
+    fields.status;
+  return communityBoards.createPost({
+    kind: "collaboration",
+    authorId: userId,
+    title: fields.title,
+    body: fields.description,
+    status,
+    tags: [fields.category],
+    metadata: {
+      category: fields.category,
+      looking_for: fields.looking_for,
+    },
+  });
 }
 
 export async function updateCollab(id, userId, fields) {
-  return unwrap(
-    await supabase
-      .from("collab_posts")
-      .update({ ...fields, updated_at: new Date().toISOString() })
-      .eq("id", id)
-      .eq("user_id", userId)
-      .select()
-      .single(),
-  );
+  const status =
+    { "In Progress": "Active", Filled: "Completed" }[fields.status] ||
+    fields.status;
+  return communityBoards.updatePost(id, {
+    title: fields.title,
+    body: fields.description,
+    status,
+    tags: [fields.category],
+    metadata: {
+      category: fields.category,
+      looking_for: fields.looking_for,
+    },
+  });
 }
 
 export async function deleteCollab(id) {
-  return unwrap(await supabase.from("collab_posts").delete().eq("id", id));
+  return communityBoards.deletePost(id);
 }
 
 export async function createCollabComment(postId, userId, comment) {
@@ -272,10 +290,9 @@ export async function createCollabComment(postId, userId, comment) {
       .select()
       .single(),
   );
-  const { error } = await supabase.rpc("create_collab_comment_notification", {
+  await supabase.rpc("create_collab_comment_notification", {
     target_post_id: postId,
   });
-  if (error) console.warn("Could not create collaboration notification", error);
   return row;
 }
 
@@ -300,6 +317,7 @@ export async function getMeetups() {
     await supabase
       .from("meetup_requests")
       .select("*")
+      .eq("kind", "meetup")
       .order("meetup_date", { ascending: true })
       .order("start_time", { ascending: true }),
   );
@@ -416,9 +434,11 @@ export async function respondToMeetup(meetupId, response) {
     body: { meetupId, status: response },
   });
   if (response === "accepted") {
-    await supabase.functions.invoke("calendar-integration", {
-      body: { action: "export_meetups" },
-    }).catch(() => null);
+    await supabase.functions
+      .invoke("calendar-integration", {
+        body: { action: "export_meetups" },
+      })
+      .catch(() => null);
   }
   return { ...updated, emailSent: !error };
 }
@@ -431,9 +451,11 @@ export async function respondToGroupMeetup(meetupId, response) {
     }),
   );
   if (response === "accepted") {
-    await supabase.functions.invoke("calendar-integration", {
-      body: { action: "export_meetups" },
-    }).catch(() => null);
+    await supabase.functions
+      .invoke("calendar-integration", {
+        body: { action: "export_meetups" },
+      })
+      .catch(() => null);
   }
   return updated;
 }
@@ -510,7 +532,11 @@ export async function createMeetup(userId, fields) {
     const date = new Date(year, month - 1, day + count, 12);
     return localDateKey(date);
   };
-  const { recurrence_count: _ignored, ...baseFields } = fields;
+  const {
+    recurrence_count: _ignored,
+    capacity: requestedCapacity,
+    ...baseFields
+  } = fields;
   const extraNames = String(fields.additional_participants || "")
     .split(/[\n,]/)
     .map((name) => name.trim().replace(/^@/, ""))
@@ -527,13 +553,16 @@ export async function createMeetup(userId, fields) {
     recurrence_rule: recurrenceRule,
     recurrence_series_id: seriesId,
     recurrence_index: index,
-    capacity: Math.min(
-      25,
-      Math.max(
-        2,
-        2 + new Set(extraNames.map((name) => name.toLowerCase())).size,
-      ),
-    ),
+    capacity:
+      fields.kind === "event"
+        ? Math.min(100, Math.max(2, Number(requestedCapacity) || 10))
+        : Math.min(
+            25,
+            Math.max(
+              2,
+              2 + new Set(extraNames.map((name) => name.toLowerCase())).size,
+            ),
+          ),
     status: "pending",
   }));
   const createdResult = unwrap(
@@ -575,17 +604,25 @@ export async function createMeetup(userId, fields) {
             supabase.rpc("create_notification", {
               target_user_id: targetUserId,
               notification_type: "meetup",
-              notification_title: "Group meetup invitation",
-              notification_message: "You were invited to a crew meetup.",
+              notification_title:
+                fields.kind === "event"
+                  ? "Crew Event invitation"
+                  : "Group meetup invitation",
+              notification_message:
+                fields.kind === "event"
+                  ? `You were invited to ${fields.event_title || "a Crew Event"}.`
+                  : "You were invited to a crew meetup.",
               notification_link: "MyMeetups.html",
             }),
         ),
       );
     }
   }
-  const { error } = await supabase.functions.invoke("send-meetup-email", {
-    body: { meetupId: created.id, status: "pending" },
-  });
+  const { error } = fields.with_user_id
+    ? await supabase.functions.invoke("send-meetup-email", {
+        body: { meetupId: created.id, status: "pending" },
+      })
+    : { error: null };
   return { ...created, emailSent: !error, recurrenceCount: createdRows.length };
 }
 
@@ -719,9 +756,25 @@ export async function sendMessage(
   silent = false,
   messageType = "text",
   expiresInMinutes = null,
+  attachmentIds = null,
+  mentionIds = [],
+  broadcastKind = null,
 ) {
-  const message = unwrap(
-    await supabase
+  const expiresAt = expiresInMinutes
+    ? new Date(Date.now() + Number(expiresInMinutes) * 60000).toISOString()
+    : null;
+  const message = attachmentIds?.length
+    ? unwrap(await supabase.rpc("send_message_with_attachments", {
+        p_conversation_kind: "dm",
+        p_conversation_id: conversationId,
+        p_content: content,
+        p_attachment_ids: attachmentIds,
+        p_reply_to_id: replyToId,
+        p_silent: silent,
+        p_expires_at: expiresAt,
+        p_message_type: messageType,
+      }))
+    : unwrap(await supabase
       .from("dm_messages")
       .insert({
         conversation_id: conversationId,
@@ -730,27 +783,33 @@ export async function sendMessage(
         reply_to_id: replyToId,
         silent,
         message_type: messageType,
-        expires_at: expiresInMinutes
-          ? new Date(Date.now() + Number(expiresInMinutes) * 60000).toISOString()
-          : null,
+        expires_at: expiresAt,
       })
       .select()
-      .single(),
-  );
-  if (!silent) {
+      .single());
+  if (!silent && !mentionIds.includes(otherUserId)) {
     await supabase.rpc("create_dm_notification", {
       target_user_id: otherUserId,
       target_conversation_id: conversationId,
     });
   }
+  await registerMessageMentions("dm", conversationId, message.id, mentionIds, broadcastKind);
   return message;
 }
 
 export async function requestConversation(user, profile, other) {
   const userId = user.id;
   const otherId = other.id;
-  const allowed = unwrap(await supabase.rpc("can_interact_with", { target_user: otherId, interaction_type:"message" }));
-  if (!allowed) throw new Error(`${other.username || "This member"} is not accepting new messages from you.`);
+  const allowed = unwrap(
+    await supabase.rpc("can_interact_with", {
+      target_user: otherId,
+      interaction_type: "message",
+    }),
+  );
+  if (!allowed)
+    throw new Error(
+      `${other.username || "This member"} is not accepting new messages from you.`,
+    );
   const [userOne, userTwo] = [userId, otherId].sort();
   const existing = unwrap(
     await supabase
@@ -1000,9 +1059,25 @@ export async function sendGroupMessage(
   silent = false,
   messageType = "text",
   expiresInMinutes = null,
+  attachmentIds = null,
+  mentionIds = [],
+  broadcastKind = null,
 ) {
-  const message = unwrap(
-    await supabase
+  const expiresAt = expiresInMinutes
+    ? new Date(Date.now() + Number(expiresInMinutes) * 60000).toISOString()
+    : null;
+  const message = attachmentIds?.length
+    ? unwrap(await supabase.rpc("send_message_with_attachments", {
+        p_conversation_kind: "group",
+        p_conversation_id: groupId,
+        p_content: content,
+        p_attachment_ids: attachmentIds,
+        p_reply_to_id: replyToId,
+        p_silent: silent,
+        p_expires_at: expiresAt,
+        p_message_type: messageType,
+      }))
+    : unwrap(await supabase
       .from("group_messages")
       .insert({
         group_id: groupId,
@@ -1011,13 +1086,10 @@ export async function sendGroupMessage(
         reply_to_id: replyToId,
         silent,
         message_type: messageType,
-        expires_at: expiresInMinutes
-          ? new Date(Date.now() + Number(expiresInMinutes) * 60000).toISOString()
-          : null,
+        expires_at: expiresAt,
       })
       .select()
-      .single(),
-  );
+      .single());
   const [
     { data: group },
     { data: memberships },
@@ -1072,14 +1144,9 @@ export async function sendGroupMessage(
             new Date(preference.muted_until) > new Date())
         )
           return false;
+        if (mentionIds.includes(target.id) || broadcastKind) return false;
         if (preference?.notification_level !== "mentions") return true;
-        return (
-          mentionsEveryone ||
-          new RegExp(
-            `(^|\\s)@${String(target.username || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`,
-            "i",
-          ).test(content)
-        );
+        return false;
       });
   await Promise.allSettled(
     notified.map(({ id: targetUserId }) =>
@@ -1092,6 +1159,7 @@ export async function sendGroupMessage(
       }),
     ),
   );
+  await registerMessageMentions("group", groupId, message.id, mentionIds, broadcastKind);
   return message;
 }
 

@@ -7,6 +7,17 @@ export default defineConfig({
   base: "./",
   build: {
     outDir: "../../dist-renderer",
-    emptyOutDir: true
+    emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          react: ["react", "react-dom", "react/jsx-runtime"],
+          supabase: ["@supabase/supabase-js"],
+          voice: ["livekit-client"],
+          icons: ["lucide-react"],
+          qrcode: ["qrcode"]
+        }
+      }
+    }
   }
 });

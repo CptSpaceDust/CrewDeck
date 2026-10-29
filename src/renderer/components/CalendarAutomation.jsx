@@ -56,7 +56,7 @@ function AvailabilityPreview({ rows = [] }) {
           const items = rows.filter((row) => row.indefinite || row.block_date === key);
           const allDay = items.some((item) => item.all_day || item.indefinite);
           const classes = ["private-calendar-day", allDay ? "offline" : items.length ? "partial" : "", selectedDate === key ? "selected" : ""].filter(Boolean).join(" ");
-          return <button type="button" className={classes} key={key} aria-label={`${new Date(`${key}T12:00:00`).toLocaleDateString()}${items.length ? ", unavailable" : ", available"}`} onClick={() => setSelectedDate(key)}><strong>{day}</strong><span>{allDay ? "Off all day" : items.length ? "Some hours off" : "Open"}</span></button>;
+          return <button type="button" className={classes} key={key} aria-pressed={selectedDate === key} aria-label={`${new Date(`${key}T12:00:00`).toLocaleDateString()}${items.length ? ", unavailable" : ", available"}`} onClick={() => setSelectedDate(key)}><strong>{day}</strong><span>{allDay ? "Off all day" : items.length ? "Some hours off" : "Open"}</span></button>;
         })}
       </div>
       <section className="private-calendar-details">

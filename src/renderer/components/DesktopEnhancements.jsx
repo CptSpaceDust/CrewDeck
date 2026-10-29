@@ -280,8 +280,8 @@ export function WhatsNew() {
             <div>
               <strong>Added</strong>
               <p>
-                A compact private calendar now shows your saved availability
-                one month at a time.
+                Universal Crew Search, the actionable Crew Inbox, live link
+                previews, and a configurable VR overlay are ready.
               </p>
             </div>
           </article>
@@ -290,8 +290,8 @@ export function WhatsNew() {
             <div>
               <strong>Changed</strong>
               <p>
-                Move between months and choose any date to check its off time
-                without opening meetup details.
+                Unread totals and reminder emails now follow inbox snooze and
+                dismiss choices across CrewDeck.
               </p>
             </div>
           </article>
@@ -300,8 +300,8 @@ export function WhatsNew() {
             <div>
               <strong>Fixed</strong>
               <p>
-                Website and app previews now use matching full-day, partial,
-                and open date states.
+                Crew Event migration and older meetup backfills now handle
+                legacy records safely.
               </p>
             </div>
           </article>

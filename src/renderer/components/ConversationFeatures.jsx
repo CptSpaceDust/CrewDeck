@@ -26,6 +26,7 @@ import {
 } from "../lib/crewFeatures";
 import { supabase } from "../lib/supabase";
 import { confirmInApp, promptInApp } from "./InAppDialog";
+import { FormattedMessage } from "./MessageComposer";
 
 const EMOJIS = ["👍", "❤️", "😂", "🎉", "🚀"];
 const MORE_EMOJIS = [
@@ -353,6 +354,7 @@ export function MessageFeatureBar({
   reactions,
   receipts = [],
   attachments = [],
+  mentions = [],
   canPin,
   onChanged,
   onNotice,
@@ -519,6 +521,7 @@ export function MessageFeatureBar({
               conversationId,
               message,
               new Date(Date.now() + 3600000).toISOString(),
+              mentions.filter((mention) => mention.message_id === message.id),
             );
             onNotice?.("Reminder set for one hour from now.");
           }}
@@ -700,7 +703,9 @@ export function ConversationDetails({
               <article key={reminder.id}>
                 <div>
                   <strong>
-                    {reminder.message_excerpt || "Message reminder"}
+                    <FormattedMessage mentions={reminder.mention_snapshot || []}>
+                      {reminder.message_excerpt || "Message reminder"}
+                    </FormattedMessage>
                   </strong>
                   <small>
                     {reminder.delivered_at ? "Delivered " : "Due "}

@@ -14,6 +14,7 @@ import {
   UserPlus,
   Bug,
   HandHelping,
+  Heart,
 } from "lucide-react";
 import { Avatar } from "./ui";
 import BrandMark from "./BrandMark";
@@ -57,9 +58,13 @@ const groups = [
     label: "Connect",
     items: [
       ["meetups", "Meetup Calendar", CalendarDays],
-      ["my-meetups", "My Meetups", CalendarCheck],
+      ["my-meetups", "My Plans", CalendarCheck],
       ["community-calendar", "Community Calendar", CalendarDays],
     ],
+  },
+  {
+    label: "Support",
+    items: [["support", "Support Captain", Heart]],
   },
 ];
 
@@ -70,10 +75,12 @@ export default function Sidebar({ page, setPage, profile, onLogout, unread }) {
         <BrandMark className="sidebar-brand-mark" />
         <strong>CrewDeck</strong>
       </div>
-      <nav>
+      <nav aria-label="Primary navigation">
         {profile?.rank?.toLowerCase() === "captain" && (
           <button
+            type="button"
             className={page === "captain" ? "nav-item active" : "nav-item"}
+            aria-current={page === "captain" ? "page" : undefined}
             onClick={() => setPage("captain")}
           >
             <LockKeyhole />
@@ -85,7 +92,9 @@ export default function Sidebar({ page, setPage, profile, onLogout, unread }) {
             <span>{group.label}</span>
             {group.items.map(([id, label, Icon]) => (
               <button
+                type="button"
                 className={page === id ? "nav-item active" : "nav-item"}
+                aria-current={page === id ? "page" : undefined}
                 onClick={() => setPage(id)}
                 key={id}
               >
@@ -102,9 +111,11 @@ export default function Sidebar({ page, setPage, profile, onLogout, unread }) {
           <section className="nav-group">
             <span>VRChat</span>
             <button
+              type="button"
               className={
                 page === "control-center" ? "nav-item active" : "nav-item"
               }
+              aria-current={page === "control-center" ? "page" : undefined}
               onClick={() => setPage("control-center")}
             >
               <Gauge />
@@ -115,9 +126,11 @@ export default function Sidebar({ page, setPage, profile, onLogout, unread }) {
       </nav>
       <div className="sidebar-footer">
         <button
+          type="button"
           className={
             page === "profile" ? "profile-chip active" : "profile-chip"
           }
+          aria-current={page === "profile" ? "page" : undefined}
           onClick={() => setPage("profile")}
         >
           <Avatar profile={profile} size={40} />
@@ -128,6 +141,7 @@ export default function Sidebar({ page, setPage, profile, onLogout, unread }) {
         </button>
         <div className="footer-actions">
           <button
+            type="button"
             onClick={() => setPage("settings")}
             title="App settings"
             aria-label="App settings"
@@ -135,7 +149,7 @@ export default function Sidebar({ page, setPage, profile, onLogout, unread }) {
           >
             <Settings />
           </button>
-          <button onClick={onLogout} title="Sign out" aria-label="Sign out">
+          <button type="button" onClick={onLogout} title="Sign out" aria-label="Sign out">
             <LogOut />
           </button>
         </div>
