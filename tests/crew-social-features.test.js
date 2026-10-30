@@ -59,8 +59,6 @@ test("desktop messaging exposes the selected realtime conversation tools", () =>
     "message_reminders",
     "forward_crew_message",
     "moderation_evidence_snapshots",
-    "Conversation folder",
-    "Conversation sound",
   ])
     assert.match(combined, new RegExp(marker));
   assert.match(messages, /PinnedMessages/);
@@ -70,6 +68,9 @@ test("desktop messaging exposes the selected realtime conversation tools", () =>
   assert.match(features, /ConversationDetails/);
   assert.match(features, /AttachmentPreviewDialog/);
   assert.match(features, /Open document/);
+  assert.doesNotMatch(features, /Conversation theme/);
+  assert.doesNotMatch(features, /Conversation folder/);
+  assert.doesNotMatch(features, /Conversation sound/);
   assert.doesNotMatch(features, /Open shared image/);
   assert.doesNotMatch(features, /openMessageAttachment/);
   assert.match(composer, /pending-message-attachment/);

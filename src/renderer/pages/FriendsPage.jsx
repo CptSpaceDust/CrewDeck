@@ -1,5 +1,6 @@
 import {
   CalendarPlus,
+  BellRing,
   Clock3,
   Heart,
   MessageCircle,
@@ -22,6 +23,7 @@ import {
   Modal,
   PageHeader,
 } from "../components/ui";
+import { PulseBadge, setPulseAlert, useVisiblePulses } from "../components/AvailabilityPulse";
 
 const online = (person) =>
   Boolean(
@@ -50,6 +52,7 @@ export default function FriendsPage({
   onNavigate,
   onViewProfile,
 }) {
+  const pulses = useVisiblePulses();
   const [profiles, setProfiles] = useState([]);
   const [friendships, setFriendships] = useState([]);
   const [details, setDetails] = useState([]);
@@ -390,6 +393,8 @@ export default function FriendsPage({
                       ? "Plan with preset"
                       : "Invite to meetup"}
                   </button>
+                  <button onClick={() => { localStorage.setItem("crewdeck.meetup.prefill", JSON.stringify({ personId: person.id, compare: true })); onNavigate?.("MeetupCalendar.html?compare=1"); }}><Clock3/> Compare availability</button>
+                  <button onClick={async()=>{const{error}=await setPulseAlert(user.id,person.id,true);setNotice(error?.message||`You will be notified when ${person.username} becomes available.`);}}><BellRing/> Availability alert</button>
                   <button onClick={() => openInsights(person)}>
                     <Users /> Mutuals
                   </button>
@@ -397,6 +402,7 @@ export default function FriendsPage({
                     <NotebookPen /> Notes & nickname
                   </button>
                 </div>
+                <PulseBadge pulse={pulses[person.id]} />
               </article>
             );
           })

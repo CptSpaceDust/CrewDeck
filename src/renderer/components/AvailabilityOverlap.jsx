@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { supabase } from "../lib/supabase";
 import {
   availabilityInstantRange,
   localDateKey,
@@ -26,6 +27,7 @@ export function AvailabilityOverlap({
   minimumAttendance,
   selectedDate,
   onUseTime,
+  userId,
 }) {
   const [open, setOpen] = useState(false);
   const [date, setDate] = useState(selectedDate || localDateKey(new Date()));
@@ -91,6 +93,13 @@ export function AvailabilityOverlap({
     minimumAttendance,
     date,
   ]);
+  useEffect(() => {
+    if (!userId || participantIds.length < 2 || !suggestions.length) return;
+    const cacheKey = `availability:${[...participantIds].sort().join(":")}:${date}:${duration}`;
+    const row = { cache_key:cacheKey, owner_id:userId, participant_ids:participantIds, result:{ date, duration, suggestions }, expires_at:new Date(Date.now()+15*60000).toISOString() };
+    supabase.from("availability_overlap_cache").upsert(row).then(() => {});
+    localStorage.setItem("crewdeck.quick-gather-overlap", JSON.stringify(row));
+  }, [userId, participantIds.join("|"), date, duration, suggestions]);
   if (participantIds.length < 2) return null;
   const best = suggestions[0];
   const slotLabel = (minutes) => {

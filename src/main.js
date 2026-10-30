@@ -40,10 +40,22 @@ if (
 )
   fs.cpSync(legacyUserData, crewDeckUserData, { recursive: true });
 app.setPath("userData", crewDeckUserData);
-const installerPreferencesPath = path.join(crewDeckUserData, "installer-preferences.json");
-let installerPreferences = { background: 1, startup: 0, startMinimized: 0, appLockSetup: 0, applied: true };
+const installerPreferencesPath = path.join(
+  crewDeckUserData,
+  "installer-preferences.json",
+);
+let installerPreferences = {
+  background: 1,
+  startup: 0,
+  startMinimized: 0,
+  appLockSetup: 0,
+  applied: true,
+};
 try {
-  installerPreferences = { ...installerPreferences, ...JSON.parse(fs.readFileSync(installerPreferencesPath, "utf8")) };
+  installerPreferences = {
+    ...installerPreferences,
+    ...JSON.parse(fs.readFileSync(installerPreferencesPath, "utf8")),
+  };
 } catch {}
 
 app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
@@ -65,6 +77,7 @@ const activeNotifications = new Set();
 let overlayWindow;
 let overlayState = {};
 let overlayShortcut = "Control+Shift+O";
+let overlaySecondaryShortcut = "Control+Shift+P";
 let updateState = {
   status: "idle",
   currentVersion: app.getVersion(),
@@ -327,6 +340,7 @@ function configurePermissions() {
 
 function createWindow() {
   const launchedHidden = process.argv.includes("--hidden");
+  let recoveryAttempted = false;
   mainWindow = new BrowserWindow({
     width: 1480,
     height: 940,
@@ -369,6 +383,29 @@ function createWindow() {
     }
     deliverPendingNotificationRoute();
   });
+  mainWindow.webContents.on(
+    "did-fail-load",
+    async (_event, code, description, failedUrl, isMainFrame) => {
+      if (!isMainFrame || recoveryAttempted) return;
+      recoveryAttempted = true;
+      try {
+        await session.defaultSession.clearCache();
+        await mainWindow.loadURL(
+          isDevelopment
+            ? "http://127.0.0.1:5173"
+            : `${APP_ORIGIN}/index.html?recovered=1`,
+        );
+      } catch {
+        const detail = `${description || "Renderer failed to load"} (${code})`;
+        await mainWindow.loadURL(
+          `data:text/html;charset=utf-8,${encodeURIComponent(`<!doctype html><meta charset="utf-8"><title>CrewDeck startup</title><style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#050914;color:#eef8ff;font:16px/1.6 system-ui}.card{width:min(560px,calc(100% - 48px));padding:30px;border:1px solid #4b91c7;border-radius:24px;background:#0b1c36;text-align:center}button{padding:11px 18px;border:1px solid #72c7ff;border-radius:11px;color:#fff;background:#174677}</style><main class="card"><h1>CrewDeck could not start</h1><p>${detail}</p><button onclick="location.href='${APP_ORIGIN}/index.html?retry=1'">Try again</button></main>`)}`,
+        );
+      }
+    },
+  );
+  mainWindow.webContents.on("render-process-gone", () => {
+    if (!mainWindow?.isDestroyed()) mainWindow.reload();
+  });
   mainWindow.on("blur", scheduleLock);
   mainWindow.on("focus", () => clearTimeout(blurTimer));
   mainWindow.on("minimize", lockApp);
@@ -395,13 +432,37 @@ function createWindow() {
 }
 
 function createMessageWindow(route = "Messages.html") {
-  const child = new BrowserWindow({ width:1080, height:760, minWidth:760, minHeight:560, title:"CrewDeck Messages", icon:ICON_PATH, backgroundColor:"#070b16", webPreferences:{ preload:path.join(__dirname, "preload.js"), contextIsolation:true, nodeIntegration:false, sandbox:true, spellcheck:true, backgroundThrottling:false } });
+  const child = new BrowserWindow({
+    width: 1080,
+    height: 760,
+    minWidth: 760,
+    minHeight: 560,
+    title: "CrewDeck Messages",
+    icon: ICON_PATH,
+    backgroundColor: "#070b16",
+    webPreferences: {
+      preload: path.join(__dirname, "preload.js"),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      spellcheck: true,
+      backgroundThrottling: false,
+    },
+  });
   child.removeMenu();
-  child.webContents.setWindowOpenHandler(({ url }) => { if (/^https?:/i.test(url) && !url.startsWith(APP_ORIGIN)) shell.openExternal(url); return { action:"deny" }; });
+  child.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:/i.test(url) && !url.startsWith(APP_ORIGIN))
+      shell.openExternal(url);
+    return { action: "deny" };
+  });
   messageWindows.add(child);
   child.on("closed", () => messageWindows.delete(child));
-  child.webContents.on("did-finish-load", () => child.webContents.send("desktop:navigate", route));
-  child.loadURL(isDevelopment ? "http://127.0.0.1:5173" : `${APP_ORIGIN}/index.html`);
+  child.webContents.on("did-finish-load", () =>
+    child.webContents.send("desktop:navigate", route),
+  );
+  child.loadURL(
+    isDevelopment ? "http://127.0.0.1:5173" : `${APP_ORIGIN}/index.html`,
+  );
   return child;
 }
 
@@ -410,26 +471,91 @@ function createOverlayWindow(show = true) {
     if (show) overlayWindow.showInactive();
     return overlayWindow;
   }
-  overlayWindow = new BrowserWindow({ width:390,height:520,minWidth:280,minHeight:180,maxWidth:900,maxHeight:1000,title:"CrewDeck VR Overlay",icon:ICON_PATH,transparent:true,frame:false,alwaysOnTop:true,skipTaskbar:true,resizable:true,show:false,backgroundColor:"#00000000",webPreferences:{preload:path.join(__dirname,"preload.js"),contextIsolation:true,nodeIntegration:false,sandbox:true,backgroundThrottling:false} });
-  overlayWindow.setAlwaysOnTop(true,"screen-saver");
-  overlayWindow.setVisibleOnAllWorkspaces(true,{visibleOnFullScreen:true});
-  overlayWindow.on("close",event=>{if(isQuitting)return;event.preventDefault();overlayWindow.hide();});
-  overlayWindow.on("closed",()=>{overlayWindow=null;});
-  overlayWindow.webContents.on("did-finish-load",()=>overlayWindow.webContents.send("overlay:state",overlayState));
-  overlayWindow.loadURL(isDevelopment?"http://127.0.0.1:5173/?overlay=1":`${APP_ORIGIN}/index.html?overlay=1`);
-  if(show)overlayWindow.once("ready-to-show",()=>overlayWindow?.showInactive());
+  overlayWindow = new BrowserWindow({
+    width: 390,
+    height: 520,
+    minWidth: 280,
+    minHeight: 180,
+    maxWidth: 900,
+    maxHeight: 1000,
+    title: "CrewDeck VR Overlay",
+    icon: ICON_PATH,
+    transparent: true,
+    frame: false,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    resizable: true,
+    show: false,
+    backgroundColor: "#00000000",
+    webPreferences: {
+      preload: path.join(__dirname, "preload.js"),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      backgroundThrottling: false,
+    },
+  });
+  overlayWindow.setAlwaysOnTop(true, "screen-saver");
+  overlayWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  overlayWindow.on("close", (event) => {
+    if (isQuitting) return;
+    event.preventDefault();
+    overlayWindow.hide();
+  });
+  overlayWindow.on("closed", () => {
+    overlayWindow = null;
+  });
+  overlayWindow.webContents.on("did-finish-load", () =>
+    overlayWindow.webContents.send("overlay:state", overlayState),
+  );
+  overlayWindow.loadURL(
+    isDevelopment
+      ? "http://127.0.0.1:5173/?overlay=1"
+      : `${APP_ORIGIN}/index.html?overlay=1`,
+  );
+  if (show)
+    overlayWindow.once("ready-to-show", () => overlayWindow?.showInactive());
   return overlayWindow;
 }
 
-function registerOverlayShortcut(accelerator=overlayShortcut){
-  if(overlayShortcut)globalShortcut.unregister(overlayShortcut);
-  overlayShortcut=String(accelerator||"Control+Shift+O");
-  try{return globalShortcut.register(overlayShortcut,()=>{const window=createOverlayWindow(false);window.isVisible()?window.hide():window.showInactive();});}catch{return false;}
+function registerOverlayShortcut(accelerator = overlayShortcut) {
+  if (overlayShortcut) globalShortcut.unregister(overlayShortcut);
+  overlayShortcut = String(accelerator || "Control+Shift+O");
+  try {
+    return globalShortcut.register(overlayShortcut, () => {
+      const window = createOverlayWindow(false);
+      window.isVisible() ? window.hide() : window.showInactive();
+    });
+  } catch {
+    return false;
+  }
+}
+function registerOverlaySecondaryShortcut(
+  accelerator = overlaySecondaryShortcut,
+) {
+  if (overlaySecondaryShortcut)
+    globalShortcut.unregister(overlaySecondaryShortcut);
+  overlaySecondaryShortcut = String(accelerator || "Control+Shift+P");
+  try {
+    return globalShortcut.register(overlaySecondaryShortcut, () => {
+      const window = createOverlayWindow(false);
+      window.isVisible() ? window.hide() : window.showInactive();
+    });
+  } catch {
+    return false;
+  }
 }
 
 function extractShareTarget(argv = []) {
-  const candidate = argv.find((value) => { try { return fs.statSync(value).isFile(); } catch { return false; } });
-  if (candidate && fs.statSync(candidate).size <= 10 * 1024 * 1024) pendingShareTarget = candidate;
+  const candidate = argv.find((value) => {
+    try {
+      return fs.statSync(value).isFile();
+    } catch {
+      return false;
+    }
+  });
+  if (candidate && fs.statSync(candidate).size <= 10 * 1024 * 1024)
+    pendingShareTarget = candidate;
 }
 
 function setupIpc() {
@@ -555,24 +681,104 @@ function setupIpc() {
   ipcMain.handle("installer:get-preferences", () => installerPreferences);
   ipcMain.handle("installer:acknowledge-preferences", () => {
     installerPreferences.applied = true;
-    try { fs.writeFileSync(installerPreferencesPath, JSON.stringify(installerPreferences, null, 2)); } catch {}
+    try {
+      fs.writeFileSync(
+        installerPreferencesPath,
+        JSON.stringify(installerPreferences, null, 2),
+      );
+    } catch {}
     return { ok: true };
   });
-  ipcMain.handle("desktop:open-message-window", (_event, route) => { createMessageWindow(String(route || "Messages.html")); return { ok:true }; });
-  ipcMain.handle("overlay:open",()=>{createOverlayWindow(true);return{ok:true};});
-  ipcMain.handle("overlay:close",()=>{overlayWindow?.hide();return{ok:true};});
-  ipcMain.handle("overlay:set-preferences",(_event,value={})=>{const window=createOverlayWindow(false);if(Number.isFinite(value.width)&&Number.isFinite(value.height))window.setSize(Math.round(value.width),Math.round(value.height));if(Number.isFinite(value.opacity))window.setOpacity(Math.max(.35,Math.min(1,value.opacity)));if(value.shortcut)registerOverlayShortcut(value.shortcut);return{ok:true};});
-  ipcMain.on("overlay:update",(_event,value={})=>{overlayState={...overlayState,...value};overlayWindow?.webContents.send("overlay:state",overlayState);});
-  ipcMain.on("overlay:command",(_event,value)=>{
-    for(const window of BrowserWindow.getAllWindows()) if(window!==overlayWindow) window.webContents.send("overlay:command",value);
+  ipcMain.handle("desktop:open-message-window", (_event, route) => {
+    createMessageWindow(String(route || "Messages.html"));
+    return { ok: true };
+  });
+  ipcMain.handle("overlay:open", () => {
+    createOverlayWindow(true);
+    return { ok: true };
+  });
+  ipcMain.handle("overlay:close", () => {
+    overlayWindow?.hide();
+    return { ok: true };
+  });
+  ipcMain.handle("overlay:toggle", () => {
+    const window = createOverlayWindow(false);
+    window.isVisible() ? window.hide() : window.showInactive();
+    return { ok: true, visible: window.isVisible() };
+  });
+  ipcMain.handle("overlay:set-preferences", (_event, value = {}) => {
+    const window = createOverlayWindow(false);
+    if (Number.isFinite(value.width) && Number.isFinite(value.height))
+      window.setSize(Math.round(value.width), Math.round(value.height));
+    if (Number.isFinite(value.opacity))
+      window.setOpacity(Math.max(0.35, Math.min(1, value.opacity)));
+    if (value.shortcut) registerOverlayShortcut(value.shortcut);
+    if (value.secondary_shortcut)
+      registerOverlaySecondaryShortcut(value.secondary_shortcut);
+    return { ok: true };
+  });
+  ipcMain.on("overlay:update", (_event, value = {}) => {
+    overlayState = { ...overlayState, ...value };
+    overlayWindow?.webContents.send("overlay:state", overlayState);
+  });
+  ipcMain.on("overlay:command", (_event, value) => {
+    for (const window of BrowserWindow.getAllWindows())
+      if (window !== overlayWindow)
+        window.webContents.send("overlay:command", value);
   });
   ipcMain.handle("desktop:get-share-target", () => {
     if (!pendingShareTarget) return null;
-    const target = pendingShareTarget; pendingShareTarget = "";
-    try { const extension = path.extname(target).toLowerCase(); const types = { ".png":"image/png", ".jpg":"image/jpeg", ".jpeg":"image/jpeg", ".webp":"image/webp", ".gif":"image/gif", ".pdf":"application/pdf", ".txt":"text/plain", ".mp3":"audio/mpeg", ".wav":"audio/wav", ".ogg":"audio/ogg", ".webm":"audio/webm" }; const mimeType = types[extension]; if (!mimeType) return { error:"CrewDeck cannot safely share this file type." }; return { name:path.basename(target), mimeType, base64:fs.readFileSync(target).toString("base64") }; } catch { return { error:"The shared file could not be opened." }; }
+    const target = pendingShareTarget;
+    pendingShareTarget = "";
+    try {
+      const extension = path.extname(target).toLowerCase();
+      const types = {
+        ".png": "image/png",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".webp": "image/webp",
+        ".gif": "image/gif",
+        ".pdf": "application/pdf",
+        ".txt": "text/plain",
+        ".mp3": "audio/mpeg",
+        ".wav": "audio/wav",
+        ".ogg": "audio/ogg",
+        ".webm": "audio/webm",
+      };
+      const mimeType = types[extension];
+      if (!mimeType)
+        return { error: "CrewDeck cannot safely share this file type." };
+      return {
+        name: path.basename(target),
+        mimeType,
+        base64: fs.readFileSync(target).toString("base64"),
+      };
+    } catch {
+      return { error: "The shared file could not be opened." };
+    }
   });
-  ipcMain.handle("desktop:repair", async () => { await session.defaultSession.clearCache(); await session.defaultSession.clearStorageData({ storages:["serviceworkers","cachestorage"] }); return { ok:true }; });
-  ipcMain.handle("desktop:set-global-ptt", (_event, accelerator) => { globalShortcut.unregister("Control+Shift+Space"); const value = String(accelerator || "Control+Shift+Space"); try { return { ok:globalShortcut.register(value, () => { mainWindow?.webContents.send("desktop:global-ptt"); for (const window of messageWindows) window.webContents.send("desktop:global-ptt"); }) }; } catch { return { ok:false }; } });
+  ipcMain.handle("desktop:repair", async () => {
+    await session.defaultSession.clearCache();
+    await session.defaultSession.clearStorageData({
+      storages: ["serviceworkers", "cachestorage"],
+    });
+    return { ok: true };
+  });
+  ipcMain.handle("desktop:set-global-ptt", (_event, accelerator) => {
+    globalShortcut.unregister("Control+Shift+Space");
+    const value = String(accelerator || "Control+Shift+Space");
+    try {
+      return {
+        ok: globalShortcut.register(value, () => {
+          mainWindow?.webContents.send("desktop:global-ptt");
+          for (const window of messageWindows)
+            window.webContents.send("desktop:global-ptt");
+        }),
+      };
+    } catch {
+      return { ok: false };
+    }
+  });
   ipcMain.on("desktop:open-external", (_event, value) => {
     try {
       const url = new URL(String(value));
@@ -645,7 +851,9 @@ if (!gotSingleInstanceLock) {
       app.setLoginItemSettings({
         openAtLogin: Boolean(Number(installerPreferences.startup)),
         path: process.execPath,
-        args: Boolean(Number(installerPreferences.startMinimized)) ? ["--hidden"] : [],
+        args: Boolean(Number(installerPreferences.startMinimized))
+          ? ["--hidden"]
+          : [],
       });
     }
     locked = lockStore.settings.enabled;

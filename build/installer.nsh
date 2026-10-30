@@ -1,6 +1,13 @@
 !include "nsDialogs.nsh"
 !include "LogicLib.nsh"
 
+!ifndef MUI_BGCOLOR
+  !define MUI_BGCOLOR "071225"
+!endif
+!ifndef MUI_TEXTCOLOR
+  !define MUI_TEXTCOLOR "EAF8FF"
+!endif
+
 Var CrewBackgroundCheckbox
 Var CrewStartupCheckbox
 Var CrewLockCheckbox
@@ -9,6 +16,7 @@ Var CrewBackgroundValue
 Var CrewStartupValue
 Var CrewLockValue
 Var CrewMinimizedValue
+Var CrewOptionLabel
 
 Page custom CrewDeckOptionsPage CrewDeckOptionsLeave
 
@@ -29,19 +37,31 @@ Function CrewDeckOptionsPage
   ${NSD_CreateLabel} 0 28u 100% 24u "Choose how CrewDeck should behave. You can change these later in Settings."
   Pop $1
   SetCtlColors $1 "A9CBE4" "071225"
-  ${NSD_CreateCheckbox} 0 62u 100% 18u "Keep notifications and calls active after I close the window"
+  ${NSD_CreateCheckbox} 0 62u 18u 18u ""
   Pop $CrewBackgroundCheckbox
   ${NSD_Check} $CrewBackgroundCheckbox
-  SetCtlColors $CrewBackgroundCheckbox "EAF8FF" "071225"
-  ${NSD_CreateCheckbox} 0 88u 100% 18u "Start CrewDeck when I sign in to Windows"
+  SetCtlColors $CrewBackgroundCheckbox "FFFFFF" "071225"
+  ${NSD_CreateLabel} 24u 62u 94% 18u "Keep notifications and calls active after I close the window"
+  Pop $CrewOptionLabel
+  SetCtlColors $CrewOptionLabel "FFFFFF" "071225"
+  ${NSD_CreateCheckbox} 0 88u 18u 18u ""
   Pop $CrewStartupCheckbox
-  SetCtlColors $CrewStartupCheckbox "EAF8FF" "071225"
-  ${NSD_CreateCheckbox} 0 114u 100% 18u "Open CrewDeck minimized when Windows starts"
+  SetCtlColors $CrewStartupCheckbox "FFFFFF" "071225"
+  ${NSD_CreateLabel} 24u 88u 94% 18u "Start CrewDeck when I sign in to Windows"
+  Pop $CrewOptionLabel
+  SetCtlColors $CrewOptionLabel "FFFFFF" "071225"
+  ${NSD_CreateCheckbox} 0 114u 18u 18u ""
   Pop $CrewMinimizedCheckbox
-  SetCtlColors $CrewMinimizedCheckbox "EAF8FF" "071225"
-  ${NSD_CreateCheckbox} 0 140u 100% 18u "Help me configure an app-lock PIN on first launch"
+  SetCtlColors $CrewMinimizedCheckbox "FFFFFF" "071225"
+  ${NSD_CreateLabel} 24u 114u 94% 18u "Open CrewDeck minimized when Windows starts"
+  Pop $CrewOptionLabel
+  SetCtlColors $CrewOptionLabel "FFFFFF" "071225"
+  ${NSD_CreateCheckbox} 0 140u 18u 18u ""
   Pop $CrewLockCheckbox
-  SetCtlColors $CrewLockCheckbox "EAF8FF" "071225"
+  SetCtlColors $CrewLockCheckbox "FFFFFF" "071225"
+  ${NSD_CreateLabel} 24u 140u 94% 18u "Help me configure an app-lock PIN on first launch"
+  Pop $CrewOptionLabel
+  SetCtlColors $CrewOptionLabel "FFFFFF" "071225"
   ${NSD_CreateLabel} 0 174u 100% 32u "Background access is used only for CrewDeck notifications, messages, calls, calendar sync status, and updates."
   Pop $1
   SetCtlColors $1 "7FA8C6" "071225"

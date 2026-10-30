@@ -173,7 +173,7 @@ export function HelpRequestsPage({ user, profile }) {
 export function BugReportsPage({ user, profile }) {
   const { rows, loading, error, reload } = useCommunityRows("bug");
   const [message, setMessage] = useState("");
-  const appVersion = window.desktop?.appVersion || "1.9.0";
+  const appVersion = window.desktop?.appVersion || "2.0.0";
   async function submit(event) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);

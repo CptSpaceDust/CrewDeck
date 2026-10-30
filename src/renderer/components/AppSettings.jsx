@@ -23,12 +23,203 @@ import { MyModerationAppeals } from "./ModerationAppeals";
 import { supabase } from "../lib/supabase";
 
 function VrOverlaySettings({ user }) {
-  const defaults={enabled:false,state:"compact",opacity:.92,scale:1,width:390,height:520,cards:["call","meetup","requests","world","ready","communication"],streamer_safe:true,privacy_mode:true,shortcut:"Control+Shift+O"};
-  const [value,setValue]=useState(defaults),[message,setMessage]=useState("");
-  useEffect(()=>{supabase.from("vr_overlay_preferences").select("*").eq("user_id",user.id).maybeSingle().then(({data})=>data&&setValue({...defaults,...data}));},[user.id]);
-  async function save(next){setValue(next);const{error}=await supabase.from("vr_overlay_preferences").upsert({user_id:user.id,...next,updated_at:new Date().toISOString()});if(error){setMessage(error.message);return;}await window.desktop.overlay.setPreferences(next);setMessage("Overlay settings saved.");}
-  const update=(key,next)=>save({...value,[key]:next});
-  return <section className="panel settings-panel vr-overlay-settings"><div className="section-icon"><MonitorSpeaker/></div><h2>VR overlay</h2><p>Keep calls, meetups, ready checks, and quick communication visible in a compact desktop overlay while you play.</p><label className="check-field"><input type="checkbox" checked={value.enabled} onChange={e=>update("enabled",e.target.checked)}/><span>Enable the always-on-top overlay</span></label><div className="settings-grid compact"><Field label="Layout"><select value={value.state} onChange={e=>update("state",e.target.value)}><option value="compact">Compact</option><option value="expanded">Expanded</option><option value="hidden">Hidden</option></select></Field><Field label="Shortcut"><input value={value.shortcut} onChange={e=>setValue(v=>({...v,shortcut:e.target.value}))} onBlur={()=>save(value)}/></Field><Field label={`Opacity ${Math.round(value.opacity*100)}%`}><input type="range" min=".35" max="1" step=".05" value={value.opacity} onChange={e=>update("opacity",Number(e.target.value))}/></Field><Field label={`Scale ${Math.round(value.scale*100)}%`}><input type="range" min=".7" max="1.6" step=".05" value={value.scale} onChange={e=>update("scale",Number(e.target.value))}/></Field></div><fieldset><legend>Overlay cards</legend><div className="overlay-card-choices">{["call","meetup","requests","world","ready","communication"].map(card=><label className="check-field" key={card}><input type="checkbox" checked={value.cards.includes(card)} onChange={e=>update("cards",e.target.checked?[...value.cards,card]:value.cards.filter(item=>item!==card))}/><span>{card}</span></label>)}</div></fieldset><label className="check-field"><input type="checkbox" checked={value.privacy_mode} onChange={e=>update("privacy_mode",e.target.checked)}/><span>Hide private message content</span></label><label className="check-field"><input type="checkbox" checked={value.streamer_safe} onChange={e=>update("streamer_safe",e.target.checked)}/><span>Streamer safe names and join details</span></label><div className="button-row"><button className="button primary" type="button" onClick={()=>window.desktop.overlay.open()}>Open preview</button><button className="button secondary" type="button" onClick={()=>window.desktop.overlay.close()}>Hide overlay</button></div>{message&&<p className="micro-copy" role="status">{message}</p>}</section>;
+  const defaults = {
+    enabled: false,
+    state: "compact",
+    opacity: 0.92,
+    scale: 1,
+    width: 390,
+    height: 520,
+    cards: ["call", "meetup", "requests", "world", "ready", "communication"],
+    streamer_safe: true,
+    privacy_mode: true,
+    shortcut: "Control+Shift+O",
+    secondary_shortcut: "Control+Shift+P",
+    controller_button: 8,
+    respect_dnd: true,
+  };
+  const [value, setValue] = useState(defaults),
+    [message, setMessage] = useState("");
+  useEffect(() => {
+    supabase
+      .from("vr_overlay_preferences")
+      .select("*")
+      .eq("user_id", user.id)
+      .maybeSingle()
+      .then(({ data }) => data && setValue({ ...defaults, ...data }));
+  }, [user.id]);
+  async function save(next) {
+    setValue(next);
+    const { error } = await supabase.from("vr_overlay_preferences").upsert({
+      user_id: user.id,
+      ...next,
+      updated_at: new Date().toISOString(),
+    });
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+    await window.desktop.overlay.setPreferences(next);
+    setMessage("Overlay settings saved.");
+  }
+  const update = (key, next) => save({ ...value, [key]: next });
+  return (
+    <section className="panel settings-panel vr-overlay-settings">
+      <div className="section-icon">
+        <MonitorSpeaker />
+      </div>
+      <h2>VR overlay</h2>
+      <p>
+        Keep calls, meetups, ready checks, and quick communication visible in a
+        compact desktop overlay while you play.
+      </p>
+      <label className="check-field">
+        <input
+          type="checkbox"
+          checked={value.enabled}
+          onChange={(e) => update("enabled", e.target.checked)}
+        />
+        <span>Enable the always-on-top overlay</span>
+      </label>
+      <div className="settings-grid compact">
+        <Field label="Layout">
+          <select
+            value={value.state}
+            onChange={(e) => update("state", e.target.value)}
+          >
+            <option value="compact">Compact</option>
+            <option value="expanded">Expanded</option>
+            <option value="hidden">Hidden</option>
+          </select>
+        </Field>
+        <Field label="Shortcut">
+          <input
+            value={value.shortcut}
+            onChange={(e) =>
+              setValue((v) => ({ ...v, shortcut: e.target.value }))
+            }
+            onBlur={() => save(value)}
+          />
+        </Field>
+        <Field label="Secondary / push-to-talk style shortcut">
+          <input
+            value={value.secondary_shortcut}
+            onChange={(e) =>
+              setValue((v) => ({ ...v, secondary_shortcut: e.target.value }))
+            }
+            onBlur={() => save(value)}
+          />
+        </Field>
+        <Field label="Controller button index">
+          <input
+            type="number"
+            min="0"
+            max="31"
+            value={value.controller_button}
+            onChange={(e) =>
+              update("controller_button", Number(e.target.value))
+            }
+          />
+        </Field>
+        <Field label={`Opacity ${Math.round(value.opacity * 100)}%`}>
+          <input
+            type="range"
+            min=".35"
+            max="1"
+            step=".05"
+            value={value.opacity}
+            onChange={(e) => update("opacity", Number(e.target.value))}
+          />
+        </Field>
+        <Field label={`Scale ${Math.round(value.scale * 100)}%`}>
+          <input
+            type="range"
+            min=".7"
+            max="1.6"
+            step=".05"
+            value={value.scale}
+            onChange={(e) => update("scale", Number(e.target.value))}
+          />
+        </Field>
+      </div>
+      <fieldset>
+        <legend>Overlay cards</legend>
+        <div className="overlay-card-choices">
+          {[
+            "call",
+            "meetup",
+            "requests",
+            "world",
+            "ready",
+            "communication",
+          ].map((card) => (
+            <label className="check-field" key={card}>
+              <input
+                type="checkbox"
+                checked={value.cards.includes(card)}
+                onChange={(e) =>
+                  update(
+                    "cards",
+                    e.target.checked
+                      ? [...value.cards, card]
+                      : value.cards.filter((item) => item !== card),
+                  )
+                }
+              />
+              <span>{card}</span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
+      <label className="check-field">
+        <input
+          type="checkbox"
+          checked={value.privacy_mode}
+          onChange={(e) => update("privacy_mode", e.target.checked)}
+        />
+        <span>Hide private message content</span>
+      </label>
+      <label className="check-field">
+        <input
+          type="checkbox"
+          checked={value.streamer_safe}
+          onChange={(e) => update("streamer_safe", e.target.checked)}
+        />
+        <span>Streamer safe names and join details</span>
+      </label>
+      <label className="check-field">
+        <input
+          type="checkbox"
+          checked={value.respect_dnd}
+          onChange={(e) => update("respect_dnd", e.target.checked)}
+        />
+        <span>
+          Hide requests blocked by Do Not Disturb and interaction preferences
+        </span>
+      </label>
+      <div className="button-row">
+        <button
+          className="button primary"
+          type="button"
+          onClick={() => window.desktop.overlay.open()}
+        >
+          Open preview
+        </button>
+        <button
+          className="button secondary"
+          type="button"
+          onClick={() => window.desktop.overlay.close()}
+        >
+          Hide overlay
+        </button>
+      </div>
+      {message && (
+        <p className="micro-copy" role="status">
+          {message}
+        </p>
+      )}
+    </section>
+  );
 }
 
 function AudioDevices({ preferences, preference }) {
@@ -324,7 +515,16 @@ export default function AppSettings({ user }) {
               meetup_preset: data.meetup_preset || {},
             }));
         });
-      supabase.from("interaction_preferences").select("*").eq("user_id", user.id).maybeSingle().then(({ data }) => data && setInteractionPreferences((current) => ({ ...current, ...data })));
+      supabase
+        .from("interaction_preferences")
+        .select("*")
+        .eq("user_id", user.id)
+        .maybeSingle()
+        .then(
+          ({ data }) =>
+            data &&
+            setInteractionPreferences((current) => ({ ...current, ...data })),
+        );
       refreshPrivacyContacts();
     }
   }, []);
@@ -355,25 +555,67 @@ export default function AppSettings({ user }) {
   }
   async function saveInteractionPreferences(event) {
     event.preventDefault();
-    const { error } = await supabase.from("interaction_preferences").upsert({ ...interactionPreferences, user_id:user.id, updated_at:new Date().toISOString() }, { onConflict:"user_id" });
+    const { error } = await supabase.from("interaction_preferences").upsert(
+      {
+        ...interactionPreferences,
+        user_id: user.id,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "user_id" },
+    );
     setPrivacyMessage(error?.message || "Privacy checkup saved.");
   }
   async function refreshPrivacyContacts() {
     if (!user?.id) return;
     const [crew, trusted, paused] = await Promise.all([
-      supabase.from("profiles").select("id,username").neq("id", user.id).order("username"),
-      supabase.from("trusted_contacts").select("trusted_user_id").eq("owner_id", user.id),
-      supabase.from("communication_boundaries").select("target_id,paused_until").eq("owner_id", user.id).gt("paused_until", new Date().toISOString()),
+      supabase
+        .from("profiles")
+        .select("id,username")
+        .neq("id", user.id)
+        .order("username"),
+      supabase
+        .from("trusted_contacts")
+        .select("trusted_user_id")
+        .eq("owner_id", user.id),
+      supabase
+        .from("communication_boundaries")
+        .select("target_id,paused_until")
+        .eq("owner_id", user.id)
+        .gt("paused_until", new Date().toISOString()),
     ]);
-    setPrivacyCrew(crew.data || []); setTrustedContacts(trusted.data || []); setBoundaries(paused.data || []);
+    setPrivacyCrew(crew.data || []);
+    setTrustedContacts(trusted.data || []);
+    setBoundaries(paused.data || []);
   }
   async function addTrustedContact(event) {
-    event.preventDefault(); const target = new FormData(event.currentTarget).get("target_id"); if (!target) return;
-    const { error } = await supabase.from("trusted_contacts").upsert({ owner_id:user.id, trusted_user_id:target }); setPrivacyMessage(error?.message || "Trusted contact added."); if (!error) { event.currentTarget.reset(); refreshPrivacyContacts(); }
+    event.preventDefault();
+    const target = new FormData(event.currentTarget).get("target_id");
+    if (!target) return;
+    const { error } = await supabase
+      .from("trusted_contacts")
+      .upsert({ owner_id: user.id, trusted_user_id: target });
+    setPrivacyMessage(error?.message || "Trusted contact added.");
+    if (!error) {
+      event.currentTarget.reset();
+      refreshPrivacyContacts();
+    }
   }
   async function pauseContact(event) {
-    event.preventDefault(); const form = new FormData(event.currentTarget); const target = form.get("target_id"); if (!target) return; const days = Number(form.get("days") || 1);
-    const { error } = await supabase.from("communication_boundaries").upsert({ owner_id:user.id, target_id:target, paused_until:new Date(Date.now() + days * 86400000).toISOString() }); setPrivacyMessage(error?.message || "Contact paused."); if (!error) { event.currentTarget.reset(); refreshPrivacyContacts(); }
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const target = form.get("target_id");
+    if (!target) return;
+    const days = Number(form.get("days") || 1);
+    const { error } = await supabase.from("communication_boundaries").upsert({
+      owner_id: user.id,
+      target_id: target,
+      paused_until: new Date(Date.now() + days * 86400000).toISOString(),
+    });
+    setPrivacyMessage(error?.message || "Contact paused.");
+    if (!error) {
+      event.currentTarget.reset();
+      refreshPrivacyContacts();
+    }
   }
   useEffect(() => {
     window.desktop.updater.getState().then(setUpdate);
@@ -934,9 +1176,36 @@ export default function AppSettings({ user }) {
             />
             <span>Use larger buttons and form controls</span>
           </label>
-          <label className="check-field"><input type="checkbox" checked={Boolean(preferences.reducedTransparency)} onChange={(event) => preference("reducedTransparency", event.target.checked)} /><span>Reduce transparency while keeping Space Glass borders</span></label>
-          <label className="check-field"><input type="checkbox" checked={Boolean(preferences.colorblindIndicators)} onChange={(event) => preference("colorblindIndicators", event.target.checked)} /><span>Use shapes and labels with status colors</span></label>
-          <label className="check-field"><input type="checkbox" checked={Boolean(preferences.audioCueCaptions)} onChange={(event) => preference("audioCueCaptions", event.target.checked)} /><span>Show a visual caption when CrewDeck plays an audio cue</span></label>
+          <label className="check-field">
+            <input
+              type="checkbox"
+              checked={Boolean(preferences.reducedTransparency)}
+              onChange={(event) =>
+                preference("reducedTransparency", event.target.checked)
+              }
+            />
+            <span>Reduce transparency while keeping Space Glass borders</span>
+          </label>
+          <label className="check-field">
+            <input
+              type="checkbox"
+              checked={Boolean(preferences.colorblindIndicators)}
+              onChange={(event) =>
+                preference("colorblindIndicators", event.target.checked)
+              }
+            />
+            <span>Use shapes and labels with status colors</span>
+          </label>
+          <label className="check-field">
+            <input
+              type="checkbox"
+              checked={Boolean(preferences.audioCueCaptions)}
+              onChange={(event) =>
+                preference("audioCueCaptions", event.target.checked)
+              }
+            />
+            <span>Show a visual caption when CrewDeck plays an audio cue</span>
+          </label>
         </section>
         <section className="panel settings-panel">
           <div className="section-icon">
@@ -1090,10 +1359,49 @@ export default function AppSettings({ user }) {
               />
               <span>Show Windows notifications</span>
             </label>
-            <label className="check-field"><input type="checkbox" checked={preferences.callNotifications !== false} onChange={(event) => preference("callNotifications", event.target.checked)} /><span>Notify and ring for incoming calls</span></label>
-            <label className="check-field"><input type="checkbox" checked={preferences.reactionNotifications !== false} onChange={(event) => preference("reactionNotifications", event.target.checked)} /><span>Notify when someone reacts to my message</span></label>
-            <label className="check-field"><input type="checkbox" checked={preferences.notificationBundling !== false} onChange={(event) => preference("notificationBundling", event.target.checked)} /><span>Bundle message bursts into one notification</span></label>
-            <label className="check-field"><input type="checkbox" checked={Boolean(preferences.privateNotificationPreviews)} onChange={(event) => preference("privateNotificationPreviews", event.target.checked)} /><span>Hide message contents in notification previews</span></label>
+            <label className="check-field">
+              <input
+                type="checkbox"
+                checked={preferences.callNotifications !== false}
+                onChange={(event) =>
+                  preference("callNotifications", event.target.checked)
+                }
+              />
+              <span>Notify and ring for incoming calls</span>
+            </label>
+            <label className="check-field">
+              <input
+                type="checkbox"
+                checked={preferences.reactionNotifications !== false}
+                onChange={(event) =>
+                  preference("reactionNotifications", event.target.checked)
+                }
+              />
+              <span>Notify when someone reacts to my message</span>
+            </label>
+            <label className="check-field">
+              <input
+                type="checkbox"
+                checked={preferences.notificationBundling !== false}
+                onChange={(event) =>
+                  preference("notificationBundling", event.target.checked)
+                }
+              />
+              <span>Bundle message bursts into one notification</span>
+            </label>
+            <label className="check-field">
+              <input
+                type="checkbox"
+                checked={Boolean(preferences.privateNotificationPreviews)}
+                onChange={(event) =>
+                  preference(
+                    "privateNotificationPreviews",
+                    event.target.checked,
+                  )
+                }
+              />
+              <span>Hide message contents in notification previews</span>
+            </label>
             <label className="check-field">
               <input
                 type="checkbox"
@@ -1235,28 +1543,212 @@ export default function AppSettings({ user }) {
             <LockKeyhole />
           </div>
           <h2>Privacy checkup</h2>
-          <p>Review who can reach you. Trusted contacts can pass stricter friend-only settings.</p>
-          <form className="privacy-checkup-grid" onSubmit={saveInteractionPreferences}>
-            {[["messages_from","Message me"],["calls_from","Call me"],["invites_from","Invite me"],["mentions_from","Mention me"]].map(([key,label]) => <Field label={`Who may ${label.toLowerCase()}?`} key={key}><select value={interactionPreferences[key]} onChange={(event) => setInteractionPreferences((current) => ({ ...current, [key]:event.target.value }))}><option value="everyone">Everyone</option><option value="friends">Friends</option><option value="trusted">Trusted contacts</option><option value="nobody">Nobody</option></select></Field>)}
-            <Field label="Who may add me as a friend?"><select value={interactionPreferences.friend_requests_from} onChange={(event) => setInteractionPreferences((current) => ({ ...current, friend_requests_from:event.target.value }))}><option value="everyone">Everyone</option><option value="friends_of_friends">Friends of friends</option><option value="nobody">Nobody</option></select></Field>
-            <label className="check-field"><input type="checkbox" checked={interactionPreferences.warn_suspicious_links} onChange={(event) => setInteractionPreferences((current) => ({ ...current, warn_suspicious_links:event.target.checked }))} /><span>Warn before opening suspicious or misleading links</span></label>
-            <button className="button primary">Save privacy choices</button>{privacyMessage && <p className="form-message">{privacyMessage}</p>}
+          <p>
+            Review who can reach you. Trusted contacts can pass stricter
+            friend-only settings.
+          </p>
+          <form
+            className="privacy-checkup-grid"
+            onSubmit={saveInteractionPreferences}
+          >
+            {[
+              ["messages_from", "Message me"],
+              ["calls_from", "Call me"],
+              ["invites_from", "Invite me"],
+              ["mentions_from", "Mention me"],
+            ].map(([key, label]) => (
+              <Field label={`Who may ${label.toLowerCase()}?`} key={key}>
+                <select
+                  value={interactionPreferences[key]}
+                  onChange={(event) =>
+                    setInteractionPreferences((current) => ({
+                      ...current,
+                      [key]: event.target.value,
+                    }))
+                  }
+                >
+                  <option value="everyone">Everyone</option>
+                  <option value="nobody">Nobody</option>
+                </select>
+              </Field>
+            ))}
+            <Field label="Who may add me as a friend?">
+              <select
+                value={interactionPreferences.friend_requests_from}
+                onChange={(event) =>
+                  setInteractionPreferences((current) => ({
+                    ...current,
+                    friend_requests_from: event.target.value,
+                  }))
+                }
+              >
+                <option value="everyone">Everyone</option>
+                <option value="friends_of_friends">Friends of friends</option>
+                <option value="nobody">Nobody</option>
+              </select>
+            </Field>
+            <label className="check-field">
+              <input
+                type="checkbox"
+                checked={interactionPreferences.warn_suspicious_links}
+                onChange={(event) =>
+                  setInteractionPreferences((current) => ({
+                    ...current,
+                    warn_suspicious_links: event.target.checked,
+                  }))
+                }
+              />
+              <span>Warn before opening suspicious or misleading links</span>
+            </label>
+            <button className="button primary">Save privacy choices</button>
+            {privacyMessage && <p className="form-message">{privacyMessage}</p>}
           </form>
           <div className="privacy-contact-manager">
-            <form className="privacy-contact-card" onSubmit={addTrustedContact}><h3>Trusted contacts</h3><p>Allow selected people through trusted-only contact settings.</p><Field label="Crew member"><select name="target_id" required><option value="">Choose a crew member</option>{privacyCrew.map((person) => <option key={person.id} value={person.id}>{person.username}</option>)}</select></Field><button className="button secondary">Add trusted contact</button><div className="privacy-contact-chips">{trustedContacts.map((item) => <button type="button" key={item.trusted_user_id} onClick={async () => { await supabase.from("trusted_contacts").delete().eq("owner_id", user.id).eq("trusted_user_id", item.trusted_user_id); refreshPrivacyContacts(); }}>{privacyCrew.find((person) => person.id === item.trusted_user_id)?.username || "Crew member"} ×</button>)}</div></form>
-            <form className="privacy-contact-card" onSubmit={pauseContact}><h3>Temporary contact pause</h3><p>Pause calls, messages, mentions, and invitations from one person.</p><Field label="Crew member"><select name="target_id" required><option value="">Choose a crew member</option>{privacyCrew.map((person) => <option key={person.id} value={person.id}>{person.username}</option>)}</select></Field><Field label="Pause for"><select name="days"><option value="1">1 day</option><option value="7">7 days</option><option value="30">30 days</option></select></Field><button className="button secondary">Pause contact</button><div className="privacy-contact-chips">{boundaries.map((item) => <button type="button" key={item.target_id} onClick={async () => { await supabase.from("communication_boundaries").delete().eq("owner_id", user.id).eq("target_id", item.target_id); refreshPrivacyContacts(); }}>{privacyCrew.find((person) => person.id === item.target_id)?.username || "Crew member"} · {new Date(item.paused_until).toLocaleDateString()} ×</button>)}</div></form>
+            <form className="privacy-contact-card" onSubmit={addTrustedContact}>
+              <h3>Trusted contacts</h3>
+              <p>
+                Allow selected people through trusted-only contact settings.
+              </p>
+              <Field label="Crew member">
+                <select name="target_id" required>
+                  <option value="">Choose a crew member</option>
+                  {privacyCrew.map((person) => (
+                    <option key={person.id} value={person.id}>
+                      {person.username}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <button className="button secondary">Add trusted contact</button>
+              <div className="privacy-contact-chips">
+                {trustedContacts.map((item) => (
+                  <button
+                    type="button"
+                    key={item.trusted_user_id}
+                    onClick={async () => {
+                      await supabase
+                        .from("trusted_contacts")
+                        .delete()
+                        .eq("owner_id", user.id)
+                        .eq("trusted_user_id", item.trusted_user_id);
+                      refreshPrivacyContacts();
+                    }}
+                  >
+                    {privacyCrew.find(
+                      (person) => person.id === item.trusted_user_id,
+                    )?.username || "Crew member"}{" "}
+                    ×
+                  </button>
+                ))}
+              </div>
+            </form>
+            <form className="privacy-contact-card" onSubmit={pauseContact}>
+              <h3>Temporary contact pause</h3>
+              <p>
+                Pause calls, messages, mentions, and invitations from one
+                person.
+              </p>
+              <Field label="Crew member">
+                <select name="target_id" required>
+                  <option value="">Choose a crew member</option>
+                  {privacyCrew.map((person) => (
+                    <option key={person.id} value={person.id}>
+                      {person.username}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Pause for">
+                <select name="days">
+                  <option value="1">1 day</option>
+                  <option value="7">7 days</option>
+                  <option value="30">30 days</option>
+                </select>
+              </Field>
+              <button className="button secondary">Pause contact</button>
+              <div className="privacy-contact-chips">
+                {boundaries.map((item) => (
+                  <button
+                    type="button"
+                    key={item.target_id}
+                    onClick={async () => {
+                      await supabase
+                        .from("communication_boundaries")
+                        .delete()
+                        .eq("owner_id", user.id)
+                        .eq("target_id", item.target_id);
+                      refreshPrivacyContacts();
+                    }}
+                  >
+                    {privacyCrew.find((person) => person.id === item.target_id)
+                      ?.username || "Crew member"}{" "}
+                    · {new Date(item.paused_until).toLocaleDateString()} ×
+                  </button>
+                ))}
+              </div>
+            </form>
           </div>
         </section>
         <section className="panel settings-panel settings-panel-wide diagnostics-panel">
-          <div className="section-icon"><RefreshCw /></div><h2>Connection diagnostics</h2><p>Check your session, database, messaging, voice, realtime updates, notifications, and audio hardware.</p>
-          <button className="button secondary" type="button" disabled={diagnosing} onClick={runDiagnostics}><RefreshCw /> {diagnosing ? "Checking CrewDeck…" : "Run full diagnostics"}</button>
+          <div className="section-icon">
+            <RefreshCw />
+          </div>
+          <h2>Connection diagnostics</h2>
+          <p>
+            Check your session, database, messaging, voice, realtime updates,
+            notifications, and audio hardware.
+          </p>
+          <button
+            className="button secondary"
+            type="button"
+            disabled={diagnosing}
+            onClick={runDiagnostics}
+          >
+            <RefreshCw />{" "}
+            {diagnosing ? "Checking CrewDeck…" : "Run full diagnostics"}
+          </button>
           {accountMessage && <p className="form-message">{accountMessage}</p>}
-          {diagnostics.length > 0 && <div className="diagnostic-grid">{diagnostics.map((item) => <article className={item.ok ? "ok" : "failed"} key={item.name}><strong>{item.name}</strong><span>{item.ok ? "Ready" : "Needs attention"}</span><small>{item.detail}</small></article>)}</div>}
+          {diagnostics.length > 0 && (
+            <div className="diagnostic-grid">
+              {diagnostics.map((item) => (
+                <article className={item.ok ? "ok" : "failed"} key={item.name}>
+                  <strong>{item.name}</strong>
+                  <span>{item.ok ? "Ready" : "Needs attention"}</span>
+                  <small>{item.detail}</small>
+                </article>
+              ))}
+            </div>
+          )}
         </section>
         <section className="panel settings-panel">
-          <div className="section-icon"><UserPlus /></div><h2>Account support</h2><p>For account deletion, recovery, or a private problem, open a Captain support ticket in Discord.</p>
-          <button className="button secondary" type="button" onClick={() => window.desktop.openExternal("https://discord.gg/Gk3YRYmMfA")}>Open Discord support</button>
-          <button className="button secondary" type="button" onClick={() => window.desktop.openExternal("https://cptspacedust.com/Privacy.html")}><LockKeyhole /> Read privacy policy</button>
+          <div className="section-icon">
+            <UserPlus />
+          </div>
+          <h2>Account support</h2>
+          <p>
+            For account deletion, recovery, or a private problem, open a Captain
+            support ticket in Discord.
+          </p>
+          <button
+            className="button secondary"
+            type="button"
+            onClick={() =>
+              window.desktop.openExternal("https://discord.gg/Gk3YRYmMfA")
+            }
+          >
+            Open Discord support
+          </button>
+          <button
+            className="button secondary"
+            type="button"
+            onClick={() =>
+              window.desktop.openExternal(
+                "https://cptspacedust.com/Privacy.html",
+              )
+            }
+          >
+            <LockKeyhole /> Read privacy policy
+          </button>
         </section>
         <section className="panel settings-panel">
           <div className="section-icon">
@@ -1272,11 +1764,66 @@ export default function AppSettings({ user }) {
             />
             <span>Launch CrewDeck with Windows</span>
           </label>
-          <Field label="Open this page at startup"><select value={preferences.startupPage || "introductions"} onChange={(event) => preference("startupPage", event.target.value)}><option value="introductions">Introductions</option><option value="messages">Messages</option><option value="friends">Friends</option><option value="meetups">Meetup Calendar</option><option value="community-calendar">Community Calendar</option></select></Field>
-          <label className="check-field"><input type="checkbox" checked={preferences.backgroundMessages !== false} onChange={(event) => preference("backgroundMessages", event.target.checked)} /><span>Keep message notifications active in the background</span></label>
-          <label className="check-field"><input type="checkbox" checked={preferences.backgroundCalls !== false} onChange={(event) => preference("backgroundCalls", event.target.checked)} /><span>Keep incoming calls active in the background</span></label>
-          <label className="check-field"><input type="checkbox" checked={Boolean(preferences.globalPushToTalk)} onChange={async (event) => { preference("globalPushToTalk", event.target.checked); if (event.target.checked) await window.desktop.globalPtt.enable("Control+Shift+Space"); }} /><span>Enable global push to talk toggle · Ctrl Shift Space</span></label>
-          <button className="button secondary" type="button" onClick={async () => { const result = await window.desktop.repair(); setNotificationMessage(result.ok ? "Repair complete. CrewDeck caches were rebuilt." : "Repair could not finish."); }}><RefreshCw /> Repair local app cache</button>
+          <Field label="Open this page at startup">
+            <select
+              value={preferences.startupPage || "introductions"}
+              onChange={(event) =>
+                preference("startupPage", event.target.value)
+              }
+            >
+              <option value="introductions">Introductions</option>
+              <option value="messages">Messages</option>
+              <option value="friends">Friends</option>
+              <option value="meetups">Meetup Calendar</option>
+              <option value="community-calendar">Community Calendar</option>
+            </select>
+          </Field>
+          <label className="check-field">
+            <input
+              type="checkbox"
+              checked={preferences.backgroundMessages !== false}
+              onChange={(event) =>
+                preference("backgroundMessages", event.target.checked)
+              }
+            />
+            <span>Keep message notifications active in the background</span>
+          </label>
+          <label className="check-field">
+            <input
+              type="checkbox"
+              checked={preferences.backgroundCalls !== false}
+              onChange={(event) =>
+                preference("backgroundCalls", event.target.checked)
+              }
+            />
+            <span>Keep incoming calls active in the background</span>
+          </label>
+          <label className="check-field">
+            <input
+              type="checkbox"
+              checked={Boolean(preferences.globalPushToTalk)}
+              onChange={async (event) => {
+                preference("globalPushToTalk", event.target.checked);
+                if (event.target.checked)
+                  await window.desktop.globalPtt.enable("Control+Shift+Space");
+              }}
+            />
+            <span>Enable global push to talk toggle · Ctrl Shift Space</span>
+          </label>
+          <button
+            className="button secondary"
+            type="button"
+            onClick={async () => {
+              const result = await window.desktop.repair();
+              setNotificationMessage(
+                result.ok
+                  ? "Repair complete. CrewDeck caches were rebuilt."
+                  : "Repair could not finish.",
+              );
+            }}
+          >
+            <RefreshCw /> Repair local app cache
+          </button>
           <p className="micro-copy">
             Closing the window keeps CrewDeck running in the Windows
             notification area so messages and alerts can still arrive. Use the

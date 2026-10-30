@@ -34,6 +34,7 @@ import {
 import { useLoader } from "../lib/hooks";
 import { supabase } from "../lib/supabase";
 import { formatMeetupLocal, localTimeZoneName } from "../lib/time";
+import { PulseBadge, useVisiblePulses } from "../components/AvailabilityPulse";
 
 const isOnline = (person) =>
   Boolean(
@@ -42,6 +43,7 @@ const isOnline = (person) =>
   );
 
 export function CrewPage({ onViewProfile }) {
+  const pulses = useVisiblePulses();
   const { data, loading, error, reload } = useLoader(() => getProfiles(), []);
   const [query, setQuery] = useState("");
   const rows = useMemo(
@@ -109,6 +111,7 @@ export function CrewPage({ onViewProfile }) {
                 <h3>{person.username}</h3>
                 <span className="rank">{person.rank || "Crew"}</span>
                 {inCall && <span className="crew-call-status">In a call</span>}
+                <PulseBadge pulse={pulses[person.id]} />
                 {!online && (
                   <small>
                     {person.last_seen
@@ -137,7 +140,8 @@ export function CrewPage({ onViewProfile }) {
   );
 }
 
-export function CrewProfilePage({ person, user, onBack }) {
+export function CrewProfilePage({ person, user, onBack, onNavigate }) {
+  const pulses = useVisiblePulses();
   const [reporting, setReporting] = useState(false);
   const [reportMessage, setReportMessage] = useState("");
   const [friendship, setFriendship] = useState(null);
@@ -232,6 +236,7 @@ export function CrewProfilePage({ person, user, onBack }) {
         <div className="crew-profile-hero">
           <Avatar profile={profile} size={112} />
           <div>
+            <PulseBadge pulse={pulses[profile.id]} />
             {onlineVisible ? (
               <span
                 className={`profile-presence ${online ? "online" : "offline"}`}
@@ -411,6 +416,7 @@ export function CrewProfilePage({ person, user, onBack }) {
           </div>
         )}
       </section>
+      {user?.id !== profile.id && <section className="panel profile-planning-actions"><h2>Plan together</h2><p>Open the shared schedule view with {profile.username} already selected.</p><button className="button secondary" onClick={()=>{localStorage.setItem("crewdeck.meetup.prefill",JSON.stringify({personId:profile.id,compare:true}));onNavigate?.("MeetupCalendar.html?compare=1");}}>Compare availability</button></section>}
       {reporting && (
         <Modal
           title={`Report ${profile.username}`}

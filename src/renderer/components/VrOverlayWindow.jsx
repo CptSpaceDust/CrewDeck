@@ -1,23 +1,290 @@
 import { useEffect, useMemo, useState } from "react";
-import { BellRing, CalendarClock, ChevronDown, ChevronUp, EarOff, Mic, MicOff, Radio, X } from "lucide-react";
+import {
+  BellRing,
+  CalendarClock,
+  ChevronDown,
+  ChevronUp,
+  EarOff,
+  Mic,
+  MicOff,
+  Radio,
+  X,
+} from "lucide-react";
 import { supabase } from "../lib/supabase";
 
-const safeName=(name,privacy)=>privacy?"Crew member":name||"Crew member";
-export default function VrOverlayWindow(){
-  const [state,setState]=useState({}),[prefs,setPrefs]=useState({state:"compact",opacity:.92,scale:1,cards:["call","meetup","requests","world","ready","communication"],privacy_mode:true,streamer_safe:true}),[upcoming,setUpcoming]=useState(null),[signals,setSignals]=useState([]);
-  useEffect(()=>window.desktop.overlay.onState(value=>setState(current=>({...current,...value}))),[]);
-  useEffect(()=>{let channel;supabase.auth.getUser().then(async({data})=>{const id=data.user?.id;if(!id)return;const{data:p}=await supabase.from("vr_overlay_preferences").select("*").eq("user_id",id).maybeSingle();if(p)setPrefs(p);const now=new Date().toISOString();const[{data:events},{data:meetups}]=await Promise.all([supabase.from("crew_events").select("id,title,starts_at,status").gte("starts_at",now).order("starts_at").limit(1),supabase.from("meetup_requests").select("id,event_title,meetup_date,start_time,status").gte("meetup_date",now.slice(0,10)).order("meetup_date").limit(1)]);const event=events?.[0],meetup=meetups?.[0];setUpcoming(event?{title:event.title,at:event.starts_at,route:`MeetupCalendar.html?event=${event.id}`} : meetup?{title:meetup.event_title||"Crew meetup",at:`${meetup.meetup_date}T${meetup.start_time||"00:00"}`,route:`MyMeetups.html?meetup=${meetup.id}`} : null);channel=supabase.channel(`vr-overlay-${id}`).on("postgres_changes",{event:"INSERT",schema:"public",table:"vr_overlay_signals"},payload=>setSignals(rows=>[payload.new,...rows].slice(0,8))).subscribe();});return()=>channel&&supabase.removeChannel(channel);},[]);
-  useEffect(()=>{document.documentElement.style.setProperty("--overlay-opacity",String(prefs.opacity||.92));document.documentElement.style.setProperty("--overlay-scale",String(prefs.scale||1));},[prefs]);
-  const cards=prefs.cards||[],call=state.call,latest=signals[0],countdown=useMemo(()=>upcoming?Math.max(0,Date.parse(upcoming.at)-Date.now()):0,[upcoming,state]);
-  const send=type=>{if(call?.id)supabase.auth.getUser().then(({data})=>supabase.from("vr_overlay_signals").insert({call_id:call.id,sender_id:data.user?.id,signal_type:type}));};
-  return <main className={`vr-overlay-window ${prefs.state||"compact"}`}>
-    <header><span><Radio/> CrewDeck Overlay</span><div><button onClick={()=>setPrefs(p=>({...p,state:p.state==="expanded"?"compact":"expanded"}))}>{prefs.state==="expanded"?<ChevronDown/>:<ChevronUp/>}</button><button onClick={()=>window.desktop.overlay.close()}><X/></button></div></header>
-    {cards.includes("call")&&<section><small>ACTIVE CALL</small><strong>{call?.connected?"Connected":call?"Connecting":"No active call"}</strong>{call&&<><p>{call.speaking?`${safeName(call.speaking,prefs.streamer_safe)} is speaking`:safeName(call.title,prefs.privacy_mode)}</p><div className="vr-overlay-actions"><button onClick={()=>window.desktop.overlay.command({type:"toggle-mic"})}>{call.muted?<MicOff/>:<Mic/>}</button><button onClick={()=>window.desktop.overlay.command({type:"toggle-deafen"})}><EarOff/></button></div></>}</section>}
-    {cards.includes("meetup")&&<section><small>NEXT MEETUP</small>{upcoming?<><strong>{upcoming.title}</strong><p>{Math.floor(countdown/3600000)}h {Math.floor(countdown%3600000/60000)}m away</p><button onClick={()=>window.desktop.overlay.command({type:"navigate",route:upcoming.route})}><CalendarClock/> Open</button></>:<p>No upcoming meetup.</p>}</section>}
-    {cards.includes("requests")&&state.request&&<section><small>JOIN REQUEST</small><strong>{safeName(state.request.name,prefs.streamer_safe)}</strong><div><button onClick={()=>window.desktop.overlay.command({type:"request",response:"accept",id:state.request.id})}>Accept</button><button onClick={()=>window.desktop.overlay.command({type:"request",response:"decline",id:state.request.id})}>Decline</button></div></section>}
-    {cards.includes("world")&&latest?.signal_type==="world_plan"&&<section><small>WORLD PLAN</small><strong>{latest.body||"Next world"}</strong><button onClick={()=>send("change_world")}>Next world</button></section>}
-    {cards.includes("ready")&&call&&<section><small>READY CHECK</small><div><button onClick={()=>send("ready")}>Ready</button><button onClick={()=>send("not_ready")}>Not ready</button></div></section>}
-    {cards.includes("communication")&&call&&<section><small>QUICK CARDS</small><div className="vr-overlay-quick">{[["need_break","I need a break"],["cannot_hear","I cannot hear you"],["slow_down","Please slow down"],["change_world","Change worlds?"]].map(([type,label])=><button key={type} onClick={()=>send(type)}>{label}</button>)}</div></section>}
-    {latest&&<footer><BellRing/> {latest.signal_type.replaceAll("_"," ")}</footer>}
-  </main>;
+const safeName = (name, privacy) =>
+  privacy ? "Crew member" : name || "Crew member";
+export default function VrOverlayWindow() {
+  const [state, setState] = useState({}),
+    [prefs, setPrefs] = useState({
+      state: "compact",
+      opacity: 0.92,
+      scale: 1,
+      cards: ["call", "meetup", "requests", "world", "ready", "communication"],
+      privacy_mode: true,
+      streamer_safe: true,
+    }),
+    [upcoming, setUpcoming] = useState(null),
+    [signals, setSignals] = useState([]);
+  useEffect(
+    () =>
+      window.desktop.overlay.onState((value) =>
+        setState((current) => ({ ...current, ...value })),
+      ),
+    [],
+  );
+  useEffect(() => {
+    let channel;
+    supabase.auth.getUser().then(async ({ data }) => {
+      const id = data.user?.id;
+      if (!id) return;
+      const { data: p } = await supabase
+        .from("vr_overlay_preferences")
+        .select("*")
+        .eq("user_id", id)
+        .maybeSingle();
+      if (p) setPrefs(p);
+      const now = new Date().toISOString();
+      const [{ data: events }, { data: meetups }] = await Promise.all([
+        supabase
+          .from("crew_events")
+          .select("id,title,starts_at,status,join_url")
+          .gte("starts_at", now)
+          .order("starts_at")
+          .limit(1),
+        supabase
+          .from("meetup_requests")
+          .select("id,event_title,meetup_date,start_time,status")
+          .gte("meetup_date", now.slice(0, 10))
+          .order("meetup_date")
+          .limit(1),
+      ]);
+      const event = events?.[0],
+        meetup = meetups?.[0];
+      setUpcoming(
+        event
+          ? {
+              title: event.title,
+              at: event.starts_at,
+              route: `MeetupCalendar.html?event=${event.id}`,
+              id: event.id,
+              kind: "event",
+              joinUrl: event.join_url,
+            }
+          : meetup
+            ? {
+                title: meetup.event_title || "Crew meetup",
+                at: `${meetup.meetup_date}T${meetup.start_time || "00:00"}`,
+                route: `MyMeetups.html?meetup=${meetup.id}`,
+                id: meetup.id,
+                kind: "meetup",
+              }
+            : null,
+      );
+      channel = supabase
+        .channel(`vr-overlay-${id}`)
+        .on(
+          "postgres_changes",
+          { event: "INSERT", schema: "public", table: "vr_overlay_signals" },
+          (payload) => setSignals((rows) => [payload.new, ...rows].slice(0, 8)),
+        )
+        .subscribe();
+    });
+    return () => channel && supabase.removeChannel(channel);
+  }, []);
+  useEffect(() => {
+    document.documentElement.style.setProperty(
+      "--overlay-opacity",
+      String(prefs.opacity || 0.92),
+    );
+    document.documentElement.style.setProperty(
+      "--overlay-scale",
+      String(prefs.scale || 1),
+    );
+  }, [prefs]);
+  const cards = prefs.cards || [],
+    call = state.call,
+    latest = signals[0],
+    countdown = useMemo(
+      () => (upcoming ? Math.max(0, Date.parse(upcoming.at) - Date.now()) : 0),
+      [upcoming, state],
+    );
+  const send = (type) => {
+    if (call?.id)
+      supabase.auth
+        .getUser()
+        .then(({ data }) =>
+          supabase
+            .from("vr_overlay_signals")
+            .insert({
+              call_id: call.id,
+              sender_id: data.user?.id,
+              signal_type: type,
+            }),
+        );
+  };
+  const attend = async () => {
+    const { data } = await supabase.auth.getUser();
+    if (!data.user || !upcoming) return;
+    if (upcoming.kind === "event") await supabase.from("crew_event_members").upsert({ event_id:upcoming.id, user_id:data.user.id, role:"participant", response:"attending", check_in:"here", checked_in_at:new Date().toISOString() },{onConflict:"event_id,user_id"});
+    else await supabase.from("meetup_participant_settings").upsert({ meetup_id:upcoming.id, user_id:data.user.id, check_in_status:"arrived", checked_in_at:new Date().toISOString(), updated_at:new Date().toISOString() },{onConflict:"meetup_id,user_id"});
+  };
+  return (
+    <main className={`vr-overlay-window ${prefs.state || "compact"}`}>
+      <header>
+        <span>
+          <Radio /> CrewDeck Overlay
+        </span>
+        <div>
+          <button
+            onClick={() =>
+              setPrefs((p) => ({
+                ...p,
+                state: p.state === "expanded" ? "compact" : "expanded",
+              }))
+            }
+          >
+            {prefs.state === "expanded" ? <ChevronDown /> : <ChevronUp />}
+          </button>
+          <button onClick={() => window.desktop.overlay.close()}>
+            <X />
+          </button>
+        </div>
+      </header>
+      {cards.includes("call") && (
+        <section>
+          <small>ACTIVE CALL</small>
+          <strong>
+            {call?.connected
+              ? "Connected"
+              : call
+                ? "Connecting"
+                : "No active call"}
+          </strong>
+          {call && (
+            <>
+              <p>
+                {call.speaking
+                  ? `${safeName(call.speaking, prefs.streamer_safe)} is speaking`
+                  : safeName(call.title, prefs.privacy_mode)}
+              </p>
+              <div className="vr-overlay-actions">
+                <button
+                  onClick={() =>
+                    window.desktop.overlay.command({ type: "toggle-mic" })
+                  }
+                >
+                  {call.muted ? <MicOff /> : <Mic />}
+                </button>
+                <button
+                  onClick={() =>
+                    window.desktop.overlay.command({ type: "toggle-deafen" })
+                  }
+                >
+                  <EarOff />
+                </button>
+              </div>
+            </>
+          )}
+        </section>
+      )}
+      {cards.includes("meetup") && (
+        <section>
+          <small>NEXT MEETUP</small>
+          {upcoming ? (
+            <>
+              <strong>{upcoming.title}</strong>
+              <p>
+                {Math.floor(countdown / 3600000)}h{" "}
+                {Math.floor((countdown % 3600000) / 60000)}m away
+              </p>
+              <button
+                onClick={() =>
+                  window.desktop.overlay.command({
+                    type: "navigate",
+                    route: upcoming.route,
+                  })
+                }
+              >
+                <CalendarClock /> Open
+              </button>
+              {upcoming.joinUrl && <button onClick={()=>window.desktop.openExternal(upcoming.joinUrl)}>Join link</button>}
+              {countdown < 4*3600000 && <button onClick={attend}>I’m here</button>}
+            </>
+          ) : (
+            <p>No upcoming meetup.</p>
+          )}
+        </section>
+      )}
+      {cards.includes("requests") && state.request && (
+        <section>
+          <small>JOIN REQUEST</small>
+          <strong>{safeName(state.request.name, prefs.streamer_safe)}</strong>
+          <div>
+            <button
+              onClick={() =>
+                window.desktop.overlay.command({
+                  type: "request",
+                  response: "accept",
+                  id: state.request.id,
+                })
+              }
+            >
+              Accept
+            </button>
+            <button
+              onClick={() =>
+                window.desktop.overlay.command({
+                  type: "request",
+                  response: "decline",
+                  id: state.request.id,
+                })
+              }
+            >
+              Decline
+            </button>
+            <button onClick={() => window.desktop.overlay.command({type:"request",response:"snooze",id:state.request.id})}>Snooze</button>
+          </div>
+        </section>
+      )}
+      {cards.includes("world") && latest?.signal_type === "world_plan" && (
+        <section>
+          <small>WORLD PLAN</small>
+          <strong>{latest.body || "Next world"}</strong>
+          <button onClick={() => send("change_world")}>Next world</button>
+        </section>
+      )}
+      {cards.includes("ready") && call && (
+        <section>
+          <small>READY CHECK</small>
+          <div>
+            <button onClick={() => send("ready")}>Ready</button>
+            <button onClick={() => send("not_ready")}>Not ready</button>
+          </div>
+        </section>
+      )}
+      {cards.includes("communication") && call && (
+        <section>
+          <small>QUICK CARDS</small>
+          <div className="vr-overlay-quick">
+            {[
+              ["need_break", "I need a break"],
+              ["cannot_hear", "I cannot hear you"],
+              ["slow_down", "Please slow down"],
+              ["change_world", "Change worlds?"],
+            ].map(([type, label]) => (
+              <button key={type} onClick={() => send(type)}>
+                {label}
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+      {latest && (
+        <footer>
+          <BellRing /> {latest.signal_type.replaceAll("_", " ")}
+        </footer>
+      )}
+    </main>
+  );
 }

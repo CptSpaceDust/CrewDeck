@@ -64,7 +64,7 @@ const groups = [
   },
   {
     label: "Support",
-    items: [["support", "Support Captain", Heart]],
+    items: [["support-requests", "Private Support", HandHelping],["support", "Support Captain", Heart]],
   },
 ];
 

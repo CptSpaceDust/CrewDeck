@@ -116,6 +116,7 @@ function MessageAttachment({ item, onNotice }) {
       >
         <Paperclip />
         <span>
+          <small>{item.file_name || "Shared document"}</small>
           <strong>Open document</strong>
           <small>{Math.max(1, Math.ceil(item.byte_size / 1024))} KB</small>
         </span>
@@ -360,6 +361,7 @@ export function MessageFeatureBar({
   onNotice,
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerPosition, setPickerPosition] = useState(null);
   const pickerRef = useRef(null);
   const messageReactions = reactions.filter(
     (item) => item.message_id === message.id,
@@ -455,13 +457,41 @@ export function MessageFeatureBar({
               title="Choose another reaction"
               aria-label="Choose another reaction"
               aria-expanded={pickerOpen}
-              onClick={() => setPickerOpen((value) => !value)}
+              onClick={() => {
+                if (pickerOpen) {
+                  setPickerOpen(false);
+                  return;
+                }
+                const rect = pickerRef.current?.getBoundingClientRect();
+                const width = Math.min(286, window.innerWidth - 24);
+                const height = 260;
+                const below = window.innerHeight - (rect?.bottom || 0);
+                setPickerPosition({
+                  position: "fixed",
+                  width,
+                  maxHeight: height,
+                  overflowY: "auto",
+                  left: Math.max(
+                    12,
+                    Math.min(window.innerWidth - width - 12, rect?.left || 12),
+                  ),
+                  top:
+                    below >= height + 20
+                      ? (rect?.bottom || 12) + 8
+                      : Math.max(12, (rect?.top || height + 20) - height - 8),
+                  right: "auto",
+                  bottom: "auto",
+                  zIndex: 30000,
+                });
+                setPickerOpen(true);
+              }}
             >
               <SmilePlus />
             </button>
             {pickerOpen && (
               <div
                 className="emoji-picker-popover"
+                style={pickerPosition || undefined}
                 role="dialog"
                 aria-label="Choose a reaction"
               >
@@ -614,6 +644,10 @@ export function ConversationDetails({
   conversationId,
   userId,
   onNotice,
+  archived = false,
+  autoArchiveDays = "",
+  onArchiveToggle,
+  onAutoArchiveChange,
 }) {
   const [reminders, setReminders] = useState([]);
   const [media, setMedia] = useState([]);
@@ -686,6 +720,42 @@ export function ConversationDetails({
             <Copy /> Copy ID
           </button>
         </div>
+        {(onArchiveToggle || onAutoArchiveChange) && (
+          <section className="conversation-detail-archive">
+            <div>
+              <strong>Archive settings</strong>
+              <small>
+                Keep inactive conversations out of your active list without
+                deleting them.
+              </small>
+            </div>
+            {onArchiveToggle && (
+              <button type="button" onClick={onArchiveToggle}>
+                {archived ? "Restore conversation" : "Archive conversation"}
+              </button>
+            )}
+            {onAutoArchiveChange && (
+              <label>
+                <span>Auto archive</span>
+                <select
+                  value={autoArchiveDays || ""}
+                  onChange={(event) =>
+                    onAutoArchiveChange(
+                      event.target.value ? Number(event.target.value) : null,
+                    )
+                  }
+                >
+                  <option value="">Off</option>
+                  <option value="7">7 days</option>
+                  <option value="14">14 days</option>
+                  <option value="30">30 days</option>
+                  <option value="60">60 days</option>
+                  <option value="90">90 days</option>
+                </select>
+              </label>
+            )}
+          </section>
+        )}
         <header>
           <div>
             <Timer />
@@ -703,7 +773,9 @@ export function ConversationDetails({
               <article key={reminder.id}>
                 <div>
                   <strong>
-                    <FormattedMessage mentions={reminder.mention_snapshot || []}>
+                    <FormattedMessage
+                      mentions={reminder.mention_snapshot || []}
+                    >
                       {reminder.message_excerpt || "Message reminder"}
                     </FormattedMessage>
                   </strong>
@@ -854,54 +926,6 @@ export function ConversationNotificationControl({
           </label>
         ))}
       </fieldset>
-      <div className="conversation-preference-selects">
-        <label>
-          <span>Conversation theme</span>
-          <select
-            aria-label="Conversation theme"
-            value={preference?.theme_key || "default"}
-            onChange={(event) => save({ theme_key: event.target.value })}
-          >
-            <option value="default">Space Default</option>
-            <option value="nebula">Nebula</option>
-            <option value="galaxy">Galaxy</option>
-            <option value="fire">Solar Flare</option>
-            <option value="ice">Frozen Planet</option>
-            <option value="alien">Alien World</option>
-            <option value="void">Void Protocol</option>
-            <option value="retro">Retro NASA</option>
-          </select>
-        </label>
-        <label>
-          <span>Organize in folder</span>
-          <select
-            aria-label="Conversation folder"
-            title="Conversation folder"
-            value={preference?.folder || "inbox"}
-            onChange={(event) => save({ folder: event.target.value })}
-          >
-            <option value="inbox">Inbox</option>
-            <option value="friends">Friends</option>
-            <option value="meetups">Meetups</option>
-            <option value="important">Important</option>
-            <option value="muted">Muted</option>
-          </select>
-        </label>
-        <label>
-          <span>Alert sound</span>
-          <select
-            aria-label="Conversation sound"
-            title="Conversation sound"
-            value={preference?.sound_key || "default"}
-            onChange={(event) => save({ sound_key: event.target.value })}
-          >
-            <option value="default">Default sound</option>
-            <option value="soft">Soft sound</option>
-            <option value="bright">Bright sound</option>
-            <option value="silent">Silent</option>
-          </select>
-        </label>
-      </div>
     </div>
   );
 }

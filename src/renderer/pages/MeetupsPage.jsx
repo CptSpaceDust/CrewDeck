@@ -511,7 +511,9 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
   const [planningKind, setPlanningKind] = useState(
     friendPrefill.kind === "event" ? "event" : "meetup",
   );
-  const [selectedParticipants, setSelectedParticipants] = useState([]);
+  const [selectedParticipants, setSelectedParticipants] = useState(
+    friendPrefill.participantIds || [],
+  );
   const [selected, setSelected] = useState(null);
   const [preferredTime, setPreferredTime] = useState("18:00");
   const [showFormHint, setShowFormHint] = useState(false);
@@ -523,6 +525,13 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
     Number(friendPrefill.preset?.duration || 1),
   );
   const [minimumAttendance, setMinimumAttendance] = useState("");
+  useEffect(() => {
+    setDuration((current) =>
+      planningKind === "event"
+        ? Math.min(10, Math.max(3, Number(current) || 3))
+        : Math.min(5, Math.max(1, Number(current) || 1)),
+    );
+  }, [planningKind]);
   const formHeadingRef = useRef(null);
   const requestFormRef = useRef(null);
   const meetups = Array.isArray(meetupLoader.data) ? meetupLoader.data : [];
@@ -759,9 +768,7 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
         event_description: isEvent
           ? String(form.get("event_description") || "").trim() || null
           : null,
-        event_visibility: isEvent
-          ? String(form.get("event_visibility") || "invite_only")
-          : "invite_only",
+        event_visibility: isEvent ? "crew_wide" : "invite_only",
         event_tags: isEvent
           ? String(form.get("event_tags") || "")
               .split(",")
@@ -1003,7 +1010,7 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
                   </h2>
                   <p>
                     {planningKind === "event"
-                      ? "Plan a larger activity with event details, capacity, visibility, and optional invitees."
+                      ? "Create a crew-wide event with a start time, duration, location, and joining details."
                       : "Invite one person to plan private time together."}
                   </p>
                 </div>
@@ -1021,78 +1028,94 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
                       type="button"
                       className={planningKind === value ? "active" : ""}
                       aria-pressed={planningKind === value}
-                      onClick={() => setPlanningKind(value)}
+                      onClick={() => {
+                        setPlanningKind(value);
+                        setSelected(null);
+                        setShowFormHint(false);
+                        if (value === "event") {
+                          setSelectedPerson("");
+                          setSelectedParticipants([]);
+                        }
+                      }}
                     >
                       {label}
                     </button>
                   ))}
                 </div>
               </section>
-              <section className="panel meetup-person-picker">
-                <div>
-                  <h2>
-                    {planningKind === "event"
-                      ? "Who should be invited first?"
-                      : "Who are you meeting?"}
-                  </h2>
-                  <p>
-                    {planningKind === "event"
-                      ? "Choose an optional first invitee. More members can be added in the event details."
-                      : "The calendar shows each person’s availability based on how they’ve configured it."}
-                  </p>
-                </div>
-                <Field
-                  label={
-                    planningKind === "event"
-                      ? "First invitee · Optional"
-                      : "Crew member"
-                  }
-                >
-                  <select
-                    value={selectedPerson}
-                    onChange={(event) => {
-                      setSelectedPerson(event.target.value);
-                      setSelectedParticipants((current) =>
-                        current.filter((id) => id !== event.target.value),
-                      );
-                    }}
-                  >
-                    <option value="">Choose someone…</option>
-                    {people.map((person) => (
-                      <option key={person.id} value={person.id}>
-                        {person.username} · {person.rank || "Crew"}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                <fieldset className="meetup-participant-picker">
-                  <legend>More participants · Optional</legend>
-                  <p>
-                    Select everyone who should be included in schedule
-                    comparison.
-                  </p>
+              {planningKind !== "event" && (
+                <section className="panel meetup-person-picker">
                   <div>
-                    {people
-                      .filter((person) => person.id !== selectedPerson)
-                      .map((person) => (
-                        <label key={person.id}>
-                          <input
-                            type="checkbox"
-                            checked={selectedParticipants.includes(person.id)}
-                            onChange={(event) =>
-                              setSelectedParticipants((current) =>
-                                event.target.checked
-                                  ? [...new Set([...current, person.id])]
-                                  : current.filter((id) => id !== person.id),
-                              )
-                            }
-                          />
-                          {person.username}
-                        </label>
-                      ))}
+                    <h2>
+                      {planningKind === "event"
+                        ? "Who should be invited first?"
+                        : "Who are you meeting?"}
+                    </h2>
+                    <p>
+                      {planningKind === "event"
+                        ? "Choose an optional first invitee. More members can be added in the event details."
+                        : "The calendar shows each person’s availability based on how they’ve configured it."}
+                    </p>
                   </div>
-                </fieldset>
-              </section>
+                  <Field
+                    label={
+                      planningKind === "event"
+                        ? "First invitee · Optional"
+                        : "Crew member"
+                    }
+                  >
+                    <select
+                      value={selectedPerson}
+                      onChange={(event) => {
+                        setSelectedPerson(event.target.value);
+                        setSelectedParticipants((current) =>
+                          current.filter((id) => id !== event.target.value),
+                        );
+                      }}
+                    >
+                      <option value="">Choose someone…</option>
+                      {people.map((person) => (
+                        <option key={person.id} value={person.id}>
+                          {person.username} · {person.rank || "Crew"}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  {selectedPerson && (
+                    <fieldset className="meetup-participant-picker">
+                      <legend>More participants · Optional</legend>
+                      <p>
+                        Select everyone who should be included in schedule
+                        comparison.
+                      </p>
+                      <div>
+                        {people
+                          .filter((person) => person.id !== selectedPerson)
+                          .map((person) => (
+                            <label key={person.id}>
+                              <input
+                                type="checkbox"
+                                checked={selectedParticipants.includes(
+                                  person.id,
+                                )}
+                                onChange={(event) =>
+                                  setSelectedParticipants((current) =>
+                                    event.target.checked
+                                      ? [...new Set([...current, person.id])]
+                                      : current.filter(
+                                          (id) => id !== person.id,
+                                        ),
+                                  )
+                                }
+                              />
+                              {person.username}
+                            </label>
+                          ))}
+                      </div>
+                    </fieldset>
+                  )}
+                </section>
+              )}
               <AvailabilityOverlap
                 participantIds={selectedIds}
                 profiles={profiles}
@@ -1110,6 +1133,7 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
                   setPreferredTime(time);
                   setShowFormHint(true);
                 }}
+                userId={user.id}
               />
               <section className="panel calendar-card">
                 <header>
@@ -1464,90 +1488,15 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
                       placeholder="What the crew will be doing"
                     />
                   </Field>
-                  <div className="form-grid">
-                    <Field label="Who can discover it?">
-                      <select
-                        name="event_visibility"
-                        defaultValue="invite_only"
-                      >
-                        <option value="invite_only">
-                          Invited members only
-                        </option>
-                        <option value="selected_group">Selected group</option>
-                        <option value="friends">Friends of the host</option>
-                        <option value="crew_wide">Everyone in the crew</option>
-                      </select>
-                    </Field>
-                    <Field label="Capacity">
-                      <input
-                        name="capacity"
-                        type="number"
-                        min="2"
-                        max="500"
-                        defaultValue="10"
-                      />
-                    </Field>
-                  </div>
-                  <div className="form-grid">
-                    <Field label="Event banner URL" hint="Optional">
-                      <input
-                        name="event_banner"
-                        type="url"
-                        placeholder="https://…"
-                      />
-                    </Field>
-                    <Field
-                      label="Selected group ID"
-                      hint="For selected-group visibility"
-                    >
-                      <input
-                        name="selected_group_id"
-                        placeholder="Group conversation ID"
-                      />
-                    </Field>
-                  </div>
-                  <Field label="Minimum attendance" hint="Optional">
-                    <input
-                      name="minimum_attendance"
-                      type="number"
-                      min="2"
-                      max="500"
-                      value={minimumAttendance}
-                      onChange={(event) =>
-                        setMinimumAttendance(event.target.value)
-                      }
-                    />
-                  </Field>
-                  <div className="form-grid">
-                    <Field label="Tags" hint="Optional, comma separated">
-                      <input
-                        name="event_tags"
-                        maxLength="200"
-                        placeholder="VRChat, relaxed, exploration"
-                      />
-                    </Field>
-                    <Field label="RSVP deadline" hint="Optional">
-                      <input name="rsvp_deadline" type="datetime-local" />
-                    </Field>
-                  </div>
-                  <label className="check-field">
-                    <input
-                      name="auto_waitlist"
-                      type="checkbox"
-                      defaultChecked
-                    />
-                    <span>
-                      Start a waitlist automatically when the event reaches
-                      capacity
-                    </span>
-                  </label>
                 </section>
               )}
-              <MeetupTemplateControls
-                userId={user.id}
-                formRef={requestFormRef}
-                onNotice={setMessage}
-              />
+              {planningKind !== "event" && (
+                <MeetupTemplateControls
+                  userId={user.id}
+                  formRef={requestFormRef}
+                  onNotice={setMessage}
+                />
+              )}
               {(selectedBlocks.length > 0 ||
                 selectedBusyMeetups.length > 0) && (
                 <div className="meetup-off-hours">
@@ -1602,7 +1551,10 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
                         setDuration(Number(event.target.value))
                       }
                     >
-                      {[1, 2, 3, 4, 5].map((hours) => (
+                      {(planningKind === "event"
+                        ? [3, 4, 5, 6, 7, 8, 9, 10]
+                        : [1, 2, 3, 4, 5]
+                      ).map((hours) => (
                         <option key={hours} value={hours}>
                           {hours} {hours === 1 ? "hour" : "hours"}
                         </option>
@@ -1611,47 +1563,54 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
                   </Field>
                 </div>
               </section>
-              <section>
-                <h3>VRChat details</h3>
-                <div className="form-grid">
-                  <Field label="Your VRChat username">
-                    <input
-                      name="vrc"
-                      defaultValue={profile?.vrchat || ""}
-                      required
-                    />
-                  </Field>
-                  <Field label="Meetup type">
-                    <select
-                      name="type"
-                      defaultValue={friendPrefill.preset?.meetup_type || ""}
-                      required
-                    >
-                      <option value="" disabled>
-                        Choose a meetup type…
-                      </option>
-                      <option>Gaming</option>
-                      <option>World Exploration</option>
-                      <option>Hanging Out / Chatting</option>
-                      <option>Watching Something</option>
-                      <option>Working on a Project</option>
-                      <option>Other</option>
-                    </select>
-                  </Field>
-                </div>
-              </section>
+              {planningKind !== "event" && (
+                <section>
+                  <h3>VRChat details</h3>
+                  <div className="form-grid">
+                    <Field label="Your VRChat username">
+                      <input
+                        name="vrc"
+                        defaultValue={profile?.vrchat || ""}
+                        required
+                      />
+                    </Field>
+                    <Field label="Meetup type">
+                      <select
+                        name="type"
+                        defaultValue={friendPrefill.preset?.meetup_type || ""}
+                        required
+                      >
+                        <option value="" disabled>
+                          Choose a meetup type…
+                        </option>
+                        <option>Gaming</option>
+                        <option>World Exploration</option>
+                        <option>Hanging Out / Chatting</option>
+                        <option>Watching Something</option>
+                        <option>Working on a Project</option>
+                        <option>Other</option>
+                      </select>
+                    </Field>
+                  </div>
+                </section>
+              )}
               <section>
                 <h3>Details</h3>
-                <Field label="Additional participant usernames" hint="Optional">
-                  <textarea
-                    name="participants"
-                    rows="3"
-                    defaultValue={selectedParticipants
-                      .map((id) => personName(profiles, id))
-                      .join(", ")}
-                    key={selectedParticipants.join("|")}
-                  />
-                </Field>
+                {planningKind !== "event" && (
+                  <Field
+                    label="Additional participant usernames"
+                    hint="Optional"
+                  >
+                    <textarea
+                      name="participants"
+                      rows="3"
+                      defaultValue={selectedParticipants
+                        .map((id) => personName(profiles, id))
+                        .join(", ")}
+                      key={selectedParticipants.join("|")}
+                    />
+                  </Field>
+                )}
                 <div className="form-grid">
                   <Field label="Location or world name" hint="Optional">
                     <input
@@ -1677,18 +1636,20 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
                     placeholder="Instance details, access notes, or meeting point"
                   />
                 </Field>
-                <Field label="Scheduling flexibility">
-                  <select
-                    name="flexibility"
-                    defaultValue={
-                      friendPrefill.preset?.time_flexibility || "exact"
-                    }
-                  >
-                    <option value="exact">Exact time only</option>
-                    <option value="30">±30 minutes is okay</option>
-                    <option value="60">±1 hour is okay</option>
-                  </select>
-                </Field>
+                {planningKind !== "event" && (
+                  <Field label="Scheduling flexibility">
+                    <select
+                      name="flexibility"
+                      defaultValue={
+                        friendPrefill.preset?.time_flexibility || "exact"
+                      }
+                    >
+                      <option value="exact">Exact time only</option>
+                      <option value="30">±30 minutes is okay</option>
+                      <option value="60">±1 hour is okay</option>
+                    </select>
+                  </Field>
+                )}
                 <Field label="Message" hint="Optional">
                   <textarea
                     name="message"
@@ -1696,28 +1657,30 @@ export default function MeetupsPage({ user, profile, myMeetupsOnly = false }) {
                     defaultValue={friendPrefill.preset?.message || ""}
                   />
                 </Field>
-                <div className="form-grid">
-                  <Field label="Repeat meetup">
-                    <select
-                      name="recurrence"
-                      value={recurrence}
-                      onChange={(event) => setRecurrence(event.target.value)}
-                    >
-                      <option value="none">Does not repeat</option>
-                      <option value="weekly">Every week</option>
-                      <option value="monthly">Every month</option>
-                    </select>
-                  </Field>
-                  {recurrence !== "none" && (
-                    <Field label="Number of meetups">
-                      <select name="recurrence_count" defaultValue="4">
-                        <option value="4">4 meetups</option>
-                        <option value="8">8 meetups</option>
-                        <option value="12">12 meetups</option>
+                {planningKind !== "event" && (
+                  <div className="form-grid">
+                    <Field label="Repeat meetup">
+                      <select
+                        name="recurrence"
+                        value={recurrence}
+                        onChange={(event) => setRecurrence(event.target.value)}
+                      >
+                        <option value="none">Does not repeat</option>
+                        <option value="weekly">Every week</option>
+                        <option value="monthly">Every month</option>
                       </select>
                     </Field>
-                  )}
-                </div>
+                    {recurrence !== "none" && (
+                      <Field label="Number of meetups">
+                        <select name="recurrence_count" defaultValue="4">
+                          <option value="4">4 meetups</option>
+                          <option value="8">8 meetups</option>
+                          <option value="12">12 meetups</option>
+                        </select>
+                      </Field>
+                    )}
+                  </div>
+                )}
               </section>
               <div className="meetup-warning">
                 <strong>What happens next</strong>

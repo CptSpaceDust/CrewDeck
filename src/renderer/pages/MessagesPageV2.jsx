@@ -32,13 +32,18 @@ import {
   VolumeX,
   Wifi,
   WifiOff,
+  CalendarDays,
   X,
 } from "lucide-react";
 import EditMessageButton from "../components/EditMessageButton";
 import GroupPolls, { InlineGroupPoll } from "../components/GroupPolls";
 import DecisionRecords from "../components/DecisionRecords";
 import InternalLinkPreviews from "../components/InternalLinkPreviews";
-import { UnreadDivider, UnreadNavigator, useUnreadNavigation } from "../components/MessageNavigation";
+import {
+  UnreadDivider,
+  UnreadNavigator,
+  useUnreadNavigation,
+} from "../components/MessageNavigation";
 import {
   ConversationDetails,
   ConversationNotificationControl,
@@ -84,7 +89,10 @@ import {
   sendGroupMessage,
   sendMessage,
 } from "../lib/data";
-import { getConversationArchives, setConversationArchive } from "../lib/decisionArchive";
+import {
+  getConversationArchives,
+  setConversationArchive,
+} from "../lib/decisionArchive";
 import { supabase } from "../lib/supabase";
 import { playCallEventSound, startRingtone, stopRingtone } from "../lib/sounds";
 import {
@@ -1104,20 +1112,51 @@ export function VoiceCall({ conversation, user, onClose, requestedCallId }) {
   }
 
   useEffect(() => {
-    const speaker = participants.find((participant) => speaking.has(participant.identity));
-    window.desktop?.overlay?.update?.({call:{id:activeCallId,title:callTitle,connected,muted,deafened,speaking:speaker?participantProfile(speaker,speaker===participants[0]).username:"",participants:participants.length}});
-  }, [activeCallId, callTitle, connected, muted, deafened, participants, speaking]);
+    const speaker = participants.find((participant) =>
+      speaking.has(participant.identity),
+    );
+    window.desktop?.overlay?.update?.({
+      call: {
+        id: activeCallId,
+        title: callTitle,
+        connected,
+        muted,
+        deafened,
+        speaking: speaker
+          ? participantProfile(speaker, speaker === participants[0]).username
+          : "",
+        participants: participants.length,
+      },
+    });
+  }, [
+    activeCallId,
+    callTitle,
+    connected,
+    muted,
+    deafened,
+    participants,
+    speaking,
+  ]);
 
-  useEffect(() => window.desktop?.overlay?.onCommand?.(async command => {
-    if (command?.type === "toggle-mic") await toggleMic();
-    if (command?.type === "toggle-deafen") {
-      const next=!deafened; setDeafened(next);
-      roomRef.current?.remoteParticipants.forEach(participant=>participant.audioTrackPublications.forEach(publication=>publication.audioTrack?.setVolume(next?0:1)));
-      await updateCallControl({deafened:next});
-    }
-  }), [deafened, muted, activeCallId]);
+  useEffect(
+    () =>
+      window.desktop?.overlay?.onCommand?.(async (command) => {
+        if (command?.type === "toggle-mic") await toggleMic();
+        if (command?.type === "toggle-deafen") {
+          const next = !deafened;
+          setDeafened(next);
+          roomRef.current?.remoteParticipants.forEach((participant) =>
+            participant.audioTrackPublications.forEach((publication) =>
+              publication.audioTrack?.setVolume(next ? 0 : 1),
+            ),
+          );
+          await updateCallControl({ deafened: next });
+        }
+      }),
+    [deafened, muted, activeCallId],
+  );
 
-  useEffect(() => () => window.desktop?.overlay?.update?.({call:null}), []);
+  useEffect(() => () => window.desktop?.overlay?.update?.({ call: null }), []);
 
   if (minimized) {
     const active =
@@ -1683,7 +1722,9 @@ function DirectMessagesPage({
       ]);
       setConversations(items);
       setRequests(pending);
-      setArchives(savedArchives.filter((item) => item.conversation_kind === "dm"));
+      setArchives(
+        savedArchives.filter((item) => item.conversation_kind === "dm"),
+      );
       setSelected((current) =>
         current
           ? items.find((x) => x.id === current.id) || items[0] || null
@@ -1820,8 +1861,13 @@ function DirectMessagesPage({
     scrollMessageStream(endRef);
   }, [messages.length]);
   useEffect(() => {
-    if (!route?.message || !messages.some((item) => item.id === route.message)) return;
-    requestAnimationFrame(() => document.querySelector(`[data-nav-message="${CSS.escape(route.message)}"]`)?.scrollIntoView({ block: "center" }));
+    if (!route?.message || !messages.some((item) => item.id === route.message))
+      return;
+    requestAnimationFrame(() =>
+      document
+        .querySelector(`[data-nav-message="${CSS.escape(route.message)}"]`)
+        ?.scrollIntoView({ block: "center" }),
+    );
   }, [route?.message, messages.length]);
   useEffect(() => {
     const last = messages.at(-1);
@@ -1829,13 +1875,20 @@ function DirectMessagesPage({
       markMessageRead("dm", selected.id, last.id, user.id).catch(() => {});
   }, [selected?.id, messages.at(-1)?.id, user.id]);
   const visible = useMemo(() => {
-    const archived = new Set(archives.filter((item) => item.archived_at).map((item) => item.conversation_id));
-    return conversations.filter((x) =>
-      archived.has(x.id) === showArchived && x.person?.username?.toLowerCase().includes(query.toLowerCase()),
+    const archived = new Set(
+      archives
+        .filter((item) => item.archived_at)
+        .map((item) => item.conversation_id),
+    );
+    return conversations.filter(
+      (x) =>
+        archived.has(x.id) === showArchived &&
+        x.person?.username?.toLowerCase().includes(query.toLowerCase()),
     );
   }, [conversations, query, archives, showArchived]);
   useEffect(() => {
-    if (selected && !visible.some((item) => item.id === selected.id)) setSelected(visible[0] || null);
+    if (selected && !visible.some((item) => item.id === selected.id))
+      setSelected(visible[0] || null);
   }, [showArchived, archives, query]);
   async function changeArchive(conversationId, archived, autoDays = null) {
     await setConversationArchive("dm", conversationId, archived, autoDays);
@@ -1846,10 +1899,18 @@ function DirectMessagesPage({
     () => Object.fromEntries(messages.map((x) => [x.id, x])),
     [messages],
   );
-  const unreadNavigation = useUnreadNavigation({ kind: "dm", conversationId: selected?.id, messages, userId: user.id });
+  const unreadNavigation = useUnreadNavigation({
+    kind: "dm",
+    conversationId: selected?.id,
+    messages,
+    userId: user.id,
+  });
   useEffect(() => {
     if (!selected?.id || !messages.length) return undefined;
-    const timer = setTimeout(() => unreadNavigation.markCurrentRead().catch(() => {}), 1800);
+    const timer = setTimeout(
+      () => unreadNavigation.markCurrentRead().catch(() => {}),
+      1800,
+    );
     return () => clearTimeout(timer);
   }, [selected?.id, messages.at(-1)?.id]);
   async function respond(request, status) {
@@ -2069,8 +2130,12 @@ function DirectMessagesPage({
       <div className="message-mode-tabs">
         <button className="active">DM Messages</button>
         <button onClick={onShowGroups}>Group Messages</button>
-        <button className={showArchived ? "active" : ""} onClick={() => setShowArchived((value) => !value)}>
-          {showArchived ? <ArchiveRestore /> : <Archive />} {showArchived ? "Back to active" : "Archived"}
+        <button
+          className={showArchived ? "active" : ""}
+          onClick={() => setShowArchived((value) => !value)}
+        >
+          {showArchived ? <ArchiveRestore /> : <Archive />}{" "}
+          {showArchived ? "Back to active" : "Archived"}
         </button>
       </div>
       {notice && <p className="form-message">{notice}</p>}
@@ -2146,12 +2211,7 @@ function DirectMessagesPage({
             })}
           </div>
         </aside>
-        <section
-          className="panel chat-panel"
-          data-conversation-theme={
-            conversationFeatures.preferences?.theme_key || "default"
-          }
-        >
+        <section className="panel chat-panel">
           {selected ? (
             <>
               <header className="chat-header">
@@ -2221,8 +2281,14 @@ function DirectMessagesPage({
                     preference={conversationFeatures.preferences}
                     onPreferenceChanged={reloadConversationFeatures}
                     onNotice={setNotice}
-                    archived={archives.some((item) => item.conversation_id === selected.id && item.archived_at)}
-                    archivePreference={archives.find((item) => item.conversation_id === selected.id)}
+                    archived={archives.some(
+                      (item) =>
+                        item.conversation_id === selected.id &&
+                        item.archived_at,
+                    )}
+                    archivePreference={archives.find(
+                      (item) => item.conversation_id === selected.id,
+                    )}
                     onArchive={changeArchive}
                   />
                 </div>
@@ -2241,11 +2307,17 @@ function DirectMessagesPage({
                     messageDayKey(messages[index - 1].created_at) !==
                       messageDayKey(item.created_at);
                   return (
-                    <div className="message-with-divider" key={item.id} data-nav-message={item.id}>
+                    <div
+                      className="message-with-divider"
+                      key={item.id}
+                      data-nav-message={item.id}
+                    >
                       {startsDay && (
                         <MessageDayDivider value={item.created_at} />
                       )}
-                      {unreadNavigation.firstUnreadId === item.id && <UnreadDivider />}
+                      {unreadNavigation.firstUnreadId === item.id && (
+                        <UnreadDivider />
+                      )}
                       <div
                         className={
                           item.sender_id === user.id
@@ -2275,10 +2347,24 @@ function DirectMessagesPage({
                             item.content,
                           )) && (
                           <>
-                          <p>
-                            <FormattedMessage mentions={unreadNavigation.mentions.filter((mention) => mention.message_id === item.id)}>{item.content}</FormattedMessage>
-                          </p>
-                          <InternalLinkPreviews content={item.content} userId={user.id} kind="dm" conversationId={selected.id} messageId={item.id} onNavigate={onNavigate} canDismiss={item.sender_id===user.id}/>
+                            <p>
+                              <FormattedMessage
+                                mentions={unreadNavigation.mentions.filter(
+                                  (mention) => mention.message_id === item.id,
+                                )}
+                              >
+                                {item.content}
+                              </FormattedMessage>
+                            </p>
+                            <InternalLinkPreviews
+                              content={item.content}
+                              userId={user.id}
+                              kind="dm"
+                              conversationId={selected.id}
+                              messageId={item.id}
+                              onNavigate={onNavigate}
+                              canDismiss={item.sender_id === user.id}
+                            />
                           </>
                         )}
                         <div className="message-footer">
@@ -2298,7 +2384,16 @@ function DirectMessagesPage({
                             >
                               <Reply />
                             </button>
-                            <button onClick={() => unreadNavigation.markUnread(item).catch((error) => setNotice(error.message))} title="Mark unread from here"><CheckCheck /></button>
+                            <button
+                              onClick={() =>
+                                unreadNavigation
+                                  .markUnread(item)
+                                  .catch((error) => setNotice(error.message))
+                              }
+                              title="Mark unread from here"
+                            >
+                              <CheckCheck />
+                            </button>
                             {item.sender_id === user.id && (
                               <>
                                 <EditMessageButton
@@ -2973,7 +3068,7 @@ function DirectActionsMenu({
                   setPreferencesOpen(true);
                 }}
               >
-                <BellRing /> Notifications & sound
+                <BellRing /> Notification settings
               </button>
               <button
                 type="button"
@@ -2985,19 +3080,6 @@ function DirectActionsMenu({
               >
                 <Hash /> Conversation info & reminders
               </button>
-              <button
-                type="button"
-                className="group-actions-menu-item"
-                onClick={() => { setOpen(false); onArchive(conversationId, !archived, archivePreference?.auto_archive_days || null); }}
-              >
-                {archived ? <ArchiveRestore /> : <Archive />} {archived ? "Restore conversation" : "Archive conversation"}
-              </button>
-              <label className="group-actions-menu-item archive-auto-setting">
-                <span>Auto archive</span>
-                <select value={archivePreference?.auto_archive_days || ""} onChange={(event) => onArchive(conversationId, archived, event.target.value ? Number(event.target.value) : null)}>
-                  <option value="">Off</option><option value="7">7 days</option><option value="14">14 days</option><option value="30">30 days</option><option value="60">60 days</option><option value="90">90 days</option>
-                </select>
-              </label>
               <button
                 type="button"
                 className="group-actions-menu-item danger"
@@ -3037,6 +3119,18 @@ function DirectActionsMenu({
             conversationId={conversationId}
             userId={user.id}
             onNotice={onNotice}
+            archived={archived}
+            autoArchiveDays={archivePreference?.auto_archive_days || ""}
+            onArchiveToggle={() =>
+              onArchive(
+                conversationId,
+                !archived,
+                archivePreference?.auto_archive_days || null,
+              )
+            }
+            onAutoArchiveChange={(days) =>
+              onArchive(conversationId, archived, days)
+            }
           />
         </Modal>
       )}
@@ -3056,6 +3150,7 @@ function GroupActionsMenu({
   archived,
   archivePreference,
   onArchive,
+  onNavigate,
 }) {
   const [open, setOpen] = useState(false);
   const [pollsOpen, setPollsOpen] = useState(false);
@@ -3116,7 +3211,7 @@ function GroupActionsMenu({
                   setPreferencesOpen(true);
                 }}
               >
-                <BellRing /> Notifications & sound
+                <BellRing /> Notification settings
               </button>
               <button
                 type="button"
@@ -3128,7 +3223,14 @@ function GroupActionsMenu({
               >
                 <BarChart3 /> Polls
               </button>
-              <button type="button" className="group-actions-menu-item" onClick={() => { setOpen(false); setDecisionsOpen(true); }}>
+              <button
+                type="button"
+                className="group-actions-menu-item"
+                onClick={() => {
+                  setOpen(false);
+                  setDecisionsOpen(true);
+                }}
+              >
                 <History /> Decision records
               </button>
               <button
@@ -3141,6 +3243,28 @@ function GroupActionsMenu({
               >
                 <Hash /> Group info & reminders
               </button>
+              <button
+                type="button"
+                className="group-actions-menu-item"
+                onClick={() => {
+                  const participantIds = (group.members || [])
+                    .map((member) => member.user_id || member.id)
+                    .filter((id) => id && id !== user.id);
+                  localStorage.setItem(
+                    "crewdeck.meetup.prefill",
+                    JSON.stringify({
+                      groupId: group.id,
+                      participantIds,
+                      compare: true,
+                      kind: "event",
+                    }),
+                  );
+                  setOpen(false);
+                  onNavigate?.("MeetupCalendar.html?compare=1&kind=event");
+                }}
+              >
+                <CalendarDays /> Plan event & compare schedules
+              </button>
               {canManage && (
                 <ManageGroupButton
                   group={group}
@@ -3152,10 +3276,6 @@ function GroupActionsMenu({
                   onClosed={() => setOpen(false)}
                 />
               )}
-              <button type="button" className="group-actions-menu-item" onClick={() => { setOpen(false); onArchive(group.id, !archived, archivePreference?.auto_archive_days || null); }}>
-                {archived ? <ArchiveRestore /> : <Archive />} {archived ? "Restore group" : "Archive group"}
-              </button>
-              <label className="group-actions-menu-item archive-auto-setting"><span>Auto archive</span><select value={archivePreference?.auto_archive_days || ""} onChange={(event) => onArchive(group.id, archived, event.target.value ? Number(event.target.value) : null)}><option value="">Off</option><option value="7">7 days</option><option value="14">14 days</option><option value="30">30 days</option><option value="60">60 days</option><option value="90">90 days</option></select></label>
               <button
                 type="button"
                 className="group-actions-menu-item danger"
@@ -3179,7 +3299,15 @@ function GroupActionsMenu({
         open={pollsOpen}
         onClose={() => setPollsOpen(false)}
       />
-      <DecisionRecords groupId={group.id} canManage={canManage} open={decisionsOpen} onClose={() => setDecisionsOpen(false)} onNotice={onNotice} userId={user.id} onNavigate={onNavigate} />
+      <DecisionRecords
+        groupId={group.id}
+        canManage={canManage}
+        open={decisionsOpen}
+        onClose={() => setDecisionsOpen(false)}
+        onNotice={onNotice}
+        userId={user.id}
+        onNavigate={onNavigate}
+      />
       {preferencesOpen && (
         <Modal
           title="Group notifications"
@@ -3205,6 +3333,16 @@ function GroupActionsMenu({
             conversationId={group.id}
             userId={user.id}
             onNotice={onNotice}
+            archived={archived}
+            autoArchiveDays={archivePreference?.auto_archive_days || ""}
+            onArchiveToggle={() =>
+              onArchive(
+                group.id,
+                !archived,
+                archivePreference?.auto_archive_days || null,
+              )
+            }
+            onAutoArchiveChange={(days) => onArchive(group.id, archived, days)}
           />
         </Modal>
       )}
@@ -3257,7 +3395,9 @@ function GroupMessagesPage({
       ]);
       setGroups(rows);
       setInvites(pendingInvites || []);
-      setArchives(savedArchives.filter((item) => item.conversation_kind === "group"));
+      setArchives(
+        savedArchives.filter((item) => item.conversation_kind === "group"),
+      );
       setSelected(
         (current) =>
           rows.find((item) => item.id === (targetId || current?.id)) ||
@@ -3363,8 +3503,13 @@ function GroupMessagesPage({
     scrollMessageStream(endRef);
   }, [messages.length]);
   useEffect(() => {
-    if (!route?.message || !messages.some((item) => item.id === route.message)) return;
-    requestAnimationFrame(() => document.querySelector(`[data-nav-message="${CSS.escape(route.message)}"]`)?.scrollIntoView({ block: "center" }));
+    if (!route?.message || !messages.some((item) => item.id === route.message))
+      return;
+    requestAnimationFrame(() =>
+      document
+        .querySelector(`[data-nav-message="${CSS.escape(route.message)}"]`)
+        ?.scrollIntoView({ block: "center" }),
+    );
   }, [route?.message, messages.length]);
   useEffect(() => {
     const last = messages.at(-1);
@@ -3386,18 +3531,32 @@ function GroupMessagesPage({
     () => Object.fromEntries(messages.map((item) => [item.id, item])),
     [messages],
   );
-  const unreadNavigation = useUnreadNavigation({ kind: "group", conversationId: selected?.id, messages, userId: user.id });
+  const unreadNavigation = useUnreadNavigation({
+    kind: "group",
+    conversationId: selected?.id,
+    messages,
+    userId: user.id,
+  });
   useEffect(() => {
     if (!selected?.id || !messages.length) return undefined;
-    const timer = setTimeout(() => unreadNavigation.markCurrentRead().catch(() => {}), 1800);
+    const timer = setTimeout(
+      () => unreadNavigation.markCurrentRead().catch(() => {}),
+      1800,
+    );
     return () => clearTimeout(timer);
   }, [selected?.id, messages.at(-1)?.id]);
   const visible = groups.filter((item) => {
-    const isArchived = archives.some((archive) => archive.conversation_id === item.id && archive.archived_at);
-    return isArchived === showArchived && item.name?.toLowerCase().includes(query.toLowerCase());
+    const isArchived = archives.some(
+      (archive) => archive.conversation_id === item.id && archive.archived_at,
+    );
+    return (
+      isArchived === showArchived &&
+      item.name?.toLowerCase().includes(query.toLowerCase())
+    );
   });
   useEffect(() => {
-    if (selected && !visible.some((item) => item.id === selected.id)) setSelected(visible[0] || null);
+    if (selected && !visible.some((item) => item.id === selected.id))
+      setSelected(visible[0] || null);
   }, [showArchived, archives, query]);
   async function changeArchive(conversationId, archived, autoDays = null) {
     await setConversationArchive("group", conversationId, archived, autoDays);
@@ -3667,7 +3826,13 @@ function GroupMessagesPage({
       <div className="message-mode-tabs">
         <button onClick={onShowDms}>DM Messages</button>
         <button className="active">Group Messages</button>
-        <button className={showArchived ? "active" : ""} onClick={() => setShowArchived((value) => !value)}>{showArchived ? <ArchiveRestore /> : <Archive />} {showArchived ? "Back to active" : "Archived"}</button>
+        <button
+          className={showArchived ? "active" : ""}
+          onClick={() => setShowArchived((value) => !value)}
+        >
+          {showArchived ? <ArchiveRestore /> : <Archive />}{" "}
+          {showArchived ? "Back to active" : "Archived"}
+        </button>
       </div>
       {notice && <p className="form-message">{notice}</p>}
       {invites.length > 0 && (
@@ -3769,12 +3934,7 @@ function GroupMessagesPage({
             ))}
           </div>
         </aside>
-        <section
-          className="panel chat-panel"
-          data-conversation-theme={
-            conversationFeatures.preferences?.theme_key || "default"
-          }
-        >
+        <section className="panel chat-panel">
           {details ? (
             <>
               <header className="chat-header">
@@ -3837,9 +3997,16 @@ function GroupMessagesPage({
                     onLeave={leave}
                     preference={conversationFeatures.preferences}
                     onPreferenceChanged={reloadConversationFeatures}
-                    archived={archives.some((item) => item.conversation_id === selected.id && item.archived_at)}
-                    archivePreference={archives.find((item) => item.conversation_id === selected.id)}
+                    archived={archives.some(
+                      (item) =>
+                        item.conversation_id === selected.id &&
+                        item.archived_at,
+                    )}
+                    archivePreference={archives.find(
+                      (item) => item.conversation_id === selected.id,
+                    )}
                     onArchive={changeArchive}
+                    onNavigate={onNavigate}
                     onChanged={async () => {
                       const group = await getGroupDetails(selected.id);
                       setDetails(group);
@@ -3876,11 +4043,17 @@ function GroupMessagesPage({
                     messageDayKey(messages[index - 1].created_at) !==
                       messageDayKey(item.created_at);
                   return (
-                    <div className="message-with-divider" key={item.id} data-nav-message={item.id}>
+                    <div
+                      className="message-with-divider"
+                      key={item.id}
+                      data-nav-message={item.id}
+                    >
                       {startsDay && (
                         <MessageDayDivider value={item.created_at} />
                       )}
-                      {unreadNavigation.firstUnreadId === item.id && <UnreadDivider />}
+                      {unreadNavigation.firstUnreadId === item.id && (
+                        <UnreadDivider />
+                      )}
                       <div
                         className={
                           item.sender_id === user.id
@@ -3923,10 +4096,24 @@ function GroupMessagesPage({
                             item.content,
                           ) ? (
                           <>
-                          <p>
-                            <FormattedMessage mentions={unreadNavigation.mentions.filter((mention) => mention.message_id === item.id)}>{item.content}</FormattedMessage>
-                          </p>
-                          <InternalLinkPreviews content={item.content} userId={user.id} kind="group" conversationId={selected.id} messageId={item.id} onNavigate={onNavigate} canDismiss={item.sender_id===user.id}/>
+                            <p>
+                              <FormattedMessage
+                                mentions={unreadNavigation.mentions.filter(
+                                  (mention) => mention.message_id === item.id,
+                                )}
+                              >
+                                {item.content}
+                              </FormattedMessage>
+                            </p>
+                            <InternalLinkPreviews
+                              content={item.content}
+                              userId={user.id}
+                              kind="group"
+                              conversationId={selected.id}
+                              messageId={item.id}
+                              onNavigate={onNavigate}
+                              canDismiss={item.sender_id === user.id}
+                            />
                           </>
                         ) : null}
                         <div className="message-footer">
@@ -3947,7 +4134,16 @@ function GroupMessagesPage({
                             >
                               <Reply />
                             </button>
-                            <button onClick={() => unreadNavigation.markUnread(item).catch((error) => setNotice(error.message))} title="Mark unread from here"><CheckCheck /></button>
+                            <button
+                              onClick={() =>
+                                unreadNavigation
+                                  .markUnread(item)
+                                  .catch((error) => setNotice(error.message))
+                              }
+                              title="Mark unread from here"
+                            >
+                              <CheckCheck />
+                            </button>
                             {item.sender_id === user.id && (
                               <>
                                 <EditMessageButton
@@ -4024,7 +4220,9 @@ function GroupMessagesPage({
                 onSend={send}
                 onSendAttachment={sendAttachment}
                 onNotice={setNotice}
-                canBroadcast={myGroupRole === "owner" || myGroupRole === "moderator"}
+                canBroadcast={
+                  myGroupRole === "owner" || myGroupRole === "moderator"
+                }
               />
             </>
           ) : (

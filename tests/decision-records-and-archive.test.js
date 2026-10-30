@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 const page = readFileSync("src/renderer/pages/MessagesPageV2.jsx", "utf8");
+const features = readFileSync("src/renderer/components/ConversationFeatures.jsx", "utf8");
 const decisions = readFileSync("src/renderer/components/DecisionRecords.jsx", "utf8");
 const archive = readFileSync("src/renderer/lib/decisionArchive.js", "utf8");
 
@@ -14,8 +15,8 @@ test("desktop group decisions support history, corrections, and actions", () => 
 });
 
 test("desktop direct and group conversations expose synced archives", () => {
-  assert.match(page, /Archive conversation/);
-  assert.match(page, /Archive group/);
-  assert.match(page, /Auto archive/);
+  assert.match(features, /Archive conversation/);
+  assert.match(features, /Auto archive/);
+  assert.match(page, /onArchiveToggle/);
   assert.match(archive, /conversation_archives/);
 });

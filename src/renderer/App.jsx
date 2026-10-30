@@ -47,6 +47,8 @@ import UpdateOverlay from "./components/UpdateVisual";
 import { InAppDialogHost } from "./components/InAppDialog";
 import CommandPalette from "./components/CommandPalette";
 import PersonalizedOnboarding from "./components/PersonalizedOnboarding";
+import { AvailabilityPulseEditor } from "./components/AvailabilityPulse";
+import SupportRequestsPage from "./pages/SupportRequestsPage";
 import {
   ConnectivityBanner,
   CommunityStatus,
@@ -86,6 +88,7 @@ function parseNavigation(value) {
     meetupcalendar: "meetups",
     mymeetups: "my-meetups",
     support: "support",
+    supportrequests: "support-requests",
     profile: "profile",
     security: "profile",
     messages: "messages",
@@ -147,6 +150,7 @@ export default function App() {
   const [toast, setToast] = useState(null);
   const [incomingCall, setIncomingCall] = useState(null);
   const [activeCall, setActiveCall] = useState(null);
+  const [overlayPrefs, setOverlayPrefs] = useState(null);
   const incomingCallRef = useRef(null);
   useMessageAlerts(mfaRequired ? null : session?.user?.id);
   useMeetupReminders(mfaRequired ? null : session?.user?.id);
@@ -161,12 +165,27 @@ export default function App() {
     return () => window.removeEventListener("message-reads", refresh);
   }, []);
   useEffect(() => {
+    let active = true;
+    const timeout = window.setTimeout(() => {
+      if (active) setLock({ loading: false, locked: false, enabled: false });
+    }, 4000);
     window.desktop.appLock
       .getState()
-      .then((value) => setLock({ loading: false, ...value }));
-    return window.desktop.appLock.onState((value) =>
+      .then((value) => {
+        if (active) setLock({ loading: false, ...value });
+      })
+      .catch(() => {
+        if (active) setLock({ loading: false, locked: false, enabled: false });
+      })
+      .finally(() => window.clearTimeout(timeout));
+    const unsubscribe = window.desktop.appLock.onState((value) =>
       setLock({ loading: false, ...value }),
     );
+    return () => {
+      active = false;
+      window.clearTimeout(timeout);
+      unsubscribe?.();
+    };
   }, []);
   useEffect(() => {
     let active = true;
@@ -183,7 +202,12 @@ export default function App() {
       } else setMfaRequired(false);
       setLoading(false);
     }
-    supabase.auth.getSession().then(({ data }) => apply(data.session));
+    const authTimeout = window.setTimeout(() => apply(null), 6000);
+    supabase.auth
+      .getSession()
+      .then(({ data }) => apply(data.session))
+      .catch(() => apply(null))
+      .finally(() => window.clearTimeout(authTimeout));
     const { data: listener } = supabase.auth.onAuthStateChange(
       (_event, next) => {
         setTimeout(() => apply(next), 0);
@@ -191,6 +215,7 @@ export default function App() {
     );
     return () => {
       active = false;
+      window.clearTimeout(authTimeout);
       listener.subscription.unsubscribe();
     };
   }, []);
@@ -199,7 +224,18 @@ export default function App() {
       setProfile(null);
       return;
     }
-    getProfile(session.user.id).then(setProfile);
+    getProfile(session.user.id)
+      .then(setProfile)
+      .catch(() =>
+        setProfile({
+          id: session.user.id,
+          username:
+            session.user.user_metadata?.username ||
+            session.user.email?.split("@")[0] ||
+            "Crew member",
+          rank: "Crew",
+        }),
+      );
   }, [session?.user?.id]);
   useEffect(() => {
     if (!session?.user) return;
@@ -268,19 +304,62 @@ export default function App() {
   }, []);
   useEffect(() => {
     incomingCallRef.current = incomingCall;
-    window.desktop?.overlay?.update?.({request:incomingCall?{id:incomingCall.id,name:incomingCall.title||"Crew member"}:null});
+    const hideRequest =
+      overlayPrefs?.respect_dnd && isQuietTime(getPreferences());
+    window.desktop?.overlay?.update?.({
+      request:
+        incomingCall && !hideRequest
+          ? { id: incomingCall.id, name: incomingCall.title || "Crew member" }
+          : null,
+    });
     if (!incomingCall) return;
     const timeout = window.setTimeout(() => {
       stopRingtone();
       setIncomingCall(null);
     }, 90000);
     return () => window.clearTimeout(timeout);
-  }, [incomingCall]);
-  useEffect(() => window.desktop?.overlay?.onCommand?.(command => {
-    if(command?.type==="request") closeIncomingCall(command.response==="accept");
-    if(command?.type==="navigate"&&command.route) navigate(command.route);
-  }), [session?.user?.id, profile?.username]);
-  useEffect(()=>{if(!session?.user?.id)return;supabase.from("vr_overlay_preferences").select("*").eq("user_id",session.user.id).maybeSingle().then(({data})=>{if(data?.enabled&&data.state!=="hidden"){window.desktop.overlay.setPreferences(data);window.desktop.overlay.open();}});},[session?.user?.id]);
+  }, [incomingCall, overlayPrefs?.respect_dnd]);
+  useEffect(
+    () =>
+      window.desktop?.overlay?.onCommand?.((command) => {
+        if (command?.type === "request" && command.response === "snooze") {
+          stopRingtone();
+          setIncomingCall(null);
+          window.desktop.overlay.update({ request: null });
+        } else if (command?.type === "request")
+          closeIncomingCall(command.response === "accept");
+        if (command?.type === "navigate" && command.route)
+          navigate(command.route);
+      }),
+    [session?.user?.id, profile?.username],
+  );
+  useEffect(() => {
+    if (!session?.user?.id) return;
+    let pressed = false,
+      timer;
+    supabase
+      .from("vr_overlay_preferences")
+      .select("*")
+      .eq("user_id", session.user.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!data) return;
+        setOverlayPrefs(data);
+        if (data.enabled && data.state !== "hidden") {
+          window.desktop.overlay.setPreferences(data);
+          window.desktop.overlay.open();
+          timer = window.setInterval(() => {
+            const button = Number(data.controller_button ?? 8),
+              down = [...(navigator.getGamepads?.() || [])].some(
+                (pad) => pad?.buttons?.[button]?.pressed,
+              );
+            if (down && !pressed) window.desktop.overlay.toggle();
+            pressed = down;
+          }, 100);
+        }
+      });
+    return () => timer && window.clearInterval(timer);
+  }, [session?.user?.id]);
   useEffect(() => {
     if (!toast) return;
     const timeout = window.setTimeout(() => setToast(null), 5000);
@@ -392,13 +471,28 @@ export default function App() {
         );
     }
     const refreshUnread = async () => {
-      const [{ data: notifications }, { data: states }] = await Promise.all([supabase
-        .from("notifications")
-        .select("id")
-        .eq("user_id", userId)
-        .eq("is_read", false),supabase.from("crew_inbox_state").select("notification_id,snoozed_until,dismissed_at").eq("user_id",userId)]);
-      const hidden=new Map((states||[]).map(item=>[item.notification_id,item]));
-      const count=(notifications||[]).filter(item=>{const state=hidden.get(item.id);return !state?.dismissed_at&&(!state?.snoozed_until||Date.parse(state.snoozed_until)<=Date.now());}).length;
+      const [{ data: notifications }, { data: states }] = await Promise.all([
+        supabase
+          .from("notifications")
+          .select("id")
+          .eq("user_id", userId)
+          .eq("is_read", false),
+        supabase
+          .from("crew_inbox_state")
+          .select("notification_id,snoozed_until,dismissed_at")
+          .eq("user_id", userId),
+      ]);
+      const hidden = new Map(
+        (states || []).map((item) => [item.notification_id, item]),
+      );
+      const count = (notifications || []).filter((item) => {
+        const state = hidden.get(item.id);
+        return (
+          !state?.dismissed_at &&
+          (!state?.snoozed_until ||
+            Date.parse(state.snoozed_until) <= Date.now())
+        );
+      }).length;
       if (alive) setUnread(count);
     };
     const pollNotifications = async () => {
@@ -568,6 +662,7 @@ export default function App() {
             person={viewedPerson}
             user={session.user}
             onBack={() => setPage("crew")}
+            onNavigate={navigate}
           />
         );
       case "birthdays":
@@ -580,8 +675,15 @@ export default function App() {
         return <MeetupsPage {...props} myMeetupsOnly />;
       case "support":
         return <SupportPage profile={profile} onUpdated={setProfile} />;
+      case "support-requests":
+        return <SupportRequestsPage {...props} />;
       case "profile":
-        return <ProfilePage {...props} onUpdated={setProfile} />;
+        return (
+          <div className="page profile-page-stack">
+            <AvailabilityPulseEditor user={session.user} />
+            <ProfilePage {...props} onUpdated={setProfile} />
+          </div>
+        );
       case "messages":
         return (
           <MessagesPage

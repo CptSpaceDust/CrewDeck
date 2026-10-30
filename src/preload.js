@@ -36,6 +36,7 @@ contextBridge.exposeInMainWorld("desktop", {
   overlay: {
     open: () => ipcRenderer.invoke("overlay:open"),
     close: () => ipcRenderer.invoke("overlay:close"),
+    toggle: () => ipcRenderer.invoke("overlay:toggle"),
     setPreferences: (value) => ipcRenderer.invoke("overlay:set-preferences", value),
     update: (value) => ipcRenderer.send("overlay:update", value),
     onState: (callback) => subscribe("overlay:state", callback),

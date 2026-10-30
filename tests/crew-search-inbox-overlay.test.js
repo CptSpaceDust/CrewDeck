@@ -1,5 +1,43 @@
-const assert=require("node:assert/strict"),fs=require("node:fs"),path=require("node:path"),test=require("node:test"),root=path.resolve(__dirname,"..");
-const read=file=>fs.readFileSync(path.join(root,file),"utf8");
-test("desktop universal search covers permission scoped CrewDeck content",()=>{const source=read("src/renderer/lib/universalSearch.js"),ui=read("src/renderer/components/CommandPalette.jsx");for(const value of ["dm_messages","group_messages","message_attachments","crew_events","group_polls","group_decisions","community_board_posts"])assert.match(source,new RegExp(value));assert.match(ui,/is:unread/);assert.match(ui,/mentions:me/);assert.match(ui,/role="listbox"/);});
-test("desktop Crew Inbox is realtime and actionable",()=>{const source=read("src/renderer/lib/crewInbox.js"),ui=read("src/renderer/pages/NotificationsPage.jsx");assert.match(source,/crew_inbox_state/);assert.match(source,/respond_to_meetup_invitation/);assert.match(ui,/Accept meetup/);assert.match(ui,/Join call/);assert.match(ui,/Snooze|1 hour/);});
-test("desktop internal previews and VR overlay use private live state",()=>{const previews=read("src/renderer/components/InternalLinkPreviews.jsx"),overlay=read("src/renderer/components/VrOverlayWindow.jsx"),main=read("src/main.js");assert.match(previews,/postgres_changes/);assert.match(previews,/Content unavailable|content unavailable/i);assert.match(overlay,/streamer_safe/);assert.match(overlay,/vr_overlay_signals/);assert.match(main,/alwaysOnTop:true/);assert.match(main,/overlay:command/);});
+const assert = require("node:assert/strict"),
+  fs = require("node:fs"),
+  path = require("node:path"),
+  test = require("node:test"),
+  root = path.resolve(__dirname, "..");
+const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
+test("desktop universal search covers permission scoped CrewDeck content", () => {
+  const source = read("src/renderer/lib/universalSearch.js"),
+    ui = read("src/renderer/components/CommandPalette.jsx");
+  for (const value of [
+    "dm_messages",
+    "group_messages",
+    "message_attachments",
+    "crew_events",
+    "group_polls",
+    "group_decisions",
+    "community_board_posts",
+  ])
+    assert.match(source, new RegExp(value));
+  assert.match(ui, /is:unread/);
+  assert.match(ui, /mentions:me/);
+  assert.match(ui, /role="listbox"/);
+});
+test("desktop Crew Inbox is realtime and actionable", () => {
+  const source = read("src/renderer/lib/crewInbox.js"),
+    ui = read("src/renderer/pages/NotificationsPage.jsx");
+  assert.match(source, /crew_inbox_state/);
+  assert.match(source, /respond_to_meetup_invitation/);
+  assert.match(ui, /Accept meetup/);
+  assert.match(ui, /Join call/);
+  assert.match(ui, /Snooze|1 hour/);
+});
+test("desktop internal previews and VR overlay use private live state", () => {
+  const previews = read("src/renderer/components/InternalLinkPreviews.jsx"),
+    overlay = read("src/renderer/components/VrOverlayWindow.jsx"),
+    main = read("src/main.js");
+  assert.match(previews, /postgres_changes/);
+  assert.match(previews, /Content unavailable|content unavailable/i);
+  assert.match(overlay, /streamer_safe/);
+  assert.match(overlay, /vr_overlay_signals/);
+  assert.match(main, /alwaysOnTop:\s*true/);
+  assert.match(main, /overlay:command/);
+});

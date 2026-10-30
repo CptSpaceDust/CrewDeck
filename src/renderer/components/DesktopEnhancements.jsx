@@ -280,8 +280,9 @@ export function WhatsNew() {
             <div>
               <strong>Added</strong>
               <p>
-                Universal Crew Search, the actionable Crew Inbox, live link
-                previews, and a configurable VR overlay are ready.
+                Crew Events, availability pulses, private community support,
+                the Crew Inbox, decision records, rich mentions, and a
+                configurable VR overlay.
               </p>
             </div>
           </article>
@@ -290,8 +291,9 @@ export function WhatsNew() {
             <div>
               <strong>Changed</strong>
               <p>
-                Unread totals and reminder emails now follow inbox snooze and
-                dismiss choices across CrewDeck.
+                Meetups, messages, community boards, conversation archives,
+                accessibility settings, and the installer now share a clearer
+                Space Glass experience.
               </p>
             </div>
           </article>
@@ -300,8 +302,9 @@ export function WhatsNew() {
             <div>
               <strong>Fixed</strong>
               <p>
-                Crew Event migration and older meetup backfills now handle
-                legacy records safely.
+                App startup recovery, message attachments, unread navigation,
+                event planning, calendar availability, and installer text
+                visibility.
               </p>
             </div>
           </article>
