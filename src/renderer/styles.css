@@ -8372,6 +8372,99 @@ html[data-color-indicators="labeled"] .presence-chip::before {
 .board-workspace-controls select {
   min-width: 145px;
 }
+.board-workflow-editor {
+  overflow: hidden;
+  border: 1px solid rgba(112, 193, 255, 0.24);
+  border-radius: 16px;
+  background: linear-gradient(
+    145deg,
+    rgba(18, 43, 79, 0.58),
+    rgba(5, 17, 38, 0.72)
+  );
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.035);
+}
+.board-workflow-editor > summary {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 13px 15px;
+  color: #dff4ff;
+  font-weight: 850;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+.board-workflow-editor > summary::-webkit-details-marker {
+  display: none;
+}
+.board-workflow-editor > summary::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid #82d6ff;
+  border-bottom: 2px solid #82d6ff;
+  transform: rotate(-45deg);
+  transition: transform 0.18s ease;
+}
+.board-workflow-editor[open] > summary {
+  border-bottom: 1px solid rgba(112, 193, 255, 0.16);
+  background: rgba(45, 116, 176, 0.09);
+}
+.board-workflow-editor[open] > summary::before {
+  transform: rotate(45deg) translate(-2px, -2px);
+}
+.board-workflow-editor > form {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  padding: 16px;
+}
+.board-workflow-editor label {
+  display: grid;
+  align-content: start;
+  gap: 7px;
+  min-width: 0;
+  color: #c8dced;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+.board-workflow-editor label:last-of-type {
+  grid-column: 1 / -1;
+}
+.board-workflow-editor input,
+.board-workflow-editor textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(111, 194, 255, 0.28);
+  border-radius: 11px;
+  color: #eef8ff;
+  background: #06152c;
+  font: inherit;
+}
+.board-workflow-editor input {
+  min-height: 44px;
+}
+.board-workflow-editor textarea {
+  min-height: 210px;
+  resize: vertical;
+  font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  tab-size: 2;
+}
+.board-workflow-editor input:focus,
+.board-workflow-editor textarea:focus {
+  outline: 2px solid rgba(113, 207, 255, 0.78);
+  outline-offset: 2px;
+  border-color: #72cfff;
+}
+.board-workflow-editor .button {
+  grid-column: 1 / -1;
+  justify-self: end;
+  min-width: 150px;
+}
 .board-layout-picker {
   display: inline-flex;
   padding: 3px;
@@ -8531,6 +8624,17 @@ html[data-color-indicators="labeled"] .presence-chip::before {
   .board-manage-grid,
   .board-link-form {
     grid-template-columns: 1fr;
+  }
+  .board-workflow-editor > form {
+    grid-template-columns: 1fr;
+    padding: 13px;
+  }
+  .board-workflow-editor label:last-of-type,
+  .board-workflow-editor .button {
+    grid-column: auto;
+  }
+  .board-workflow-editor .button {
+    justify-self: stretch;
   }
 }
 @media (max-width: 900px) {
