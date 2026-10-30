@@ -69,6 +69,19 @@ test("desktop enhancements cover notifications, drafts, reminders, and privacy",
   assert.match(profile, /Report a concern/);
 });
 
+test("startup preserves archived conversation arrays", () => {
+  const preferences = read("src", "renderer", "lib", "preferences.js");
+  assert.match(preferences, /if \(Array\.isArray\(fallback\)\)/);
+  assert.match(
+    preferences,
+    /Array\.isArray\(parsed\) \? parsed : \[\.\.\.fallback\]/,
+  );
+  assert.match(
+    preferences,
+    /new Set\(readJson\("cptspacedust\.desktop\.archived-conversations\.v1", \[\]\)\)/,
+  );
+});
+
 test("advanced messaging, meetup templates, and profile privacy are wired", () => {
   const composer = read("src/renderer/components/MessageComposer.jsx");
   const messages = read("src/renderer/pages/MessagesPageV2.jsx");

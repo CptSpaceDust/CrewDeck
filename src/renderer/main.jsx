@@ -26,6 +26,10 @@ class RootErrorBoundary extends Component {
             Your account data is safe. Reload the app, or repair its local cache
             if this continues.
           </p>
+          <details>
+            <summary>Technical details</summary>
+            <code>{this.state.error?.message || "Unknown startup error"}</code>
+          </details>
           <div>
             <button type="button" onClick={() => location.reload()}>
               Reload CrewDeck

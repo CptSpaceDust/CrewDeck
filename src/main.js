@@ -28,7 +28,10 @@ const ICON_PATH = path.join(__dirname, "..", "assets", "icon.png");
 const isDevelopment = process.argv.includes("--dev");
 
 // Carry sessions, drafts, and PIN settings into the rebranded user-data folder.
-const crewDeckUserData = path.join(app.getPath("appData"), "CrewDeck");
+const crewDeckUserData =
+  !app.isPackaged && process.env.CREWDECK_DEBUG_USER_DATA
+  ? path.resolve(process.env.CREWDECK_DEBUG_USER_DATA)
+  : path.join(app.getPath("appData"), "CrewDeck");
 const legacyUserData = path.join(
   app.getPath("appData"),
   "CptSpaceDust Community",
