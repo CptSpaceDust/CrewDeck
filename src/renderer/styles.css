@@ -6263,17 +6263,39 @@ html[data-motion="full"] dialog {
 }
 .conversation-details-panel {
   display: grid;
-  gap: 15px;
+  gap: 14px;
+}
+.conversation-information-modal {
+  width: min(760px, 100%);
+  padding: 0;
+  overflow: hidden;
+  border-color: rgba(112, 193, 255, 0.32);
+  background:
+    radial-gradient(circle at 94% 4%, rgba(80, 118, 224, 0.15), transparent 35%),
+    linear-gradient(155deg, #101d33, #081426 72%);
+}
+.conversation-information-modal > .modal-header {
+  margin: 0;
+  padding: 21px 24px 17px;
+  border-bottom: 1px solid rgba(112, 193, 255, 0.14);
+}
+.conversation-information-modal > .modal-header h2 {
+  font-size: 1.45rem;
+}
+.conversation-information-modal > .conversation-details-panel {
+  max-height: calc(90vh - 82px);
+  overflow-y: auto;
+  padding: 20px 24px 26px;
 }
 .conversation-id-card {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px 12px;
-  padding: 14px;
+  padding: 16px;
   border: 1px solid rgba(104, 190, 255, 0.25);
-  border-radius: 14px;
-  background: rgba(77, 163, 255, 0.08);
+  border-radius: 16px;
+  background: linear-gradient(145deg, rgba(38, 87, 143, 0.28), rgba(8, 24, 49, 0.66));
 }
 .conversation-id-card > span {
   grid-column: 1 / -1;
@@ -6281,7 +6303,7 @@ html[data-motion="full"] dialog {
   align-items: center;
   gap: 7px;
   color: #9dd7ff;
-  font-size: 11px;
+  font-size: 0.74rem;
   font-weight: 800;
 }
 .conversation-id-card svg,
@@ -6308,6 +6330,15 @@ html[data-motion="full"] dialog {
   background: rgba(77, 163, 255, 0.13);
   cursor: pointer;
 }
+.conversation-id-card button:hover,
+.message-reminder-list button:hover {
+  border-color: rgba(116, 211, 255, 0.7);
+  background: rgba(77, 163, 255, 0.23);
+}
+.conversation-id-card button svg {
+  width: 16px;
+  height: 16px;
+}
 .conversation-details-panel > header > div {
   display: flex;
   align-items: center;
@@ -6322,6 +6353,37 @@ html[data-motion="full"] dialog {
 .message-reminder-list small {
   margin-top: 2px;
   color: var(--muted);
+}
+.conversation-detail-section {
+  display: grid;
+  gap: 13px;
+  padding: 16px;
+  border: 1px solid rgba(104, 190, 255, 0.2);
+  border-radius: 16px;
+  background: rgba(7, 21, 43, 0.58);
+}
+.conversation-detail-section > header {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+.conversation-detail-section > header > svg {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  color: #82d7ff;
+}
+.conversation-detail-section > header span,
+.conversation-detail-section > header strong,
+.conversation-detail-section > header small {
+  display: block;
+}
+.conversation-detail-section > header small {
+  margin-top: 3px;
+  color: #a6bed2;
+}
+.conversation-detail-section > .micro-copy {
+  margin: 2px 0 0;
 }
 .message-reminder-list {
   display: grid;
@@ -6360,6 +6422,18 @@ html[data-motion="full"] dialog {
     flex-direction: column;
   }
   .message-reminder-list button {
+    justify-content: center;
+  }
+  .conversation-information-modal > .modal-header {
+    padding: 17px 16px 14px;
+  }
+  .conversation-information-modal > .conversation-details-panel {
+    padding: 14px;
+  }
+  .conversation-id-card {
+    grid-template-columns: 1fr;
+  }
+  .conversation-id-card button {
     justify-content: center;
   }
 }
@@ -7615,7 +7689,7 @@ html[data-motion="full"] dialog {
   padding: 5px 10px;
 }
 .conversation-media-heading {
-  margin-top: 22px;
+  margin: 0;
 }
 
 .conversation-media-gallery {
@@ -7692,11 +7766,62 @@ html[data-motion="full"] dialog {
   align-content: center;
   justify-items: center;
   gap: 0.65rem;
+  padding: 0;
   text-align: center;
 }
-.conversation-media-card.document svg {
+.conversation-media-open {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 0.65rem;
+  width: 100%;
+  min-height: 8.5rem;
+  padding: 2.5rem 1rem 1rem;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+.conversation-media-open:hover {
+  background: rgba(77, 163, 255, 0.09);
+}
+.conversation-media-open > svg {
   width: 1.7rem;
   color: var(--accent, #7bc8ff);
+}
+.conversation-media-delete {
+  position: absolute;
+  z-index: 3;
+  top: 0.55rem;
+  right: 0.55rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 30px;
+  padding: 6px 8px;
+  border: 1px solid rgba(255, 121, 142, 0.42);
+  border-radius: 9px;
+  color: #ffd6dc;
+  background: rgba(42, 8, 18, 0.9);
+  box-shadow: 0 7px 18px rgba(0, 0, 0, 0.38);
+  font: inherit;
+  font-size: 0.68rem;
+  font-weight: 850;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+}
+.conversation-media-delete:hover {
+  border-color: #ff8da0;
+  color: #fff;
+  background: rgba(116, 25, 45, 0.96);
+}
+.conversation-media-delete svg {
+  width: 14px;
+  height: 14px;
+}
+.conversation-media-card.audio {
+  padding-top: 2.9rem;
 }
 .conversation-media-card.loading {
   display: grid;
@@ -9767,10 +9892,10 @@ html[data-color-indicators="labeled"] .presence-chip::before {
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 12px;
   align-items: center;
-  padding: 15px;
+  padding: 16px;
   border: 1px solid rgba(104, 190, 255, 0.23);
   border-radius: 15px;
-  background: rgba(18, 52, 91, 0.48);
+  background: linear-gradient(145deg, rgba(38, 87, 143, 0.24), rgba(8, 24, 49, 0.62));
 }
 .conversation-detail-archive > div {
   display: grid;
@@ -9788,6 +9913,7 @@ html[data-color-indicators="labeled"] .presence-chip::before {
   background: #143d69;
   font: inherit;
   font-weight: 800;
+  cursor: pointer;
 }
 .conversation-detail-archive > label {
   grid-column: 1/-1;
@@ -9800,7 +9926,24 @@ html[data-color-indicators="labeled"] .presence-chip::before {
 }
 .conversation-detail-archive select {
   width: auto;
-  min-width: 120px;
+  min-width: 140px;
+  min-height: 40px;
+  padding: 8px 38px 8px 12px;
+  appearance: none;
+  border: 1px solid rgba(111, 193, 255, 0.34);
+  border-radius: 10px;
+  color: #eef8ff;
+  background-color: #07172e;
+  background-image:
+    linear-gradient(45deg, transparent 50%, #8fd8ff 50%),
+    linear-gradient(135deg, #8fd8ff 50%, transparent 50%);
+  background-position:
+    calc(100% - 17px) 17px,
+    calc(100% - 12px) 17px;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  font: inherit;
+  cursor: pointer;
 }
 .meetup-participant-picker input,
 .meetup-request-form .check-field input {

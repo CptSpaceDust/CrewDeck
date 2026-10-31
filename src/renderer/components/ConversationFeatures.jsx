@@ -23,6 +23,7 @@ import {
   toggleMessageReaction,
   unpinGroupMessage,
   getMessageAttachmentUrl,
+  removeStagedMessageAttachment,
 } from "../lib/crewFeatures";
 import { supabase } from "../lib/supabase";
 import { confirmInApp, promptInApp } from "./InAppDialog";
@@ -190,7 +191,7 @@ function AttachmentPreviewDialog({ preview, onClose }) {
   );
 }
 
-function SharedMediaAttachment({ item, onPreview, onNotice }) {
+function SharedMediaAttachment({ item, userId, onPreview, onDelete, onNotice }) {
   const [url, setUrl] = useState("");
   useEffect(() => {
     let current = true;
@@ -204,11 +205,24 @@ function SharedMediaAttachment({ item, onPreview, onNotice }) {
   if (!url)
     return <div className="conversation-media-card loading">Loading…</div>;
   const mimeType = String(item.mime_type || "");
+  const removeButton = item.uploader_id === userId && (
+    <button
+      type="button"
+      className="conversation-media-delete"
+      aria-label="Remove shared media"
+      title="Remove shared media"
+      onClick={() => onDelete(item)}
+    >
+      <Trash2 />
+      <span>Remove</span>
+    </button>
+  );
   if (mimeType.startsWith("image/")) {
     return (
       <article className="conversation-media-card image">
         <img src={url} alt="Shared image" loading="lazy" />
         <span className="conversation-media-type">IMAGE</span>
+        {removeButton}
       </article>
     );
   }
@@ -217,6 +231,7 @@ function SharedMediaAttachment({ item, onPreview, onNotice }) {
       <article className="conversation-media-card video">
         <video src={url} controls preload="metadata" playsInline />
         <span className="conversation-media-type">VIDEO</span>
+        {removeButton}
       </article>
     );
   }
@@ -225,19 +240,23 @@ function SharedMediaAttachment({ item, onPreview, onNotice }) {
       <article className="conversation-media-card audio">
         <span className="conversation-media-type">VOICE MESSAGE</span>
         <audio src={url} controls preload="metadata" />
+        {removeButton}
       </article>
     );
   }
   return (
-    <button
-      type="button"
-      className="conversation-media-card document"
-      onClick={() => onPreview({ url, mimeType })}
-    >
-      <Paperclip />
-      <span className="conversation-media-type">OPEN DOCUMENT</span>
-      <small>{Math.max(1, Math.ceil(item.byte_size / 1024))} KB</small>
-    </button>
+    <article className="conversation-media-card document">
+      <button
+        type="button"
+        className="conversation-media-open"
+        onClick={() => onPreview({ url, mimeType })}
+      >
+        <Paperclip />
+        <span className="conversation-media-type">OPEN DOCUMENT</span>
+        <small>{Math.max(1, Math.ceil(item.byte_size / 1024))} KB</small>
+      </button>
+      {removeButton}
+    </article>
   );
 }
 
@@ -707,6 +726,27 @@ export function ConversationDetails({
       onNotice?.(`Conversation ID: ${conversationId}`);
     }
   }
+  async function deleteSharedMedia(item) {
+    if (
+      !(await confirmInApp(
+        "Remove this shared item from the conversation? The stored file will also be deleted.",
+        {
+          title: "Remove shared media?",
+          confirmLabel: "Remove",
+          danger: true,
+        },
+      ))
+    )
+      return;
+    try {
+      await removeStagedMessageAttachment(item.id);
+      setMedia((current) => current.filter((entry) => entry.id !== item.id));
+      setPreview(null);
+      onNotice?.("Shared media removed.");
+    } catch (error) {
+      onNotice?.(error.message || "The shared media could not be removed.");
+    }
+  }
   return (
     <>
       <section className="conversation-details-panel">
@@ -756,57 +796,57 @@ export function ConversationDetails({
             )}
           </section>
         )}
-        <header>
-          <div>
+        <section className="conversation-detail-section">
+          <header>
             <Timer />
             <span>
               <strong>Message reminders</strong>
               <small>Remove reminders you no longer need.</small>
             </span>
-          </div>
-        </header>
-        {loading ? (
-          <p className="micro-copy">Loading reminders…</p>
-        ) : reminders.length ? (
-          <div className="message-reminder-list">
-            {reminders.map((reminder) => (
-              <article key={reminder.id}>
-                <div>
-                  <strong>
-                    <FormattedMessage
-                      mentions={reminder.mention_snapshot || []}
-                    >
-                      {reminder.message_excerpt || "Message reminder"}
-                    </FormattedMessage>
-                  </strong>
-                  <small>
-                    {reminder.delivered_at ? "Delivered " : "Due "}
-                    {new Date(
-                      reminder.delivered_at || reminder.remind_at,
-                    ).toLocaleString()}
-                  </small>
-                </div>
-                <button
-                  type="button"
-                  title="Remove reminder"
-                  onClick={async () => {
-                    await deleteMessageReminder(reminder.id, userId);
-                    await load();
-                    onNotice?.("Message reminder removed.");
-                  }}
-                >
-                  <Trash2 /> Remove
-                </button>
-              </article>
-            ))}
-          </div>
-        ) : (
-          <p className="micro-copy">
-            No message reminders for this conversation.
-          </p>
-        )}
-        <header className="conversation-media-heading">
-          <div>
+          </header>
+          {loading ? (
+            <p className="micro-copy">Loading reminders…</p>
+          ) : reminders.length ? (
+            <div className="message-reminder-list">
+              {reminders.map((reminder) => (
+                <article key={reminder.id}>
+                  <div>
+                    <strong>
+                      <FormattedMessage
+                        mentions={reminder.mention_snapshot || []}
+                      >
+                        {reminder.message_excerpt || "Message reminder"}
+                      </FormattedMessage>
+                    </strong>
+                    <small>
+                      {reminder.delivered_at ? "Delivered " : "Due "}
+                      {new Date(
+                        reminder.delivered_at || reminder.remind_at,
+                      ).toLocaleString()}
+                    </small>
+                  </div>
+                  <button
+                    type="button"
+                    title="Remove reminder"
+                    onClick={async () => {
+                      await deleteMessageReminder(reminder.id, userId);
+                      await load();
+                      onNotice?.("Message reminder removed.");
+                    }}
+                  >
+                    <Trash2 /> Remove
+                  </button>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <p className="micro-copy">
+              No message reminders for this conversation.
+            </p>
+          )}
+        </section>
+        <section className="conversation-detail-section conversation-media-section">
+          <header className="conversation-media-heading">
             <Paperclip />
             <span>
               <strong>Shared media</strong>
@@ -814,17 +854,18 @@ export function ConversationDetails({
                 Images, files, voice messages, and links from this conversation.
               </small>
             </span>
-          </div>
-        </header>
-        <div className="conversation-media-gallery">
-          {media.map((item) => (
-            <SharedMediaAttachment
-              key={item.id}
-              item={item}
-              onPreview={setPreview}
-              onNotice={onNotice}
-            />
-          ))}
+          </header>
+          <div className="conversation-media-gallery">
+            {media.map((item) => (
+              <SharedMediaAttachment
+                key={item.id}
+                item={item}
+                userId={userId}
+                onPreview={setPreview}
+                onDelete={deleteSharedMedia}
+                onNotice={onNotice}
+              />
+            ))}
           {links.map((item) => (
             <button
               type="button"
@@ -851,10 +892,11 @@ export function ConversationDetails({
               <small>{item.url}</small>
             </button>
           ))}
-          {!media.length && !links.length && (
-            <p className="micro-copy">Nothing has been shared here yet.</p>
-          )}
-        </div>
+            {!media.length && !links.length && (
+              <p className="micro-copy">Nothing has been shared here yet.</p>
+            )}
+          </div>
+        </section>
       </section>
       {preview && (
         <AttachmentPreviewDialog

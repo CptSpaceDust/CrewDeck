@@ -3113,6 +3113,7 @@ function DirectActionsMenu({
         <Modal
           title="Conversation information"
           onClose={() => setDetailsOpen(false)}
+          className="conversation-information-modal"
         >
           <ConversationDetails
             kind="dm"
@@ -3327,6 +3328,7 @@ function GroupActionsMenu({
         <Modal
           title="Group conversation information"
           onClose={() => setDetailsOpen(false)}
+          className="conversation-information-modal"
         >
           <ConversationDetails
             kind="group"

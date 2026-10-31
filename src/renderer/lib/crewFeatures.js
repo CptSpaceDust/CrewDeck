@@ -216,6 +216,7 @@ export async function removeStagedMessageAttachment(attachmentId) {
     );
   }
   if (data?.error) throw new Error(data.error);
+  sessionStorage.removeItem(`crewdeck.media-cache.${attachmentId}`);
 }
 
 export async function getMessageAttachmentUrl(attachmentId) {
