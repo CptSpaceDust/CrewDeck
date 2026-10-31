@@ -41,6 +41,8 @@ export default function SupportRequestsPage({ user, profile }) {
     [feedback, setFeedback] = useState(null),
     [createOpen, setCreateOpen] = useState(false),
     [escalating, setEscalating] = useState(false),
+    [transferOpen, setTransferOpen] = useState(false),
+    [transferCandidates, setTransferCandidates] = useState([]),
     [notice, setNotice] = useState(""),
     [helperPermissions, setHelperPermissions] = useState(null);
   async function load() {
@@ -106,6 +108,18 @@ export default function SupportRequestsPage({ user, profile }) {
         (payload) => {
           if (payload.new.request_id === selected?.id)
             setMessages((rows) => [...rows, payload.new]);
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "community_support_attachments",
+        },
+        (payload) => {
+          const requestId = payload.new?.request_id || payload.old?.request_id;
+          if (requestId === selected?.id) loadDetails(selected.id);
         },
       )
       .subscribe();
@@ -207,6 +221,34 @@ export default function SupportRequestsPage({ user, profile }) {
   }
   async function claim() {
     await transition("claimed", { assigned_helper_id: user.id });
+  }
+  async function openTransfer() {
+    const { data, error } = await supabase.rpc(
+      "list_support_transfer_helpers",
+      { target_request: selected.id },
+    );
+    if (error) {
+      setNotice(error.message);
+      return;
+    }
+    setTransferCandidates(data || []);
+    setTransferOpen(true);
+  }
+  async function transfer(event) {
+    event.preventDefault();
+    const targetHelper = String(
+      new FormData(event.currentTarget).get("helper") || "",
+    );
+    if (!targetHelper) return;
+    const { error } = await supabase.rpc("transfer_support_request", {
+      target_request: selected.id,
+      target_helper: targetHelper,
+    });
+    setNotice(error?.message || "Request transferred privately.");
+    if (!error) {
+      setTransferOpen(false);
+      await load();
+    }
   }
   async function openAttachment(attachment) {
     const { data, error } = await supabase.functions.invoke(
@@ -346,6 +388,7 @@ export default function SupportRequestsPage({ user, profile }) {
                     <button onClick={() => transition("resolved")}>
                       Resolve
                     </button>
+                    <button onClick={openTransfer}>Transfer</button>
                     <button onClick={() => setEscalating(true)}>
                       <ArrowUpRight /> Escalate with notice
                     </button>
@@ -553,6 +596,38 @@ export default function SupportRequestsPage({ user, profile }) {
             <button className="button primary">
               <ArrowUpRight /> Escalate request
             </button>
+          </form>
+        </Modal>
+      )}
+      {transferOpen && selected && (
+        <Modal
+          title="Transfer private support request"
+          onClose={() => setTransferOpen(false)}
+        >
+          <form className="stack-form" onSubmit={transfer}>
+            <p>
+              Only helpers permitted for {CATEGORIES[selected.category]} are
+              listed. The requester will see that the assigned helper changed.
+            </p>
+            <Field label="New helper">
+              <select name="helper" required defaultValue="">
+                <option value="" disabled>
+                  Choose a permitted helper
+                </option>
+                {transferCandidates.map((person) => (
+                  <option value={person.user_id} key={person.user_id}>
+                    {person.username}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            {transferCandidates.length ? (
+              <button className="button primary">Transfer request</button>
+            ) : (
+              <p className="form-message">
+                No other helpers are permitted for this category.
+              </p>
+            )}
           </form>
         </Modal>
       )}

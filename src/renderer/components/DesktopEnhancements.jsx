@@ -280,9 +280,9 @@ export function WhatsNew() {
             <div>
               <strong>Added</strong>
               <p>
-                Crew Events, availability pulses, private community support,
-                the Crew Inbox, decision records, rich mentions, and a
-                configurable VR overlay.
+                Crew Events, private community support, the Crew Inbox, and a
+                configurable VR overlay are complete, with support-request
+                transfer and quiet response reminders.
               </p>
             </div>
           </article>
@@ -291,9 +291,8 @@ export function WhatsNew() {
             <div>
               <strong>Changed</strong>
               <p>
-                Meetups, messages, community boards, conversation archives,
-                accessibility settings, and the installer now share a clearer
-                Space Glass experience.
+                Support deadlines, audit history, retention, attachments, and
+                realtime updates now stay synchronized server side.
               </p>
             </div>
           </article>
@@ -302,9 +301,8 @@ export function WhatsNew() {
             <div>
               <strong>Fixed</strong>
               <p>
-                App startup recovery, message attachments, unread navigation,
-                event planning, calendar availability, and installer text
-                visibility.
+                Captain board workflow layout, Conversation Information, and
+                immediate Shared Media deletion.
               </p>
             </div>
           </article>

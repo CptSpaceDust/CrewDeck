@@ -2,6 +2,30 @@
 
 Every published CrewDeck release is documented here and copied into its GitHub release notes.
 
+## [2.0.2] - 2026-10-30
+
+### Added
+
+- Private support requests can be transferred to another helper who is permitted for the same support category.
+- Private response reminders now notify the correct helper or requester without creating public rankings.
+
+### Changed
+
+- The v2 roadmap is fully verified across website, desktop, database authorization, realtime behavior, and release checks.
+- Support-request deadlines, audit entries, retention, and attachment updates now stay synchronized server side.
+
+### Fixed
+
+- The Captain workflow editor keeps its fields aligned and includes a clear workflow guide.
+- Conversation Information has a cleaner layout and Shared Media owners can remove uploaded files immediately.
+
+## [2.0.1] - 2026-10-30
+
+### Fixed
+
+- Recovered startup when archived conversation state was stored in an older format.
+- Added technical recovery details instead of leaving the app on a blank screen.
+
 ## [2.0.0] - 2026-10-29
 
 ### Added
