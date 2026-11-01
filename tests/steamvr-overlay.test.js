@@ -13,19 +13,25 @@ test("Control Center no longer includes VRChat OSC automation", () => {
     read("src/preload.js"),
     read("src/renderer/pages/ControlCenterPage.jsx"),
   ].join("\n");
-  const website = [
-    fs.readFileSync(path.join(websiteRoot, "control-center.html"), "utf8"),
-    fs.readFileSync(path.join(websiteRoot, "js/control-center.js"), "utf8"),
-    fs.readFileSync(
-      path.join(websiteRoot, "css/control-center-space-glass.css"),
-      "utf8",
-    ),
-  ].join("\n");
   assert.doesNotMatch(
     desktop,
     /VRChat OSC|osc:configure|node:dgram|oscShockArmed/,
   );
-  assert.doesNotMatch(website, /VRChat OSC|OSC shock|CrewDeck\/Intensity/);
+
+  // The website is a sibling repository in the local workspace, but it is not
+  // present in CrewDeck's standalone GitHub Actions checkout.
+  const websiteControlCenter = path.join(websiteRoot, "control-center.html");
+  if (fs.existsSync(websiteControlCenter)) {
+    const website = [
+      fs.readFileSync(websiteControlCenter, "utf8"),
+      fs.readFileSync(path.join(websiteRoot, "js/control-center.js"), "utf8"),
+      fs.readFileSync(
+        path.join(websiteRoot, "css/control-center-space-glass.css"),
+        "utf8",
+      ),
+    ].join("\n");
+    assert.doesNotMatch(website, /VRChat OSC|OSC shock|CrewDeck\/Intensity/);
+  }
 });
 
 test("live controls coalesce stale commands and SteamVR has an interactive window path", () => {
