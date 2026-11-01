@@ -345,8 +345,9 @@ export default function App() {
       .then(({ data }) => {
         if (!data) return;
         setOverlayPrefs(data);
-        if (data.enabled && data.state !== "hidden") {
+        if (data.enabled || data.steamvr_enabled)
           window.desktop.overlay.setPreferences(data);
+        if (data.enabled && data.state !== "hidden") {
           window.desktop.overlay.open();
           timer = window.setInterval(() => {
             const button = Number(data.controller_button ?? 8),

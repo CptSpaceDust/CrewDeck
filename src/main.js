@@ -13,8 +13,9 @@ const {
   globalShortcut,
 } = require("electron");
 const fs = require("node:fs");
-const dgram = require("node:dgram");
 const path = require("node:path");
+const { spawn } = require("node:child_process");
+const readline = require("node:readline");
 const { pathToFileURL } = require("node:url");
 const { AppLockStore } = require("./app-lock-store");
 const { autoUpdater } = require("electron-updater");
@@ -79,12 +80,15 @@ let pendingShareTarget = "";
 const messageWindows = new Set();
 const activeNotifications = new Set();
 let overlayWindow;
+let steamVrOverlayProcess;
+let steamVrRequested = false;
+let steamVrRestartTimer;
+let vrStreamBackpressured = false;
+let vrPanelRoute = "Messages.html";
+const vrSurfaceWindows = { wrist: null, panel: null };
 let overlayState = {};
 let overlayShortcut = "Control+Shift+O";
 let overlaySecondaryShortcut = "Control+Shift+P";
-let oscSocket = null;
-let oscStatus = { enabled: false, port: 9001, listening: false, error: "" };
-const oscSettingsPath = path.join(crewDeckUserData, "vrchat-osc.json");
 let updateState = {
   status: "idle",
   currentVersion: app.getVersion(),
@@ -92,96 +96,6 @@ let updateState = {
   percent: 0,
   message: "",
 };
-
-function readOscString(buffer, offset = 0) {
-  const end = buffer.indexOf(0, offset);
-  if (end < 0) throw new Error("Invalid OSC string.");
-  const value = buffer.toString("utf8", offset, end);
-  return { value, offset: (end + 4) & ~3 };
-}
-
-function parseOscMessage(buffer) {
-  const addressPart = readOscString(buffer, 0);
-  if (!addressPart.value.startsWith("/avatar/parameters/CrewDeck/"))
-    return null;
-  const typePart = readOscString(buffer, addressPart.offset);
-  if (!typePart.value.startsWith(",")) return null;
-  let offset = typePart.offset;
-  const values = [];
-  for (const type of typePart.value.slice(1)) {
-    if (type === "T" || type === "F") values.push(type === "T");
-    else if (type === "i") {
-      if (offset + 4 > buffer.length) throw new Error("Invalid OSC integer.");
-      values.push(buffer.readInt32BE(offset));
-      offset += 4;
-    } else if (type === "f") {
-      if (offset + 4 > buffer.length) throw new Error("Invalid OSC float.");
-      values.push(buffer.readFloatBE(offset));
-      offset += 4;
-    } else if (type === "s") {
-      const part = readOscString(buffer, offset);
-      values.push(part.value);
-      offset = part.offset;
-    } else return null;
-  }
-  return {
-    parameter: addressPart.value.slice("/avatar/parameters/CrewDeck/".length),
-    value: values[0],
-    values,
-    receivedAt: Date.now(),
-  };
-}
-
-function stopOscListener() {
-  if (oscSocket) {
-    try {
-      oscSocket.close();
-    } catch {}
-    oscSocket = null;
-  }
-  oscStatus = { ...oscStatus, listening: false };
-}
-
-function configureOscListener(value = {}) {
-  const enabled = Boolean(value.enabled);
-  const port = Math.max(1024, Math.min(65535, Number(value.port) || 9001));
-  stopOscListener();
-  oscStatus = { enabled, port, listening: false, error: "" };
-  try {
-    fs.writeFileSync(
-      oscSettingsPath,
-      JSON.stringify({ enabled, port }, null, 2),
-    );
-  } catch {}
-  if (!enabled) return oscStatus;
-  const socket = dgram.createSocket({ type: "udp4", reuseAddr: true });
-  oscSocket = socket;
-  socket.on("message", (message, remote) => {
-    if (remote.address !== "127.0.0.1") return;
-    try {
-      const event = parseOscMessage(message);
-      if (!event) return;
-      for (const window of BrowserWindow.getAllWindows())
-        window.webContents.send("osc:event", event);
-    } catch {}
-  });
-  socket.on("error", (error) => {
-    oscStatus = { ...oscStatus, listening: false, error: error.message };
-    for (const window of BrowserWindow.getAllWindows())
-      window.webContents.send("osc:status", oscStatus);
-    try {
-      socket.close();
-    } catch {}
-    if (oscSocket === socket) oscSocket = null;
-  });
-  socket.bind(port, "127.0.0.1", () => {
-    if (oscSocket !== socket) return;
-    oscStatus = { ...oscStatus, listening: true, error: "" };
-    for (const window of BrowserWindow.getAllWindows())
-      window.webContents.send("osc:status", oscStatus);
-  });
-  return oscStatus;
-}
 
 function sendUpdateState(patch = {}) {
   updateState = { ...updateState, ...patch, currentVersion: app.getVersion() };
@@ -615,6 +529,236 @@ function createOverlayWindow(show = true) {
   return overlayWindow;
 }
 
+function vrHelperPath() {
+  return app.isPackaged
+    ? path.join(
+        process.resourcesPath,
+        "steamvr-overlay",
+        "CrewDeck.SteamVrOverlay.exe",
+      )
+    : path.join(
+        __dirname,
+        "..",
+        "native",
+        "CrewDeck.SteamVrOverlay",
+        "bin",
+        "Release",
+        "net8.0",
+        "win-x64",
+        "CrewDeck.SteamVrOverlay.exe",
+      );
+}
+
+function sendVrPacket(kind, width, height, payload = Buffer.alloc(0)) {
+  const child = steamVrOverlayProcess;
+  if (!child || child.killed || !child.stdin?.writable) return false;
+  if (vrStreamBackpressured && (kind === 1 || kind === 2)) return false;
+  const header = Buffer.allocUnsafe(16);
+  header.writeUInt32LE(0x43445256, 0);
+  header.writeUInt32LE(kind, 4);
+  header.writeUInt32LE(width, 8);
+  header.writeUInt32LE(height, 12);
+  try {
+    child.stdin.cork();
+    child.stdin.write(header);
+    const ready = child.stdin.write(payload);
+    child.stdin.uncork();
+    if (!ready) {
+      vrStreamBackpressured = true;
+      child.stdin.once("drain", () => {
+        if (steamVrOverlayProcess === child) vrStreamBackpressured = false;
+      });
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function sendVrCommand(command) {
+  const payload = Buffer.from(JSON.stringify(command), "utf8");
+  return sendVrPacket(10, payload.length, 0, payload);
+}
+
+function sendVrInput(surface, event) {
+  const target = vrSurfaceWindows[surface];
+  if (!target || target.isDestroyed()) return;
+  if (event.type === "mouse") {
+    const button =
+      event.button === 2 ? "right" : event.button === 4 ? "middle" : "left";
+    target.webContents.sendInputEvent({
+      type:
+        event.action === "move"
+          ? "mouseMove"
+          : event.action === "down"
+            ? "mouseDown"
+            : "mouseUp",
+      x: event.x,
+      y: event.y,
+      button,
+      clickCount: 1,
+    });
+  } else if (event.type === "scroll") {
+    target.webContents.sendInputEvent({
+      type: "mouseWheel",
+      x: 0,
+      y: 0,
+      deltaX: Math.round(Number(event.dx || 0) * 80),
+      deltaY: Math.round(Number(event.dy || 0) * 80),
+      canScroll: true,
+    });
+  }
+}
+
+function createVrSurface(surface, width, height) {
+  const current = vrSurfaceWindows[surface];
+  if (current && !current.isDestroyed()) return current;
+  const window = new BrowserWindow({
+    width,
+    height,
+    show: false,
+    frame: false,
+    transparent: true,
+    backgroundColor: "#00000000",
+    webPreferences: {
+      preload: path.join(__dirname, "preload.js"),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      backgroundThrottling: false,
+      offscreen: true,
+    },
+  });
+  window.webContents.setFrameRate(surface === "wrist" ? 15 : 24);
+  window.webContents.on("did-finish-load", () => {
+    if (surface === "panel")
+      window.webContents.send("desktop:navigate", vrPanelRoute);
+    window.webContents.invalidate();
+  });
+  window.webContents.on("paint", (_event, _dirty, image) => {
+    if (!steamVrOverlayProcess || image.isEmpty()) return;
+    const size = image.getSize();
+    sendVrPacket(
+      surface === "wrist" ? 1 : 2,
+      size.width,
+      size.height,
+      image.getBitmap(),
+    );
+  });
+  window.on("closed", () => {
+    if (vrSurfaceWindows[surface] === window) vrSurfaceWindows[surface] = null;
+  });
+  window.loadURL(
+    isDevelopment
+      ? `http://127.0.0.1:5173/?vrSurface=${surface}`
+      : `${APP_ORIGIN}/index.html?vrSurface=${surface}`,
+  );
+  vrSurfaceWindows[surface] = window;
+  return window;
+}
+
+function ensureVrSurfaces() {
+  createVrSurface("wrist", 420, 180);
+  createVrSurface("panel", 1280, 800);
+}
+
+function updateSteamVrState(next) {
+  overlayState = { ...overlayState, ...next };
+  for (const window of BrowserWindow.getAllWindows())
+    window.webContents.send("overlay:state", overlayState);
+}
+
+function scheduleSteamVrRestart() {
+  if (!steamVrRequested || steamVrRestartTimer) return;
+  steamVrRestartTimer = setTimeout(() => {
+    steamVrRestartTimer = null;
+    startSteamVrOverlay();
+  }, 2500);
+}
+
+function startSteamVrOverlay(hand = overlayState.wristHand || "left") {
+  if (steamVrOverlayProcess && !steamVrOverlayProcess.killed)
+    return { ok: true, message: "CrewDeck is already connected to SteamVR." };
+  const executable = vrHelperPath();
+  if (!fs.existsSync(executable))
+    return {
+      ok: false,
+      error: "The SteamVR companion is missing. Repair or reinstall CrewDeck.",
+    };
+  steamVrRequested = true;
+  ensureVrSurfaces();
+  updateSteamVrState({
+    steamVrReady: false,
+    steamVrConnecting: true,
+    steamVrError: "",
+  });
+  const child = spawn(executable, [hand === "right" ? "right" : "left"], {
+    cwd: path.dirname(executable),
+    windowsHide: true,
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+  steamVrOverlayProcess = child;
+  vrStreamBackpressured = false;
+  const lines = readline.createInterface({ input: child.stdout });
+  lines.on("line", (line) => {
+    try {
+      const event = JSON.parse(line);
+      if (event.type === "ready") {
+        updateSteamVrState({
+          steamVrReady: true,
+          steamVrConnecting: false,
+          steamVrError: "",
+          wristHand: event.hand,
+        });
+      } else if (event.type === "error") {
+        updateSteamVrState({
+          steamVrReady: false,
+          steamVrConnecting: true,
+          steamVrError: event.error,
+        });
+      } else if (event.type === "mouse" || event.type === "scroll") {
+        sendVrInput(event.surface, event);
+      }
+    } catch {}
+  });
+  child.stderr.on("data", (data) => {
+    const error = String(data || "").trim();
+    if (error) updateSteamVrState({ steamVrError: error });
+  });
+  child.on("error", (error) => {
+    updateSteamVrState({
+      steamVrReady: false,
+      steamVrConnecting: false,
+      steamVrError: error.message,
+    });
+  });
+  child.on("exit", () => {
+    if (steamVrOverlayProcess === child) steamVrOverlayProcess = null;
+    vrStreamBackpressured = false;
+    updateSteamVrState({
+      steamVrReady: false,
+      steamVrConnecting: steamVrRequested,
+    });
+    scheduleSteamVrRestart();
+  });
+  return {
+    ok: true,
+    message:
+      "CrewDeck is connecting its wrist launcher and app panel to SteamVR.",
+  };
+}
+
+function stopSteamVrOverlay() {
+  steamVrRequested = false;
+  if (steamVrRestartTimer) clearTimeout(steamVrRestartTimer);
+  steamVrRestartTimer = null;
+  try {
+    steamVrOverlayProcess?.kill();
+  } catch {}
+  steamVrOverlayProcess = null;
+  updateSteamVrState({ steamVrReady: false, steamVrConnecting: false });
+}
+
 function registerOverlayShortcut(accelerator = overlayShortcut) {
   if (overlayShortcut) globalShortcut.unregister(overlayShortcut);
   overlayShortcut = String(accelerator || "Control+Shift+O");
@@ -794,8 +938,10 @@ function setupIpc() {
     createOverlayWindow(true);
     return { ok: true };
   });
+  ipcMain.handle("overlay:get-state", () => overlayState);
   ipcMain.handle("overlay:close", () => {
     overlayWindow?.hide();
+    sendVrCommand({ type: "hide-panel" });
     return { ok: true };
   });
   ipcMain.handle("overlay:toggle", () => {
@@ -804,19 +950,9 @@ function setupIpc() {
     return { ok: true, visible: window.isVisible() };
   });
   ipcMain.handle("overlay:open-steamvr", async () => {
-    const window = createOverlayWindow(false);
-    window.setSkipTaskbar(false);
-    window.setAlwaysOnTop(false);
-    window.show();
-    overlayState = { ...overlayState, steamVrReady: true };
-    window.webContents.send("overlay:state", overlayState);
     try {
       await shell.openExternal("steam://run/250820");
-      return {
-        ok: true,
-        message:
-          "SteamVR opened. In the SteamVR dashboard, choose Desktop, select CrewDeck VR Overlay, and pin it in your view.",
-      };
+      return startSteamVrOverlay(overlayState.wristHand || "left");
     } catch (error) {
       return {
         ok: false,
@@ -833,6 +969,27 @@ function setupIpc() {
     if (value.shortcut) registerOverlayShortcut(value.shortcut);
     if (value.secondary_shortcut)
       registerOverlaySecondaryShortcut(value.secondary_shortcut);
+    if (value.wrist_hand) {
+      overlayState = { ...overlayState, wristHand: value.wrist_hand };
+      sendVrCommand({ type: "set-hand", hand: value.wrist_hand });
+    }
+    if (value.steamvr_enabled) startSteamVrOverlay(value.wrist_hand);
+    if (value.steamvr_enabled === false) stopSteamVrOverlay();
+    return { ok: true };
+  });
+  ipcMain.handle("overlay:show-panel", (_event, route = "Messages.html") => {
+    vrPanelRoute = String(route || "Messages.html");
+    const window = createVrSurface("panel", 1280, 800);
+    if (!window.webContents.isLoading())
+      window.webContents.send("desktop:navigate", vrPanelRoute);
+    sendVrCommand({ type: "show-panel" });
+    return { ok: true };
+  });
+  ipcMain.handle("overlay:native-command", (_event, value = {}) => ({
+    ok: sendVrCommand(value),
+  }));
+  ipcMain.handle("overlay:stop-steamvr", () => {
+    stopSteamVrOverlay();
     return { ok: true };
   });
   ipcMain.on("overlay:update", (_event, value = {}) => {
@@ -844,10 +1001,6 @@ function setupIpc() {
       if (window !== overlayWindow)
         window.webContents.send("overlay:command", value);
   });
-  ipcMain.handle("osc:get-status", () => oscStatus);
-  ipcMain.handle("osc:configure", (_event, value = {}) =>
-    configureOscListener(value),
-  );
   ipcMain.handle("desktop:get-share-target", () => {
     if (!pendingShareTarget) return null;
     const target = pendingShareTarget;
@@ -985,10 +1138,6 @@ if (!gotSingleInstanceLock) {
     registerAppOrigin();
     configurePermissions();
     setupIpc();
-    try {
-      const savedOsc = JSON.parse(fs.readFileSync(oscSettingsPath, "utf8"));
-      if (savedOsc?.enabled) configureOscListener(savedOsc);
-    } catch {}
     createWindow();
     createTray();
     registerOverlayShortcut();
@@ -998,7 +1147,7 @@ if (!gotSingleInstanceLock) {
 
 app.on("before-quit", () => {
   isQuitting = true;
-  stopOscListener();
+  stopSteamVrOverlay();
   globalShortcut.unregisterAll();
 });
 app.on("activate", showMainWindow);

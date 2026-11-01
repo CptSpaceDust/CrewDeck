@@ -66,4 +66,12 @@ test("Control Center includes device operations and real dials", () => {
   assert.match(css, /--dial-color/);
   assert.match(css, /control-emergency-flash/);
   assert.match(css, /user-select: none/);
+  for (const safetyFeature of [
+    "control_device_safety_limits",
+    "captain_create_control_access_link",
+    "Duplicate command blocked",
+    "Hold to shock",
+    "Device safety limits",
+  ])
+    assert.ok(page.includes(safetyFeature), `Missing ${safetyFeature}`);
 });

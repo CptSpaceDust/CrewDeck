@@ -2,6 +2,25 @@
 
 Every published CrewDeck release is documented here and copied into its GitHub release notes.
 
+## [2.0.4] - 2026-11-01
+
+### Added
+
+- Per-device intensity, duration, cooldown, escalation, and press-and-hold safety limits are enforced before OpenShock commands are sent.
+- Captains can create expiring, one-use Control Center links with separate limits for every device.
+- SteamVR now includes a Trusted Person-only mini Control Center, wrist Emergency Stop, device selector, large VR controls, panel anchoring, and controller haptic confirmation.
+
+### Changed
+
+- Strong commands require a configurable hold, and releasing an active command immediately sends Stop.
+- Live controls keep their low-latency command flow while still respecting device limits and escalation protection.
+- VRChat OSC Control Center automation has been removed from the website and desktop app.
+
+### Fixed
+
+- Emergency Stop now sends the correct OpenShock Stop command to every available device and remains available during Safe Mode.
+- Duplicate clicks are blocked in both the interface and the server-side command guard.
+
 ## [2.0.3] - 2026-10-31
 
 ### Added

@@ -11,3 +11,7 @@ dist-fixed/
 .DS_Store
 Thumbs.db
 build/UpdateAnimation.exe
+.dotnet-cli/
+build/steamvr-overlay/
+native/**/bin/
+native/**/obj/

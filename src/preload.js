@@ -39,8 +39,13 @@ contextBridge.exposeInMainWorld("desktop", {
     onToggle: (callback) => subscribe("desktop:global-ptt", callback),
   },
   overlay: {
+    getState: () => ipcRenderer.invoke("overlay:get-state"),
     open: () => ipcRenderer.invoke("overlay:open"),
     openSteamVr: () => ipcRenderer.invoke("overlay:open-steamvr"),
+    stopSteamVr: () => ipcRenderer.invoke("overlay:stop-steamvr"),
+    showPanel: (route) => ipcRenderer.invoke("overlay:show-panel", route),
+    nativeCommand: (value) =>
+      ipcRenderer.invoke("overlay:native-command", value),
     close: () => ipcRenderer.invoke("overlay:close"),
     toggle: () => ipcRenderer.invoke("overlay:toggle"),
     setPreferences: (value) =>
@@ -49,12 +54,6 @@ contextBridge.exposeInMainWorld("desktop", {
     onState: (callback) => subscribe("overlay:state", callback),
     command: (value) => ipcRenderer.send("overlay:command", value),
     onCommand: (callback) => subscribe("overlay:command", callback),
-  },
-  osc: {
-    getStatus: () => ipcRenderer.invoke("osc:get-status"),
-    configure: (value) => ipcRenderer.invoke("osc:configure", value),
-    onEvent: (callback) => subscribe("osc:event", callback),
-    onStatus: (callback) => subscribe("osc:status", callback),
   },
   onDeepLink: (callback) => subscribe("auth:deep-link", callback),
   screenShare: {

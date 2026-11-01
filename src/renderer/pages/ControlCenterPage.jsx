@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   AlertTriangle,
+  Copy,
   Link2,
   Radio,
   RefreshCw,
@@ -20,6 +21,60 @@ const initialControl = () => ({
   presets: [],
   selectedPreset: "",
 });
+
+const initialSafety = () => ({
+  max_intensity: 70,
+  max_duration: 10,
+  high_intensity_threshold: 40,
+  cooldown_seconds: 3,
+  max_intensity_step: 15,
+  hold_milliseconds: 800,
+});
+
+async function sha256(value) {
+  const bytes = new TextEncoder().encode(value);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return [...new Uint8Array(digest)]
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+function HoldCommandButton({ holdMs, className = "", disabled, children, onActivate, onRelease }) {
+  const timer = useRef(null);
+  const activated = useRef(false);
+  const [holding, setHolding] = useState(false);
+  const stop = () => {
+    window.clearTimeout(timer.current);
+    setHolding(false);
+    if (activated.current) onRelease?.();
+    activated.current = false;
+  };
+  return (
+    <button
+      className={`${className}${holding ? " holding" : ""}`}
+      disabled={disabled}
+      style={{ "--hold-ms": `${holdMs}ms` }}
+      onContextMenu={(event) => event.preventDefault()}
+      onPointerDown={(event) => {
+        if (disabled) return;
+        event.preventDefault();
+        event.currentTarget.setPointerCapture(event.pointerId);
+        setHolding(true);
+        timer.current = window.setTimeout(async () => {
+          activated.current = true;
+          await onActivate?.();
+        }, Math.max(0, holdMs));
+      }}
+      onPointerUp={stop}
+      onPointerCancel={stop}
+      onPointerLeave={(event) => {
+        if (event.buttons) stop();
+      }}
+    >
+      {children}
+    </button>
+  );
+}
 
 function badgesOf(profile) {
   if (Array.isArray(profile?.badges)) return profile.badges;
@@ -140,6 +195,7 @@ export default function ControlCenterPage({ user, profile }) {
   const [access, setAccess] = useState("checking");
   const [devices, setDevices] = useState([]);
   const [controls, setControls] = useState({});
+  const [safety, setSafety] = useState({});
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -148,14 +204,8 @@ export default function ControlCenterPage({ user, profile }) {
   const [liveMode, setLiveMode] = useState("vibrate");
   const [pendingWarning, setPendingWarning] = useState(null);
   const [emergencyActive, setEmergencyActive] = useState(false);
-  const [oscStatus, setOscStatus] = useState({
-    enabled: false,
-    listening: false,
-    port: 9001,
-    error: "",
-  });
-  const [oscShockArmed, setOscShockArmed] = useState(false);
-  const [lastOscParameter, setLastOscParameter] = useState("");
+  const [shareLink, setShareLink] = useState("");
+  const commandGate = useRef(new Map());
   const warningRun = useRef(null);
   const lastLiveCommand = useRef(0);
   const emergencyTimer = useRef(null);
@@ -163,12 +213,6 @@ export default function ControlCenterPage({ user, profile }) {
     pending: new Map(),
     running: false,
     generation: 0,
-  });
-  const oscValues = useRef({
-    intensity: null,
-    duration: null,
-    previous: new Map(),
-    lastAction: 0,
   });
 
   const verifyAccess = useCallback(async () => {
@@ -232,6 +276,29 @@ export default function ControlCenterPage({ user, profile }) {
     [user.id],
   );
 
+  const loadSafety = useCallback(
+    async (nextDevices) => {
+      const { data } = await supabase
+        .from("control_device_safety_limits")
+        .select("*")
+        .eq("user_id", user.id);
+      const rows = data || [];
+      setSafety((current) =>
+        Object.fromEntries(
+          nextDevices.map((device) => [
+            device.id,
+            {
+              ...initialSafety(),
+              ...current[device.id],
+              ...rows.find((row) => row.shocker_id === device.id),
+            },
+          ]),
+        ),
+      );
+    },
+    [user.id],
+  );
+
   const loadDevices = useCallback(async () => {
     setLoading(true);
     setNotice("");
@@ -255,14 +322,14 @@ export default function ControlCenterPage({ user, profile }) {
           next[device.id] = { ...initialControl(), ...current[device.id] };
         return next;
       });
-      await Promise.all([loadPresets(nextDevices), loadLogs()]);
+      await Promise.all([loadPresets(nextDevices), loadSafety(nextDevices), loadLogs()]);
       setNotice(nextDevices.length ? "" : "No connected devices were found.");
     } catch (error) {
       setNotice(error.message || "Unable to load the Control Center.");
     } finally {
       setLoading(false);
     }
-  }, [loadLogs, loadPresets, verifyAccess]);
+  }, [loadLogs, loadPresets, loadSafety, verifyAccess]);
 
   useEffect(() => {
     loadDevices();
@@ -291,111 +358,6 @@ export default function ControlCenterPage({ user, profile }) {
       supabase.removeChannel(logChannel);
     };
   }, [loadDevices, loadLogs, user.id, verifyAccess]);
-
-  useEffect(() => {
-    window.desktop.osc?.getStatus?.().then(setOscStatus);
-    const stopStatus =
-      window.desktop.osc?.onStatus?.(setOscStatus) || (() => {});
-    const stopEvent =
-      window.desktop.osc?.onEvent?.(async (event) => {
-        if (access !== "allowed" || !devices.length) return;
-        const parameter = String(event?.parameter || "");
-        const normalized = parameter.toLowerCase();
-        const value = event?.value;
-        setLastOscParameter(parameter);
-        if (normalized === "intensity") {
-          const next = Math.max(
-            0,
-            Math.min(
-              100,
-              Number(value) <= 1 ? Number(value) * 100 : Number(value),
-            ),
-          );
-          oscValues.current.intensity = Math.round(next);
-          return;
-        }
-        if (normalized === "duration") {
-          oscValues.current.duration = Math.max(
-            0.1,
-            Math.min(10, Number(value) || 1),
-          );
-          return;
-        }
-        const active = value === true || Number(value) > 0.5;
-        const wasActive = oscValues.current.previous.get(normalized) === true;
-        oscValues.current.previous.set(normalized, active);
-        if (!active || wasActive) return;
-        if (Date.now() - oscValues.current.lastAction < 800) return;
-        if (normalized === "stop") {
-          oscValues.current.lastAction = Date.now();
-          await emergencyStop();
-          return;
-        }
-        const action =
-          normalized === "vibrate"
-            ? "vibrate"
-            : normalized === "beep"
-              ? "beep"
-              : normalized === "shock"
-                ? "shock"
-                : "";
-        if (!action || (action === "shock" && !oscShockArmed)) return;
-        const primary = devices[0];
-        const targets = targetDevices(primary.id);
-        if (!targets.length) return;
-        oscValues.current.lastAction = Date.now();
-        try {
-          await Promise.all(
-            targets.map(async (device) => {
-              const control = controls[device.id] || initialControl();
-              const requestedIntensity =
-                oscValues.current.intensity ?? control.intensity;
-              const intensity = Math.max(
-                0,
-                Math.min(control.intensity, requestedIntensity),
-              );
-              const requestedDuration =
-                oscValues.current.duration ?? control.duration;
-              const duration = Math.max(
-                0.1,
-                Math.min(control.duration, requestedDuration),
-              );
-              if (intensity <= 0) return;
-              if (action === "shock" && control.warningEnabled) {
-                await sendCommand(
-                  device,
-                  "vibrate",
-                  intensity,
-                  control.warningDelay,
-                );
-                await new Promise((resolve) =>
-                  window.setTimeout(resolve, control.warningDelay * 1000),
-                );
-              }
-              await sendCommand(device, action, intensity, duration);
-            }),
-          );
-          setNotice(
-            `VRChat OSC sent ${action} through CrewDeck safety limits.`,
-          );
-        } catch (error) {
-          setNotice(error.message || "The VRChat OSC command was rejected.");
-        }
-      }) || (() => {});
-    return () => {
-      stopStatus();
-      stopEvent();
-    };
-  }, [access, controls, devices, oscShockArmed]);
-
-  async function configureOsc(enabled) {
-    setOscShockArmed(false);
-    const next = await window.desktop.osc.configure({
-      enabled,
-      port: oscStatus.port || 9001,
-    });
-    setOscStatus(next);
-  }
 
   function updateControl(id, patch, sync = true) {
     setControls((current) => {
@@ -470,6 +432,40 @@ export default function ControlCenterPage({ user, profile }) {
     });
   }
 
+  async function saveSafety(deviceId) {
+    const values = { ...initialSafety(), ...safety[deviceId] };
+    const { error } = await supabase.from("control_device_safety_limits").upsert(
+      { user_id: user.id, shocker_id: deviceId, ...values, updated_at: new Date().toISOString() },
+      { onConflict: "user_id,shocker_id" },
+    );
+    if (error) throw error;
+    setNotice("Device safety limits saved.");
+  }
+
+  async function createSafetyLink() {
+    if (!devices.length) return;
+    const tokenBytes = crypto.getRandomValues(new Uint8Array(24));
+    const token = [...tokenBytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+    const tokenHash = await sha256(token);
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    const { error } = await supabase.rpc("captain_create_control_access_link", {
+      p_token_hash: tokenHash,
+      p_expires_at: expiresAt,
+      p_max_uses: 1,
+      p_devices: devices.map((device) => ({
+        shocker_id: device.id,
+        shocker_name: device.name || "Control module",
+        max_intensity: (safety[device.id] || initialSafety()).max_intensity,
+        max_duration: (safety[device.id] || initialSafety()).max_duration,
+      })),
+    });
+    if (error) throw error;
+    const link = `https://www.cptspacedust.com/control-center.html?control_invite=${token}`;
+    setShareLink(link);
+    await navigator.clipboard?.writeText(link);
+    setNotice("A one-use Control Center link was copied. It expires in 24 hours.");
+  }
+
   async function sendCommand(
     device,
     action,
@@ -478,6 +474,11 @@ export default function ControlCenterPage({ user, profile }) {
     skipLog = false,
   ) {
     if (access !== "allowed") throw new Error("Control access is unavailable.");
+    const fingerprint = `${device.id}:${action}:${Number(intensity)}:${Number(duration)}`;
+    const lastSent = commandGate.current.get(fingerprint) || 0;
+    if (action !== "stop" && Number(duration) > 0.3 && Date.now() - lastSent < 1200)
+      throw new Error("Duplicate command blocked.");
+    commandGate.current.set(fingerprint, Date.now());
     const { data, error } = await supabase.functions.invoke(
       "openshock-control",
       {
@@ -493,6 +494,14 @@ export default function ControlCenterPage({ user, profile }) {
       throw new Error(await functionError(error, "The command was rejected."));
     if (!data?.success) throw new Error(data?.error || "The command failed.");
     if (!skipLog) await logCommand(device, action, intensity, duration);
+  }
+
+  async function stopTargets(id) {
+    warningRun.current = null;
+    setPendingWarning(null);
+    await Promise.allSettled(
+      targetDevices(id).map((device) => sendCommand(device, "stop", 0, 0, true)),
+    );
   }
 
   function targetDevices(id) {
@@ -604,15 +613,13 @@ export default function ControlCenterPage({ user, profile }) {
     window.requestAnimationFrame(() => setEmergencyActive(true));
     setBusy(true);
     try {
-      const results = await Promise.allSettled(
-        devices.map((device) => sendCommand(device, "stop", 0, 0, true)),
-      );
-      const failed = results.filter((result) => result.status === "rejected");
-      setNotice(
-        failed.length
-          ? `Emergency stop reached ${devices.length - failed.length} of ${devices.length} devices.`
-          : "Emergency stop sent. Active device output has been halted.",
-      );
+      const { data, error } = await supabase.functions.invoke("openshock-control", {
+        body: { action: "stop_all" },
+      });
+      if (error || !data?.success) throw new Error(await functionError(error, data?.error || "Emergency stop failed."));
+      setNotice(`Emergency stop sent to ${data.stopped} device${data.stopped === 1 ? "" : "s"}.`);
+    } catch (error) {
+      setNotice(error.message || "Emergency stop failed.");
     } finally {
       setBusy(false);
       emergencyTimer.current = window.setTimeout(
@@ -722,8 +729,13 @@ export default function ControlCenterPage({ user, profile }) {
       <div className="control-center-access panel">
         <ShieldAlert />
         <span className="eyebrow">Restricted system</span>
-        <h1>Access denied</h1>
-        <p>The Trusted Person badge is required.</p>
+        <h1>{access === "locked" ? "Control Center locked" : "Access denied"}</h1>
+        <p>{access === "locked" ? "Safe Mode is active. Emergency Stop remains available." : "The Trusted Person badge is required."}</p>
+        {access === "locked" && canUseControlCenter(profile) && (
+          <button className="button danger control-emergency" onClick={emergencyStop}>
+            <AlertTriangle /> Emergency Stop
+          </button>
+        )}
       </div>
     );
 
@@ -757,7 +769,7 @@ export default function ControlCenterPage({ user, profile }) {
           <button
             className="button secondary"
             onClick={syncAll}
-            disabled={!devices.length}
+            disabled={busy}
           >
             {anySynced ? <Unlink2 /> : <Link2 />}
             {anySynced ? "Desync All" : "Sync All"}
@@ -796,77 +808,31 @@ export default function ControlCenterPage({ user, profile }) {
             </button>
           </div>
         )}
-      </section>
-      <section className="panel control-osc-panel">
-        <div className="control-global-heading">
-          <div>
-            <span className="eyebrow">Local integration</span>
-            <h2>VRChat OSC automation</h2>
-            <p>
-              Listen only on this computer for CrewDeck-prefixed avatar
-              parameters. Commands still use your selected device limits,
-              Trusted Person access, Safe Mode, warnings, and emergency stop.
-            </p>
+        {profile.rank?.trim().toLowerCase() === "captain" && (
+          <div className="control-share-access">
+            <div>
+              <strong>Limited access link</strong>
+              <p>Create a one-use, 24-hour link using each device’s limits below.</p>
+            </div>
+            <button
+              className="button secondary"
+              onClick={() => createSafetyLink().catch((error) => setNotice(error.message))}
+              disabled={!devices.length}
+            >
+              <Link2 /> Generate link
+            </button>
+            {shareLink && (
+              <button className="button ghost" onClick={() => navigator.clipboard?.writeText(shareLink)}>
+                <Copy /> Copy again
+              </button>
+            )}
           </div>
-          <span
-            className={`control-osc-state${oscStatus.listening ? " online" : ""}`}
-          >
-            {oscStatus.listening
-              ? `Listening on 127.0.0.1:${oscStatus.port}`
-              : oscStatus.error || "Not listening"}
-          </span>
-        </div>
-        <div className="control-osc-settings">
-          <label className="check-field">
-            <input
-              type="checkbox"
-              checked={Boolean(oscStatus.enabled)}
-              onChange={(event) => configureOsc(event.target.checked)}
-            />
-            <span>Enable CrewDeck VRChat OSC listener</span>
-          </label>
-          <label>
-            <span>Local UDP port</span>
-            <input
-              type="number"
-              min="1024"
-              max="65535"
-              value={oscStatus.port || 9001}
-              onChange={(event) =>
-                setOscStatus((current) => ({
-                  ...current,
-                  port: Number(event.target.value),
-                }))
-              }
-              onBlur={() => oscStatus.enabled && configureOsc(true)}
-            />
-          </label>
-          <label className="check-field control-osc-arm">
-            <input
-              type="checkbox"
-              checked={oscShockArmed}
-              disabled={!oscStatus.listening}
-              onChange={(event) => setOscShockArmed(event.target.checked)}
-            />
-            <span>Arm OSC shock commands for this session only</span>
-          </label>
-        </div>
-        <details>
-          <summary>VRChat avatar parameters</summary>
-          <code>/avatar/parameters/CrewDeck/Intensity</code>
-          <code>/avatar/parameters/CrewDeck/Duration</code>
-          <code>/avatar/parameters/CrewDeck/Vibrate</code>
-          <code>/avatar/parameters/CrewDeck/Beep</code>
-          <code>/avatar/parameters/CrewDeck/Shock</code>
-          <code>/avatar/parameters/CrewDeck/Stop</code>
-        </details>
-        {lastOscParameter && (
-          <small>Last CrewDeck parameter received: {lastOscParameter}</small>
         )}
       </section>
       <div className="control-device-grid">
         {devices.map((device) => {
           const control = controls[device.id] || initialControl();
+          const deviceSafety = safety[device.id] || initialSafety();
           return (
             <article
               className={`panel control-device-card${control.synced ? " synced" : ""}`}
@@ -890,7 +856,7 @@ export default function ControlCenterPage({ user, profile }) {
                   label="Intensity"
                   value={control.intensity}
                   min={0}
-                  max={100}
+                  max={deviceSafety.max_intensity}
                   disabled={busy}
                   onChange={(value) => {
                     updateControl(device.id, { intensity: value });
@@ -904,7 +870,7 @@ export default function ControlCenterPage({ user, profile }) {
                     tone="duration"
                     value={control.duration}
                     min={1}
-                    max={30}
+                    max={Math.max(1, Math.floor(deviceSafety.max_duration))}
                     suffix="s"
                     disabled={busy}
                     onChange={(value) =>
@@ -986,17 +952,59 @@ export default function ControlCenterPage({ user, profile }) {
                         </button>
                       </div>
                     </section>
+                    <section className="control-safety-settings">
+                      <h3>Device safety limits</h3>
+                      <p>These limits are also enforced by the server.</p>
+                      <div className="control-safety-fields">
+                        {[
+                          ["max_intensity", "Max intensity", 1, 100, 1],
+                          ["max_duration", "Max duration (seconds)", 0.3, 30, 0.1],
+                          ["high_intensity_threshold", "High-intensity threshold", 1, 100, 1],
+                          ["cooldown_seconds", "Cooldown (seconds)", 0, 60, 0.5],
+                          ["max_intensity_step", "Maximum increase", 1, 100, 1],
+                          ["hold_milliseconds", "Hold time (ms)", 0, 5000, 100],
+                        ].map(([key, label, min, max, step]) => (
+                          <label key={key}>
+                            <span>{label}</span>
+                            <input
+                              type="number"
+                              min={min}
+                              max={max}
+                              step={step}
+                              value={deviceSafety[key]}
+                              onChange={(event) =>
+                                setSafety((current) => ({
+                                  ...current,
+                                  [device.id]: { ...deviceSafety, [key]: Number(event.target.value) },
+                                }))
+                              }
+                            />
+                          </label>
+                        ))}
+                      </div>
+                      <button onClick={() => saveSafety(device.id).catch((error) => setNotice(error.message))}>
+                        Save safety limits
+                      </button>
+                    </section>
                   </div>
                 </details>
               )}
               {!live && (
                 <div className="control-action-row">
-                  <button
-                    disabled={busy}
-                    onClick={() => runAction(device.id, "vibrate")}
-                  >
-                    Vibrate
-                  </button>
+                  {control.intensity >= deviceSafety.high_intensity_threshold ? (
+                    <HoldCommandButton
+                      disabled={busy}
+                      holdMs={deviceSafety.hold_milliseconds}
+                      onActivate={() => runAction(device.id, "vibrate")}
+                      onRelease={() => stopTargets(device.id)}
+                    >
+                      Hold to vibrate
+                    </HoldCommandButton>
+                  ) : (
+                    <button disabled={busy} onClick={() => runAction(device.id, "vibrate")}>
+                      Vibrate
+                    </button>
+                  )}
                   <button
                     disabled={busy || profile.rank?.toLowerCase() !== "captain"}
                     title={
@@ -1008,17 +1016,19 @@ export default function ControlCenterPage({ user, profile }) {
                   >
                     Beep
                   </button>
-                  <button
+                  <HoldCommandButton
                     className="shock"
                     disabled={busy && pendingWarning !== device.id}
-                    onClick={() => runAction(device.id, "shock")}
+                    holdMs={deviceSafety.hold_milliseconds}
+                    onActivate={() => runAction(device.id, "shock")}
+                    onRelease={() => stopTargets(device.id)}
                   >
                     {pendingWarning === device.id
                       ? "Cancel Shock"
                       : control.warningEnabled
-                        ? "Shock - Warning On"
-                        : "Shock"}
-                  </button>
+                        ? "Hold · Warning On"
+                        : "Hold to shock"}
+                  </HoldCommandButton>
                 </div>
               )}
             </article>

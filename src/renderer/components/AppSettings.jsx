@@ -45,9 +45,18 @@ function VrOverlaySettings({ user }) {
     secondary_shortcut: "Control+Shift+P",
     controller_button: 8,
     respect_dnd: true,
+    steamvr_enabled: false,
+    wrist_hand: "left",
   };
   const [value, setValue] = useState(defaults),
-    [message, setMessage] = useState("");
+    [message, setMessage] = useState(""),
+    [runtime, setRuntime] = useState({});
+  useEffect(() => {
+    window.desktop.overlay.getState().then(setRuntime);
+    return window.desktop.overlay.onState((next) =>
+      setRuntime((current) => ({ ...current, ...next })),
+    );
+  }, []);
   useEffect(() => {
     supabase
       .from("vr_overlay_preferences")
@@ -78,18 +87,50 @@ function VrOverlaySettings({ user }) {
       </div>
       <h2>VR overlay</h2>
       <p>
-        Keep calls, meetups, ready checks, and quick communication visible in a
-        compact desktop overlay while you play.
+        Put a real CrewDeck wrist launcher and interactive app panel inside
+        SteamVR. Open messages, calls, meetups, and the calendar without leaving
+        VR.
       </p>
+      <div
+        className={`vr-steamvr-status ${runtime.steamVrReady ? "connected" : runtime.steamVrConnecting ? "connecting" : "offline"}`}
+        role="status"
+      >
+        <span />
+        <strong>
+          {runtime.steamVrReady
+            ? "Connected to SteamVR"
+            : runtime.steamVrConnecting
+              ? "Waiting for SteamVR…"
+              : "SteamVR is disconnected"}
+        </strong>
+        {runtime.steamVrError && <small>{runtime.steamVrError}</small>}
+      </div>
       <label className="check-field">
         <input
           type="checkbox"
           checked={value.enabled}
           onChange={(e) => update("enabled", e.target.checked)}
         />
-        <span>Enable the always-on-top overlay</span>
+        <span>Enable the desktop overlay preview</span>
+      </label>
+      <label className="check-field">
+        <input
+          type="checkbox"
+          checked={value.steamvr_enabled}
+          onChange={(e) => update("steamvr_enabled", e.target.checked)}
+        />
+        <span>Connect the wrist launcher to SteamVR automatically</span>
       </label>
       <div className="settings-grid compact">
+        <Field label="Wrist">
+          <select
+            value={value.wrist_hand}
+            onChange={(e) => update("wrist_hand", e.target.value)}
+          >
+            <option value="left">Left hand</option>
+            <option value="right">Right hand</option>
+          </select>
+        </Field>
         <Field label="Layout">
           <select
             value={value.state}
@@ -224,7 +265,7 @@ function VrOverlaySettings({ user }) {
             );
           }}
         >
-          Open in SteamVR
+          Connect to SteamVR
         </button>
         <button
           className="button secondary"
@@ -232,6 +273,16 @@ function VrOverlaySettings({ user }) {
           onClick={() => window.desktop.overlay.close()}
         >
           Hide overlay
+        </button>
+        <button
+          className="button ghost"
+          type="button"
+          onClick={async () => {
+            await window.desktop.overlay.stopSteamVr();
+            setMessage("CrewDeck disconnected from SteamVR.");
+          }}
+        >
+          Disconnect SteamVR
         </button>
       </div>
       {message && (
