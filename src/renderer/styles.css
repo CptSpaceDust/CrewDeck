@@ -6271,7 +6271,11 @@ html[data-motion="full"] dialog {
   overflow: hidden;
   border-color: rgba(112, 193, 255, 0.32);
   background:
-    radial-gradient(circle at 94% 4%, rgba(80, 118, 224, 0.15), transparent 35%),
+    radial-gradient(
+      circle at 94% 4%,
+      rgba(80, 118, 224, 0.15),
+      transparent 35%
+    ),
     linear-gradient(155deg, #101d33, #081426 72%);
 }
 .conversation-information-modal > .modal-header {
@@ -6295,7 +6299,11 @@ html[data-motion="full"] dialog {
   padding: 16px;
   border: 1px solid rgba(104, 190, 255, 0.25);
   border-radius: 16px;
-  background: linear-gradient(145deg, rgba(38, 87, 143, 0.28), rgba(8, 24, 49, 0.66));
+  background: linear-gradient(
+    145deg,
+    rgba(38, 87, 143, 0.28),
+    rgba(8, 24, 49, 0.66)
+  );
 }
 .conversation-id-card > span {
   grid-column: 1 / -1;
@@ -9895,7 +9903,11 @@ html[data-color-indicators="labeled"] .presence-chip::before {
   padding: 16px;
   border: 1px solid rgba(104, 190, 255, 0.23);
   border-radius: 15px;
-  background: linear-gradient(145deg, rgba(38, 87, 143, 0.24), rgba(8, 24, 49, 0.62));
+  background: linear-gradient(
+    145deg,
+    rgba(38, 87, 143, 0.24),
+    rgba(8, 24, 49, 0.62)
+  );
 }
 .conversation-detail-archive > div {
   display: grid;
@@ -9940,7 +9952,9 @@ html[data-color-indicators="labeled"] .presence-chip::before {
   background-position:
     calc(100% - 17px) 17px,
     calc(100% - 12px) 17px;
-  background-size: 5px 5px, 5px 5px;
+  background-size:
+    5px 5px,
+    5px 5px;
   background-repeat: no-repeat;
   font: inherit;
   cursor: pointer;
@@ -10019,4 +10033,65 @@ html[data-color-indicators="labeled"] .presence-chip::before {
   .support-feedback {
     grid-template-columns: 1fr;
   }
+}
+
+/* Cross-page controls must retain their shape inside flexible form layouts. */
+input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  inline-size: 20px !important;
+  block-size: 20px !important;
+  min-inline-size: 20px !important;
+  min-block-size: 20px !important;
+  max-inline-size: 20px;
+  max-block-size: 20px;
+  aspect-ratio: 1;
+  flex: 0 0 20px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid rgba(118, 204, 255, 0.62);
+  border-radius: 5px;
+  background: #06152b;
+  box-shadow: inset 0 0 0 4px #06152b;
+  cursor: pointer;
+}
+input[type="checkbox"]:checked {
+  border-color: #8ddcff;
+  background: #69c9ff;
+  box-shadow:
+    inset 0 0 0 4px #0a2445,
+    0 0 12px rgba(105, 201, 255, 0.35);
+}
+input[type="checkbox"]:focus-visible {
+  outline: 2px solid #b8eaff;
+  outline-offset: 2px;
+}
+
+.notification-filters {
+  width: max-content;
+  max-width: 100%;
+  padding: 6px;
+  border: 1px solid rgba(102, 190, 255, 0.18);
+  border-radius: 16px;
+  background: rgba(5, 17, 38, 0.66);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.04);
+}
+.notification-filters button {
+  min-height: 38px;
+  padding: 8px 14px;
+  border-radius: 11px;
+  color: #b8cee1;
+  background: transparent;
+  font-weight: 800;
+}
+.notification-filters button:hover,
+.notification-filters button:focus-visible,
+.notification-filters button.active {
+  color: #fff;
+  border-color: rgba(105, 199, 255, 0.38);
+  background: linear-gradient(
+    145deg,
+    rgba(42, 123, 190, 0.38),
+    rgba(29, 60, 112, 0.5)
+  );
 }

@@ -94,6 +94,10 @@ if (!window.desktop) {
     },
     overlay: {
       open: async () => ({ ok: false }),
+      openSteamVr: async () => ({
+        ok: false,
+        error: "SteamVR integration is available in the desktop build.",
+      }),
       close: async () => ({ ok: true }),
       toggle: async () => ({ ok: true }),
       setPreferences: async () => ({ ok: true }),
@@ -101,6 +105,12 @@ if (!window.desktop) {
       onState: () => () => {},
       command: () => {},
       onCommand: () => () => {},
+    },
+    osc: {
+      getStatus: async () => ({ enabled: false, listening: false, port: 9001 }),
+      configure: async () => ({ enabled: false, listening: false, port: 9001 }),
+      onEvent: () => () => {},
+      onStatus: () => () => {},
     },
   };
 }

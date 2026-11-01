@@ -1,14 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import HCaptcha from "@hcaptcha/react-hcaptcha";
-import {
-  ArrowLeft,
-  Eye,
-  EyeOff,
-  KeyRound,
-  Mail,
-  ShieldCheck,
-  Sparkles,
-} from "lucide-react";
+import { ArrowLeft, Eye, EyeOff, KeyRound, Mail, Sparkles } from "lucide-react";
 import { HCAPTCHA_HOST, HCAPTCHA_SITE_KEY, supabase } from "../lib/supabase";
 import BrandMark from "./BrandMark";
 
@@ -182,23 +174,14 @@ export default function AuthScreen({
         <div className="auth-copy">
           <span className="eyebrow">Your crew, one place</span>
           <h1>
-            Stay close to your community.
+            Everything your crew needs,
             <br />
-            <em>Built for the crew.</em>
+            <em>together in one place.</em>
           </h1>
           <p>
-            Meet the crew, build ideas together, plan meetups, and keep every
-            conversation close at hand.
+            Connect with your community, plan meetups, collaborate on ideas, and
+            keep important conversations within easy reach.
           </p>
-        </div>
-        <div className="auth-security">
-          <ShieldCheck />
-          <span>
-            <strong>Desktop-first privacy</strong>
-            <small>
-              Protected by your account and optional local PIN lock.
-            </small>
-          </span>
         </div>
       </section>
       <section className="auth-panel">
@@ -366,7 +349,8 @@ export default function AuthScreen({
           )}
           <div className="auth-links auth-policy-link">
             <span>
-              By using CrewDeck, you can review how your information is handled in the{" "}
+              By using CrewDeck, you can review how your information is handled
+              in the{" "}
               <button
                 type="button"
                 onClick={() =>

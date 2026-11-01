@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   BellRing,
+  CalendarDays,
   CalendarClock,
   ChevronDown,
   ChevronUp,
   EarOff,
   Mic,
   MicOff,
+  MessageCircle,
   Radio,
+  SlidersHorizontal,
   X,
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
@@ -20,7 +23,15 @@ export default function VrOverlayWindow() {
       state: "compact",
       opacity: 0.92,
       scale: 1,
-      cards: ["call", "meetup", "requests", "world", "ready", "communication"],
+      cards: [
+        "navigation",
+        "call",
+        "meetup",
+        "requests",
+        "world",
+        "ready",
+        "communication",
+      ],
       privacy_mode: true,
       streamer_safe: true,
     }),
@@ -111,23 +122,44 @@ export default function VrOverlayWindow() {
     );
   const send = (type) => {
     if (call?.id)
-      supabase.auth
-        .getUser()
-        .then(({ data }) =>
-          supabase
-            .from("vr_overlay_signals")
-            .insert({
-              call_id: call.id,
-              sender_id: data.user?.id,
-              signal_type: type,
-            }),
-        );
+      supabase.auth.getUser().then(({ data }) =>
+        supabase.from("vr_overlay_signals").insert({
+          call_id: call.id,
+          sender_id: data.user?.id,
+          signal_type: type,
+        }),
+      );
   };
   const attend = async () => {
     const { data } = await supabase.auth.getUser();
     if (!data.user || !upcoming) return;
-    if (upcoming.kind === "event") await supabase.from("crew_event_members").upsert({ event_id:upcoming.id, user_id:data.user.id, role:"participant", response:"attending", check_in:"here", checked_in_at:new Date().toISOString() },{onConflict:"event_id,user_id"});
-    else await supabase.from("meetup_participant_settings").upsert({ meetup_id:upcoming.id, user_id:data.user.id, check_in_status:"arrived", checked_in_at:new Date().toISOString(), updated_at:new Date().toISOString() },{onConflict:"meetup_id,user_id"});
+    if (upcoming.kind === "event")
+      await supabase
+        .from("crew_event_members")
+        .upsert(
+          {
+            event_id: upcoming.id,
+            user_id: data.user.id,
+            role: "participant",
+            response: "attending",
+            check_in: "here",
+            checked_in_at: new Date().toISOString(),
+          },
+          { onConflict: "event_id,user_id" },
+        );
+    else
+      await supabase
+        .from("meetup_participant_settings")
+        .upsert(
+          {
+            meetup_id: upcoming.id,
+            user_id: data.user.id,
+            check_in_status: "arrived",
+            checked_in_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "meetup_id,user_id" },
+        );
   };
   return (
     <main className={`vr-overlay-window ${prefs.state || "compact"}`}>
@@ -151,6 +183,43 @@ export default function VrOverlayWindow() {
           </button>
         </div>
       </header>
+      {cards.includes("navigation") && (
+        <section>
+          <small>QUICK ACCESS</small>
+          <div className="vr-overlay-quick">
+            <button
+              onClick={() =>
+                window.desktop.overlay.command({
+                  type: "navigate",
+                  route: "Messages.html",
+                })
+              }
+            >
+              <MessageCircle /> Messages
+            </button>
+            <button
+              onClick={() =>
+                window.desktop.overlay.command({
+                  type: "navigate",
+                  route: "MeetupCalendar.html",
+                })
+              }
+            >
+              <CalendarDays /> Meetups
+            </button>
+            <button
+              onClick={() =>
+                window.desktop.overlay.command({
+                  type: "navigate",
+                  route: "ControlCenter.html",
+                })
+              }
+            >
+              <SlidersHorizontal /> Control Center
+            </button>
+          </div>
+        </section>
+      )}
       {cards.includes("call") && (
         <section>
           <small>ACTIVE CALL</small>
@@ -208,8 +277,16 @@ export default function VrOverlayWindow() {
               >
                 <CalendarClock /> Open
               </button>
-              {upcoming.joinUrl && <button onClick={()=>window.desktop.openExternal(upcoming.joinUrl)}>Join link</button>}
-              {countdown < 4*3600000 && <button onClick={attend}>I’m here</button>}
+              {upcoming.joinUrl && (
+                <button
+                  onClick={() => window.desktop.openExternal(upcoming.joinUrl)}
+                >
+                  Join link
+                </button>
+              )}
+              {countdown < 4 * 3600000 && (
+                <button onClick={attend}>I’m here</button>
+              )}
             </>
           ) : (
             <p>No upcoming meetup.</p>
@@ -243,7 +320,17 @@ export default function VrOverlayWindow() {
             >
               Decline
             </button>
-            <button onClick={() => window.desktop.overlay.command({type:"request",response:"snooze",id:state.request.id})}>Snooze</button>
+            <button
+              onClick={() =>
+                window.desktop.overlay.command({
+                  type: "request",
+                  response: "snooze",
+                  id: state.request.id,
+                })
+              }
+            >
+              Snooze
+            </button>
           </div>
         </section>
       )}

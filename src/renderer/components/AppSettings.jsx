@@ -30,7 +30,15 @@ function VrOverlaySettings({ user }) {
     scale: 1,
     width: 390,
     height: 520,
-    cards: ["call", "meetup", "requests", "world", "ready", "communication"],
+    cards: [
+      "navigation",
+      "call",
+      "meetup",
+      "requests",
+      "world",
+      "ready",
+      "communication",
+    ],
     streamer_safe: true,
     privacy_mode: true,
     shortcut: "Control+Shift+O",
@@ -146,6 +154,7 @@ function VrOverlaySettings({ user }) {
         <legend>Overlay cards</legend>
         <div className="overlay-card-choices">
           {[
+            "navigation",
             "call",
             "meetup",
             "requests",
@@ -204,6 +213,18 @@ function VrOverlaySettings({ user }) {
           onClick={() => window.desktop.overlay.open()}
         >
           Open preview
+        </button>
+        <button
+          className="button secondary"
+          type="button"
+          onClick={async () => {
+            const result = await window.desktop.overlay.openSteamVr();
+            setMessage(
+              result.message || result.error || "SteamVR overlay prepared.",
+            );
+          }}
+        >
+          Open in SteamVR
         </button>
         <button
           className="button secondary"

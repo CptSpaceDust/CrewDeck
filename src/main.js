@@ -13,6 +13,7 @@ const {
   globalShortcut,
 } = require("electron");
 const fs = require("node:fs");
+const dgram = require("node:dgram");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
 const { AppLockStore } = require("./app-lock-store");
@@ -30,8 +31,8 @@ const isDevelopment = process.argv.includes("--dev");
 // Carry sessions, drafts, and PIN settings into the rebranded user-data folder.
 const crewDeckUserData =
   !app.isPackaged && process.env.CREWDECK_DEBUG_USER_DATA
-  ? path.resolve(process.env.CREWDECK_DEBUG_USER_DATA)
-  : path.join(app.getPath("appData"), "CrewDeck");
+    ? path.resolve(process.env.CREWDECK_DEBUG_USER_DATA)
+    : path.join(app.getPath("appData"), "CrewDeck");
 const legacyUserData = path.join(
   app.getPath("appData"),
   "CptSpaceDust Community",
@@ -81,6 +82,9 @@ let overlayWindow;
 let overlayState = {};
 let overlayShortcut = "Control+Shift+O";
 let overlaySecondaryShortcut = "Control+Shift+P";
+let oscSocket = null;
+let oscStatus = { enabled: false, port: 9001, listening: false, error: "" };
+const oscSettingsPath = path.join(crewDeckUserData, "vrchat-osc.json");
 let updateState = {
   status: "idle",
   currentVersion: app.getVersion(),
@@ -88,6 +92,96 @@ let updateState = {
   percent: 0,
   message: "",
 };
+
+function readOscString(buffer, offset = 0) {
+  const end = buffer.indexOf(0, offset);
+  if (end < 0) throw new Error("Invalid OSC string.");
+  const value = buffer.toString("utf8", offset, end);
+  return { value, offset: (end + 4) & ~3 };
+}
+
+function parseOscMessage(buffer) {
+  const addressPart = readOscString(buffer, 0);
+  if (!addressPart.value.startsWith("/avatar/parameters/CrewDeck/"))
+    return null;
+  const typePart = readOscString(buffer, addressPart.offset);
+  if (!typePart.value.startsWith(",")) return null;
+  let offset = typePart.offset;
+  const values = [];
+  for (const type of typePart.value.slice(1)) {
+    if (type === "T" || type === "F") values.push(type === "T");
+    else if (type === "i") {
+      if (offset + 4 > buffer.length) throw new Error("Invalid OSC integer.");
+      values.push(buffer.readInt32BE(offset));
+      offset += 4;
+    } else if (type === "f") {
+      if (offset + 4 > buffer.length) throw new Error("Invalid OSC float.");
+      values.push(buffer.readFloatBE(offset));
+      offset += 4;
+    } else if (type === "s") {
+      const part = readOscString(buffer, offset);
+      values.push(part.value);
+      offset = part.offset;
+    } else return null;
+  }
+  return {
+    parameter: addressPart.value.slice("/avatar/parameters/CrewDeck/".length),
+    value: values[0],
+    values,
+    receivedAt: Date.now(),
+  };
+}
+
+function stopOscListener() {
+  if (oscSocket) {
+    try {
+      oscSocket.close();
+    } catch {}
+    oscSocket = null;
+  }
+  oscStatus = { ...oscStatus, listening: false };
+}
+
+function configureOscListener(value = {}) {
+  const enabled = Boolean(value.enabled);
+  const port = Math.max(1024, Math.min(65535, Number(value.port) || 9001));
+  stopOscListener();
+  oscStatus = { enabled, port, listening: false, error: "" };
+  try {
+    fs.writeFileSync(
+      oscSettingsPath,
+      JSON.stringify({ enabled, port }, null, 2),
+    );
+  } catch {}
+  if (!enabled) return oscStatus;
+  const socket = dgram.createSocket({ type: "udp4", reuseAddr: true });
+  oscSocket = socket;
+  socket.on("message", (message, remote) => {
+    if (remote.address !== "127.0.0.1") return;
+    try {
+      const event = parseOscMessage(message);
+      if (!event) return;
+      for (const window of BrowserWindow.getAllWindows())
+        window.webContents.send("osc:event", event);
+    } catch {}
+  });
+  socket.on("error", (error) => {
+    oscStatus = { ...oscStatus, listening: false, error: error.message };
+    for (const window of BrowserWindow.getAllWindows())
+      window.webContents.send("osc:status", oscStatus);
+    try {
+      socket.close();
+    } catch {}
+    if (oscSocket === socket) oscSocket = null;
+  });
+  socket.bind(port, "127.0.0.1", () => {
+    if (oscSocket !== socket) return;
+    oscStatus = { ...oscStatus, listening: true, error: "" };
+    for (const window of BrowserWindow.getAllWindows())
+      window.webContents.send("osc:status", oscStatus);
+  });
+  return oscStatus;
+}
 
 function sendUpdateState(patch = {}) {
   updateState = { ...updateState, ...patch, currentVersion: app.getVersion() };
@@ -709,6 +803,27 @@ function setupIpc() {
     window.isVisible() ? window.hide() : window.showInactive();
     return { ok: true, visible: window.isVisible() };
   });
+  ipcMain.handle("overlay:open-steamvr", async () => {
+    const window = createOverlayWindow(false);
+    window.setSkipTaskbar(false);
+    window.setAlwaysOnTop(false);
+    window.show();
+    overlayState = { ...overlayState, steamVrReady: true };
+    window.webContents.send("overlay:state", overlayState);
+    try {
+      await shell.openExternal("steam://run/250820");
+      return {
+        ok: true,
+        message:
+          "SteamVR opened. In the SteamVR dashboard, choose Desktop, select CrewDeck VR Overlay, and pin it in your view.",
+      };
+    } catch (error) {
+      return {
+        ok: false,
+        error: error.message || "SteamVR could not be opened.",
+      };
+    }
+  });
   ipcMain.handle("overlay:set-preferences", (_event, value = {}) => {
     const window = createOverlayWindow(false);
     if (Number.isFinite(value.width) && Number.isFinite(value.height))
@@ -729,6 +844,10 @@ function setupIpc() {
       if (window !== overlayWindow)
         window.webContents.send("overlay:command", value);
   });
+  ipcMain.handle("osc:get-status", () => oscStatus);
+  ipcMain.handle("osc:configure", (_event, value = {}) =>
+    configureOscListener(value),
+  );
   ipcMain.handle("desktop:get-share-target", () => {
     if (!pendingShareTarget) return null;
     const target = pendingShareTarget;
@@ -866,6 +985,10 @@ if (!gotSingleInstanceLock) {
     registerAppOrigin();
     configurePermissions();
     setupIpc();
+    try {
+      const savedOsc = JSON.parse(fs.readFileSync(oscSettingsPath, "utf8"));
+      if (savedOsc?.enabled) configureOscListener(savedOsc);
+    } catch {}
     createWindow();
     createTray();
     registerOverlayShortcut();
@@ -875,6 +998,7 @@ if (!gotSingleInstanceLock) {
 
 app.on("before-quit", () => {
   isQuitting = true;
+  stopOscListener();
   globalShortcut.unregisterAll();
 });
 app.on("activate", showMainWindow);

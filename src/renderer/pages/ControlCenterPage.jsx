@@ -148,9 +148,28 @@ export default function ControlCenterPage({ user, profile }) {
   const [liveMode, setLiveMode] = useState("vibrate");
   const [pendingWarning, setPendingWarning] = useState(null);
   const [emergencyActive, setEmergencyActive] = useState(false);
+  const [oscStatus, setOscStatus] = useState({
+    enabled: false,
+    listening: false,
+    port: 9001,
+    error: "",
+  });
+  const [oscShockArmed, setOscShockArmed] = useState(false);
+  const [lastOscParameter, setLastOscParameter] = useState("");
   const warningRun = useRef(null);
   const lastLiveCommand = useRef(0);
   const emergencyTimer = useRef(null);
+  const liveQueue = useRef({
+    pending: new Map(),
+    running: false,
+    generation: 0,
+  });
+  const oscValues = useRef({
+    intensity: null,
+    duration: null,
+    previous: new Map(),
+    lastAction: 0,
+  });
 
   const verifyAccess = useCallback(async () => {
     const {
@@ -265,11 +284,118 @@ export default function ControlCenterPage({ user, profile }) {
       .subscribe();
     return () => {
       warningRun.current = null;
+      liveQueue.current.generation += 1;
+      liveQueue.current.pending.clear();
       window.clearTimeout(emergencyTimer.current);
       supabase.removeChannel(safety);
       supabase.removeChannel(logChannel);
     };
   }, [loadDevices, loadLogs, user.id, verifyAccess]);
+
+  useEffect(() => {
+    window.desktop.osc?.getStatus?.().then(setOscStatus);
+    const stopStatus =
+      window.desktop.osc?.onStatus?.(setOscStatus) || (() => {});
+    const stopEvent =
+      window.desktop.osc?.onEvent?.(async (event) => {
+        if (access !== "allowed" || !devices.length) return;
+        const parameter = String(event?.parameter || "");
+        const normalized = parameter.toLowerCase();
+        const value = event?.value;
+        setLastOscParameter(parameter);
+        if (normalized === "intensity") {
+          const next = Math.max(
+            0,
+            Math.min(
+              100,
+              Number(value) <= 1 ? Number(value) * 100 : Number(value),
+            ),
+          );
+          oscValues.current.intensity = Math.round(next);
+          return;
+        }
+        if (normalized === "duration") {
+          oscValues.current.duration = Math.max(
+            0.1,
+            Math.min(10, Number(value) || 1),
+          );
+          return;
+        }
+        const active = value === true || Number(value) > 0.5;
+        const wasActive = oscValues.current.previous.get(normalized) === true;
+        oscValues.current.previous.set(normalized, active);
+        if (!active || wasActive) return;
+        if (Date.now() - oscValues.current.lastAction < 800) return;
+        if (normalized === "stop") {
+          oscValues.current.lastAction = Date.now();
+          await emergencyStop();
+          return;
+        }
+        const action =
+          normalized === "vibrate"
+            ? "vibrate"
+            : normalized === "beep"
+              ? "beep"
+              : normalized === "shock"
+                ? "shock"
+                : "";
+        if (!action || (action === "shock" && !oscShockArmed)) return;
+        const primary = devices[0];
+        const targets = targetDevices(primary.id);
+        if (!targets.length) return;
+        oscValues.current.lastAction = Date.now();
+        try {
+          await Promise.all(
+            targets.map(async (device) => {
+              const control = controls[device.id] || initialControl();
+              const requestedIntensity =
+                oscValues.current.intensity ?? control.intensity;
+              const intensity = Math.max(
+                0,
+                Math.min(control.intensity, requestedIntensity),
+              );
+              const requestedDuration =
+                oscValues.current.duration ?? control.duration;
+              const duration = Math.max(
+                0.1,
+                Math.min(control.duration, requestedDuration),
+              );
+              if (intensity <= 0) return;
+              if (action === "shock" && control.warningEnabled) {
+                await sendCommand(
+                  device,
+                  "vibrate",
+                  intensity,
+                  control.warningDelay,
+                );
+                await new Promise((resolve) =>
+                  window.setTimeout(resolve, control.warningDelay * 1000),
+                );
+              }
+              await sendCommand(device, action, intensity, duration);
+            }),
+          );
+          setNotice(
+            `VRChat OSC sent ${action} through CrewDeck safety limits.`,
+          );
+        } catch (error) {
+          setNotice(error.message || "The VRChat OSC command was rejected.");
+        }
+      }) || (() => {});
+    return () => {
+      stopStatus();
+      stopEvent();
+    };
+  }, [access, controls, devices, oscShockArmed]);
+
+  async function configureOsc(enabled) {
+    setOscShockArmed(false);
+    const next = await window.desktop.osc.configure({
+      enabled,
+      port: oscStatus.port || 9001,
+    });
+    setOscStatus(next);
+  }
 
   function updateControl(id, patch, sync = true) {
     setControls((current) => {
@@ -427,20 +553,35 @@ export default function ControlCenterPage({ user, profile }) {
     if (!live || value <= 0 || Date.now() - lastLiveCommand.current < 160)
       return;
     lastLiveCommand.current = Date.now();
+    const queue = liveQueue.current;
+    for (const device of targetDevices(id))
+      queue.pending.set(device.id, { device, action: liveMode, value });
+    if (queue.running) return;
+    queue.running = true;
+    const generation = queue.generation;
     try {
-      await Promise.all(
-        targetDevices(id).map((device) =>
-          sendCommand(device, liveMode, value, 0.3, true),
-        ),
-      );
+      while (queue.pending.size && generation === queue.generation) {
+        const batch = [...queue.pending.values()];
+        queue.pending.clear();
+        await Promise.all(
+          batch.map(({ device, action, value: latestValue }) =>
+            sendCommand(device, action, latestValue, 0.3, true),
+          ),
+        );
+      }
     } catch (error) {
+      queue.pending.clear();
       setNotice(error.message || "Live control was interrupted.");
       setLive(false);
+    } finally {
+      queue.running = false;
     }
   }
 
   function stopLive(force = false) {
     if (!live && !force) return;
+    liveQueue.current.generation += 1;
+    liveQueue.current.pending.clear();
     setControls((current) =>
       Object.fromEntries(
         Object.entries(current).map(([id, item]) => [
@@ -455,6 +596,8 @@ export default function ControlCenterPage({ user, profile }) {
     warningRun.current = null;
     setPendingWarning(null);
     setLive(false);
+    liveQueue.current.generation += 1;
+    liveQueue.current.pending.clear();
     stopLive(true);
     window.clearTimeout(emergencyTimer.current);
     setEmergencyActive(false);
@@ -652,6 +795,73 @@ export default function ControlCenterPage({ user, profile }) {
               Shock
             </button>
           </div>
+        )}
+      </section>
+      <section className="panel control-osc-panel">
+        <div className="control-global-heading">
+          <div>
+            <span className="eyebrow">Local integration</span>
+            <h2>VRChat OSC automation</h2>
+            <p>
+              Listen only on this computer for CrewDeck-prefixed avatar
+              parameters. Commands still use your selected device limits,
+              Trusted Person access, Safe Mode, warnings, and emergency stop.
+            </p>
+          </div>
+          <span
+            className={`control-osc-state${oscStatus.listening ? " online" : ""}`}
+          >
+            {oscStatus.listening
+              ? `Listening on 127.0.0.1:${oscStatus.port}`
+              : oscStatus.error || "Not listening"}
+          </span>
+        </div>
+        <div className="control-osc-settings">
+          <label className="check-field">
+            <input
+              type="checkbox"
+              checked={Boolean(oscStatus.enabled)}
+              onChange={(event) => configureOsc(event.target.checked)}
+            />
+            <span>Enable CrewDeck VRChat OSC listener</span>
+          </label>
+          <label>
+            <span>Local UDP port</span>
+            <input
+              type="number"
+              min="1024"
+              max="65535"
+              value={oscStatus.port || 9001}
+              onChange={(event) =>
+                setOscStatus((current) => ({
+                  ...current,
+                  port: Number(event.target.value),
+                }))
+              }
+              onBlur={() => oscStatus.enabled && configureOsc(true)}
+            />
+          </label>
+          <label className="check-field control-osc-arm">
+            <input
+              type="checkbox"
+              checked={oscShockArmed}
+              disabled={!oscStatus.listening}
+              onChange={(event) => setOscShockArmed(event.target.checked)}
+            />
+            <span>Arm OSC shock commands for this session only</span>
+          </label>
+        </div>
+        <details>
+          <summary>VRChat avatar parameters</summary>
+          <code>/avatar/parameters/CrewDeck/Intensity</code>
+          <code>/avatar/parameters/CrewDeck/Duration</code>
+          <code>/avatar/parameters/CrewDeck/Vibrate</code>
+          <code>/avatar/parameters/CrewDeck/Beep</code>
+          <code>/avatar/parameters/CrewDeck/Shock</code>
+          <code>/avatar/parameters/CrewDeck/Stop</code>
+        </details>
+        {lastOscParameter && (
+          <small>Last CrewDeck parameter received: {lastOscParameter}</small>
         )}
       </section>
       <div className="control-device-grid">

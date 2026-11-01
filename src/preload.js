@@ -29,19 +29,32 @@ contextBridge.exposeInMainWorld("desktop", {
   },
   openExternal: (url) => ipcRenderer.send("desktop:open-external", url),
   onNavigate: (callback) => subscribe("desktop:navigate", callback),
-  openMessageWindow: (route) => ipcRenderer.invoke("desktop:open-message-window", route),
+  openMessageWindow: (route) =>
+    ipcRenderer.invoke("desktop:open-message-window", route),
   shareTarget: { get: () => ipcRenderer.invoke("desktop:get-share-target") },
   repair: () => ipcRenderer.invoke("desktop:repair"),
-  globalPtt: { enable: (accelerator) => ipcRenderer.invoke("desktop:set-global-ptt", accelerator), onToggle: (callback) => subscribe("desktop:global-ptt", callback) },
+  globalPtt: {
+    enable: (accelerator) =>
+      ipcRenderer.invoke("desktop:set-global-ptt", accelerator),
+    onToggle: (callback) => subscribe("desktop:global-ptt", callback),
+  },
   overlay: {
     open: () => ipcRenderer.invoke("overlay:open"),
+    openSteamVr: () => ipcRenderer.invoke("overlay:open-steamvr"),
     close: () => ipcRenderer.invoke("overlay:close"),
     toggle: () => ipcRenderer.invoke("overlay:toggle"),
-    setPreferences: (value) => ipcRenderer.invoke("overlay:set-preferences", value),
+    setPreferences: (value) =>
+      ipcRenderer.invoke("overlay:set-preferences", value),
     update: (value) => ipcRenderer.send("overlay:update", value),
     onState: (callback) => subscribe("overlay:state", callback),
     command: (value) => ipcRenderer.send("overlay:command", value),
     onCommand: (callback) => subscribe("overlay:command", callback),
+  },
+  osc: {
+    getStatus: () => ipcRenderer.invoke("osc:get-status"),
+    configure: (value) => ipcRenderer.invoke("osc:configure", value),
+    onEvent: (callback) => subscribe("osc:event", callback),
+    onStatus: (callback) => subscribe("osc:status", callback),
   },
   onDeepLink: (callback) => subscribe("auth:deep-link", callback),
   screenShare: {

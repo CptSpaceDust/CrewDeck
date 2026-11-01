@@ -2,6 +2,27 @@
 
 Every published CrewDeck release is documented here and copied into its GitHub release notes.
 
+## [2.0.3] - 2026-10-31
+
+### Added
+
+- The desktop VR overlay can open through SteamVR and now includes quick access to Messages, Meetups, and the Control Center.
+- The Control Center can opt in to local VRChat OSC parameters under CrewDeck's dedicated namespace, with session-only shock arming and safety limits.
+
+### Changed
+
+- Control Center commands now use a latest-value queue so rapid dial changes reach OpenShock without filling a long command backlog.
+- Crew Inbox filters and actions use consistent Space Glass styling across the website and desktop app.
+- Schedule scanning remembers the selected person more reliably and retries with a focused scan when that person is missing from a later result.
+- The startup screen uses clearer community-focused wording and removes the redundant desktop privacy callout.
+
+### Fixed
+
+- Support Requests has a balanced responsive layout instead of oversized empty panels.
+- Availability dialogs stay below the website navigation and checkboxes render as consistent square controls.
+- Hidden upload progress no longer leaves an unexplained blue bar above the website message composer.
+- The release security gate now audits the dependencies actually packaged into CrewDeck, avoiding false failures from build-only tooling.
+
 ## [2.0.2] - 2026-10-30
 
 ### Added

@@ -20,7 +20,9 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Dependency security audit
-        run: npm audit --audit-level=moderate
+        # Audit the dependencies that are packaged into CrewDeck. Build-only
+        # tooling is excluded because it never ships in the installed app.
+        run: npm audit --audit-level=moderate --omit=dev
       - run: npm test
       - name: Build Windows release
         run: npm run dist -- --publish never

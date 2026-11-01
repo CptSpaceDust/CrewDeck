@@ -2204,6 +2204,108 @@ html[data-motion="reduced"] *::after {
     rgba(7, 19, 39, 0.5)
   );
 }
+
+.control-osc-panel {
+  display: grid;
+  gap: 16px;
+  margin: 18px 0;
+  padding: 20px;
+  border-color: var(--control-line);
+  background: linear-gradient(
+    145deg,
+    rgba(13, 38, 69, 0.74),
+    rgba(4, 14, 31, 0.82)
+  );
+}
+.control-osc-panel h2,
+.control-osc-panel p {
+  margin: 4px 0;
+}
+.control-osc-panel p {
+  max-width: 760px;
+  color: #a9c0d5;
+  line-height: 1.55;
+}
+.control-osc-state {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 7px 11px;
+  border: 1px solid rgba(255, 177, 99, 0.3);
+  border-radius: 999px;
+  color: #ffd49f;
+  background: rgba(111, 65, 24, 0.22);
+  font-size: 0.74rem;
+  font-weight: 850;
+}
+.control-osc-state.online {
+  color: #aaf1d0;
+  border-color: rgba(91, 220, 160, 0.34);
+  background: rgba(31, 119, 82, 0.2);
+}
+.control-osc-settings {
+  display: grid;
+  grid-template-columns: minmax(230px, 1fr) minmax(160px, 220px) minmax(
+      260px,
+      1fr
+    );
+  gap: 12px;
+  align-items: end;
+}
+.control-osc-settings > label {
+  display: grid;
+  gap: 7px;
+  min-height: 58px;
+  padding: 12px;
+  border: 1px solid rgba(107, 193, 255, 0.18);
+  border-radius: 13px;
+  color: #dcefff;
+  background: rgba(5, 18, 40, 0.62);
+}
+.control-osc-settings > .check-field {
+  grid-template-columns: auto 1fr;
+  align-items: center;
+}
+.control-osc-settings input[type="number"] {
+  width: 100%;
+  min-height: 38px;
+  padding: 7px 10px;
+  border: 1px solid rgba(110, 199, 255, 0.3);
+  border-radius: 9px;
+  color: #effaff;
+  background: #06152c;
+}
+.control-osc-arm {
+  border-color: rgba(255, 126, 143, 0.25) !important;
+}
+.control-osc-panel details {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid rgba(107, 193, 255, 0.16);
+  border-radius: 13px;
+  background: rgba(3, 13, 30, 0.54);
+}
+.control-osc-panel summary {
+  cursor: pointer;
+  font-weight: 800;
+}
+.control-osc-panel code {
+  display: block;
+  margin-top: 5px;
+  padding: 6px 9px;
+  border-radius: 7px;
+  color: #a9e6ff;
+  background: #020b19;
+}
+.control-osc-panel > small {
+  color: #8faac1;
+}
+@media (max-width: 900px) {
+  .control-osc-settings {
+    grid-template-columns: 1fr;
+  }
+}
 .friend-meetup-preset-card > header {
   display: flex;
   align-items: flex-start;
