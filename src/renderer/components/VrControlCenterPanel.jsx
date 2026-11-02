@@ -3,7 +3,7 @@ import { AlertTriangle, Radio, ShieldAlert, Volume2, Zap } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { canUseControlCenter } from "../pages/ControlCenterPage";
 
-const fallback = { max_intensity: 70, max_duration: 10, high_intensity_threshold: 40, hold_milliseconds: 800 };
+const fallback = { max_intensity: 100, max_duration: 30, high_intensity_threshold: 40, hold_milliseconds: 800, require_hold_to_shock: true };
 
 export default function VrControlCenterPanel() {
   const [access, setAccess] = useState("checking");
@@ -84,7 +84,11 @@ export default function VrControlCenterPanel() {
       <div className="vr-control-buttons">
         <button disabled={!captain} title={captain ? "Beep" : "Captain only"} onClick={() => command("beep")}><Volume2 />Beep</button>
         <button onPointerDown={() => startHold("vibrate")} onPointerUp={release} onPointerCancel={release}><Radio />Hold vibrate</button>
-        <button className="shock" onPointerDown={() => startHold("shock")} onPointerUp={release} onPointerCancel={release}><Zap />Hold shock</button>
+        {safety.require_hold_to_shock !== false ? (
+          <button className="shock" onPointerDown={() => startHold("shock")} onPointerUp={release} onPointerCancel={release}><Zap />Hold shock</button>
+        ) : (
+          <button className="shock" onClick={() => command("shock")}><Zap />Shock</button>
+        )}
       </div>
       <button className="vr-control-emergency" onClick={emergency}><AlertTriangle /> EMERGENCY STOP</button>
     </section>

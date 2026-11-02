@@ -9,7 +9,7 @@ import {
   Unlink2,
 } from "lucide-react";
 import { promptInApp, confirmInApp } from "../components/InAppDialog";
-import { Loading, PageHeader } from "../components/ui";
+import { Loading, Modal, PageHeader } from "../components/ui";
 import { supabase } from "../lib/supabase";
 
 const initialControl = () => ({
@@ -23,12 +23,13 @@ const initialControl = () => ({
 });
 
 const initialSafety = () => ({
-  max_intensity: 70,
-  max_duration: 10,
+  max_intensity: 100,
+  max_duration: 30,
   high_intensity_threshold: 40,
   cooldown_seconds: 3,
   max_intensity_step: 15,
   hold_milliseconds: 800,
+  require_hold_to_shock: true,
 });
 
 async function sha256(value) {
@@ -37,6 +38,26 @@ async function sha256(value) {
   return [...new Uint8Array(digest)]
     .map((byte) => byte.toString(16).padStart(2, "0"))
     .join("");
+}
+
+async function copyControlText(value) {
+  try {
+    await navigator.clipboard.writeText(value);
+    return true;
+  } catch {}
+  const field = document.createElement("textarea");
+  field.value = value;
+  field.readOnly = true;
+  field.style.position = "fixed";
+  field.style.opacity = "0";
+  document.body.appendChild(field);
+  field.select();
+  let copied = false;
+  try {
+    copied = document.execCommand("copy");
+  } catch {}
+  field.remove();
+  return copied;
 }
 
 function HoldCommandButton({ holdMs, className = "", disabled, children, onActivate, onRelease }) {
@@ -205,6 +226,9 @@ export default function ControlCenterPage({ user, profile }) {
   const [pendingWarning, setPendingWarning] = useState(null);
   const [emergencyActive, setEmergencyActive] = useState(false);
   const [shareLink, setShareLink] = useState("");
+  const [linkBuilderOpen, setLinkBuilderOpen] = useState(false);
+  const [linkCreating, setLinkCreating] = useState(false);
+  const [linkSettings, setLinkSettings] = useState({ expiryMinutes: 1440, maxUses: 1, devices: {} });
   const commandGate = useRef(new Map());
   const warningRun = useRef(null);
   const lastLiveCommand = useRef(0);
@@ -433,6 +457,8 @@ export default function ControlCenterPage({ user, profile }) {
   }
 
   async function saveSafety(deviceId) {
+    if (profile.rank?.trim().toLowerCase() !== "captain")
+      throw new Error("Only the Captain can change device safety limits.");
     const values = { ...initialSafety(), ...safety[deviceId] };
     const { error } = await supabase.from("control_device_safety_limits").upsert(
       { user_id: user.id, shocker_id: deviceId, ...values, updated_at: new Date().toISOString() },
@@ -442,28 +468,44 @@ export default function ControlCenterPage({ user, profile }) {
     setNotice("Device safety limits saved.");
   }
 
+  function openSafetyLinkBuilder() {
+    setShareLink("");
+    setLinkSettings({
+      expiryMinutes: 1440,
+      maxUses: 1,
+      devices: Object.fromEntries(devices.map((device) => {
+        const limits = safety[device.id] || initialSafety();
+        return [device.id, { included: true, max_intensity: limits.max_intensity, max_duration: limits.max_duration, require_hold_to_shock: limits.require_hold_to_shock !== false, hold_milliseconds: limits.hold_milliseconds }];
+      })),
+    });
+    setLinkBuilderOpen(true);
+  }
+
   async function createSafetyLink() {
-    if (!devices.length) return;
+    const selectedDevices = devices.filter((device) => linkSettings.devices[device.id]?.included);
+    if (!selectedDevices.length) throw new Error("Choose at least one device for the link.");
     const tokenBytes = crypto.getRandomValues(new Uint8Array(24));
     const token = [...tokenBytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
     const tokenHash = await sha256(token);
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    const expiresAt = new Date(Date.now() + Number(linkSettings.expiryMinutes) * 60 * 1000).toISOString();
     const { error } = await supabase.rpc("captain_create_control_access_link", {
       p_token_hash: tokenHash,
       p_expires_at: expiresAt,
-      p_max_uses: 1,
-      p_devices: devices.map((device) => ({
+      p_max_uses: Number(linkSettings.maxUses),
+      p_devices: selectedDevices.map((device) => ({
         shocker_id: device.id,
         shocker_name: device.name || "Control module",
-        max_intensity: (safety[device.id] || initialSafety()).max_intensity,
-        max_duration: (safety[device.id] || initialSafety()).max_duration,
+        max_intensity: linkSettings.devices[device.id].max_intensity,
+        max_duration: linkSettings.devices[device.id].max_duration,
+        require_hold_to_shock: linkSettings.devices[device.id].require_hold_to_shock,
+        hold_milliseconds: linkSettings.devices[device.id].hold_milliseconds,
       })),
     });
     if (error) throw error;
     const link = `https://www.cptspacedust.com/control-center.html?control_invite=${token}`;
     setShareLink(link);
-    await navigator.clipboard?.writeText(link);
-    setNotice("A one-use Control Center link was copied. It expires in 24 hours.");
+    const copied = await copyControlText(link);
+    setNotice(copied ? `Guest link copied. It allows ${linkSettings.maxUses} new session${Number(linkSettings.maxUses) === 1 ? "" : "s"}.` : "Guest link created. Use the visible Copy button or select the link manually.");
   }
 
   async function sendCommand(
@@ -816,19 +858,39 @@ export default function ControlCenterPage({ user, profile }) {
             </div>
             <button
               className="button secondary"
-              onClick={() => createSafetyLink().catch((error) => setNotice(error.message))}
+              onClick={openSafetyLinkBuilder}
               disabled={!devices.length}
             >
               <Link2 /> Generate link
             </button>
             {shareLink && (
-              <button className="button ghost" onClick={() => navigator.clipboard?.writeText(shareLink)}>
+              <button className="button ghost" onClick={async () => setNotice(await copyControlText(shareLink) ? "Guest link copied." : "Copy permission was denied. Select the link in the link builder instead.")}>
                 <Copy /> Copy again
               </button>
             )}
           </div>
         )}
       </section>
+      {linkBuilderOpen && (
+        <Modal title="Create a guest Control Center link" onClose={() => setLinkBuilderOpen(false)}>
+          <div className="control-link-builder-app">
+            <p>Anyone with this link can use only the devices and maximum settings selected below.</p>
+            <div className="control-link-builder-summary">
+              <label><span>Link expires</span><select value={linkSettings.expiryMinutes} onChange={(event) => setLinkSettings((current) => ({ ...current, expiryMinutes: Number(event.target.value) }))}><option value={15}>15 minutes</option><option value={60}>1 hour</option><option value={1440}>24 hours</option><option value={10080}>7 days</option><option value={43200}>30 days</option></select></label>
+              <label><span>Maximum uses</span><input type="number" min="1" max="100" value={linkSettings.maxUses} onChange={(event) => setLinkSettings((current) => ({ ...current, maxUses: Number(event.target.value) }))} /><small>Each new browser session counts as one use.</small></label>
+            </div>
+            <div className="control-link-builder-devices">
+              {devices.map((device) => {
+                const item = linkSettings.devices[device.id] || { included: true, ...initialSafety() };
+                const update = (patch) => setLinkSettings((current) => ({ ...current, devices: { ...current.devices, [device.id]: { ...item, ...patch } } }));
+                return <section key={device.id}><label className="control-link-device-title"><input type="checkbox" checked={item.included} onChange={(event) => update({ included: event.target.checked })} /><strong>{device.name || "Control module"}</strong></label><div><label><span>Max intensity</span><input type="number" min="1" max="100" value={item.max_intensity} onChange={(event) => update({ max_intensity: Number(event.target.value) })} /></label><label><span>Max duration</span><input type="number" min="0.3" max="30" step="0.1" value={item.max_duration} onChange={(event) => update({ max_duration: Number(event.target.value) })} /></label></div><label className="control-link-device-title"><input type="checkbox" checked={item.require_hold_to_shock !== false} onChange={(event) => update({ require_hold_to_shock: event.target.checked })} /><span>Require hold to shock ({item.hold_milliseconds} ms)</span></label></section>;
+              })}
+            </div>
+            {shareLink && <label className="control-link-output"><span>Generated link</span><input readOnly value={shareLink} onFocus={(event) => event.currentTarget.select()} /></label>}
+            <div className="modal-actions"><button className="button ghost" onClick={() => setLinkBuilderOpen(false)}>Done</button>{shareLink && <button className="button secondary" onClick={async () => setNotice(await copyControlText(shareLink) ? "Guest link copied." : "Select the generated link and copy it manually.")}><Copy /> Copy link</button>}<button className="button primary" disabled={linkCreating} onClick={async () => { setLinkCreating(true); try { await createSafetyLink(); } catch (error) { setNotice(error.message); } finally { setLinkCreating(false); } }}>{linkCreating ? "Creating…" : "Create link"}</button></div>
+          </div>
+        </Modal>
+      )}
       <div className="control-device-grid">
         {devices.map((device) => {
           const control = controls[device.id] || initialControl();
@@ -952,9 +1014,11 @@ export default function ControlCenterPage({ user, profile }) {
                         </button>
                       </div>
                     </section>
-                    <section className="control-safety-settings">
-                      <h3>Device safety limits</h3>
-                      <p>These limits are also enforced by the server.</p>
+                    {profile.rank?.trim().toLowerCase() === "captain" && <section className="control-safety-settings">
+                      <header className="control-safety-heading">
+                        <div><span>Captain controls</span><h3>Device safety limits</h3><p>Set the maximum command strength and safety behavior for this device.</p></div>
+                        <b>Captain only</b>
+                      </header>
                       <div className="control-safety-fields">
                         {[
                           ["max_intensity", "Max intensity", 1, 100, 1],
@@ -982,10 +1046,13 @@ export default function ControlCenterPage({ user, profile }) {
                           </label>
                         ))}
                       </div>
-                      <button onClick={() => saveSafety(device.id).catch((error) => setNotice(error.message))}>
-                        Save safety limits
-                      </button>
-                    </section>
+                      <label className="control-safety-toggle">
+                        <input type="checkbox" checked={deviceSafety.require_hold_to_shock !== false} onChange={(event) => setSafety((current) => ({ ...current, [device.id]: { ...deviceSafety, require_hold_to_shock: event.target.checked } }))} />
+                        <span aria-hidden="true" />
+                        <span><strong>Hold to activate shock</strong><small>Turn this off to send a shock with one click. Release-to-stop only applies while hold mode is on.</small></span>
+                      </label>
+                      <footer><span>These limits are enforced before a command reaches OpenShock.</span><button onClick={() => saveSafety(device.id).catch((error) => setNotice(error.message))}>Save safety limits</button></footer>
+                    </section>}
                   </div>
                 </details>
               )}
@@ -1016,19 +1083,15 @@ export default function ControlCenterPage({ user, profile }) {
                   >
                     Beep
                   </button>
-                  <HoldCommandButton
-                    className="shock"
-                    disabled={busy && pendingWarning !== device.id}
-                    holdMs={deviceSafety.hold_milliseconds}
-                    onActivate={() => runAction(device.id, "shock")}
-                    onRelease={() => stopTargets(device.id)}
-                  >
-                    {pendingWarning === device.id
-                      ? "Cancel Shock"
-                      : control.warningEnabled
-                        ? "Hold · Warning On"
-                        : "Hold to shock"}
-                  </HoldCommandButton>
+                  {deviceSafety.require_hold_to_shock !== false ? (
+                    <HoldCommandButton className="shock" disabled={busy && pendingWarning !== device.id} holdMs={deviceSafety.hold_milliseconds} onActivate={() => runAction(device.id, "shock")} onRelease={() => stopTargets(device.id)}>
+                      {pendingWarning === device.id ? "Cancel Shock" : control.warningEnabled ? "Hold · Warning On" : "Hold to shock"}
+                    </HoldCommandButton>
+                  ) : (
+                    <button className="shock" disabled={busy && pendingWarning !== device.id} onClick={() => runAction(device.id, "shock")}>
+                      {pendingWarning === device.id ? "Cancel Shock" : control.warningEnabled ? "Shock · Warning On" : "Shock"}
+                    </button>
+                  )}
                 </div>
               )}
             </article>

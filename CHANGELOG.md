@@ -2,6 +2,22 @@
 
 Every published CrewDeck release is documented here and copied into its GitHub release notes.
 
+## [2.0.5] - 2026-11-01
+
+### Added
+
+- Captains can create guest Control Center links that work without a CrewDeck login and configure expiration, session count, included devices, intensity, duration, and hold-to-shock behavior before sharing.
+
+### Changed
+
+- New device safety limits default to 100 intensity and 30 seconds while remaining Captain controlled.
+- SteamVR reports the wrist overlay as connected only after its first frame is visible and can position it from the headset when the selected controller is not yet tracked.
+
+### Fixed
+
+- Generated links remain visible and selectable when clipboard access is denied, with a compatible copy fallback.
+- The SteamVR wrist launcher starts fully visible, stays visible during startup, and reports overlay frame or display failures instead of silently appearing connected.
+
 ## [2.0.4] - 2026-11-01
 
 ### Added

@@ -72,6 +72,20 @@ test("Control Center includes device operations and real dials", () => {
     "Duplicate command blocked",
     "Hold to shock",
     "Device safety limits",
+    "require_hold_to_shock",
+    "Only the Captain can change device safety limits",
+    "Maximum uses",
+    "copyControlText",
   ])
     assert.ok(page.includes(safetyFeature), `Missing ${safetyFeature}`);
+});
+
+test("SteamVR reports ready only after the wrist surface is visible", () => {
+  const main = read("src", "main.js");
+  const native = read("native", "CrewDeck.SteamVrOverlay", "Program.cs");
+  assert.match(main, /event\.type === "visible"/);
+  assert.match(native, /PositionWristOrFallback/);
+  assert.match(native, /SetOverlayRaw/);
+  assert.match(native, /type = "visible"/);
+  assert.match(native, /SetOverlayAlpha\(_wrist, 1f\)/);
 });

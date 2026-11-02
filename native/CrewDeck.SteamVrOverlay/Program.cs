@@ -17,7 +17,10 @@ internal static class Program
     private static ulong _wrist;
     private static ulong _panel;
     private static string _hand = "left";
-    private static float _wristAlpha = .08f;
+    private static float _wristAlpha = 1f;
+    private static bool _wristHasFrame;
+    private static bool _wristVisibleReported;
+    private static readonly DateTime StartedAt = DateTime.UtcNow;
     private static HmdMatrix34_t _panelTransform;
     private static string _panelAnchor = "world";
 
@@ -75,8 +78,17 @@ internal static class Program
             !CreateOverlay("com.crewdeck.panel", "CrewDeck", ref _panel, 1.14f, 1280, 800))
             return false;
 
+        _overlay.SetOverlaySortOrder(_wrist, 100);
+        _overlay.SetOverlayTextureColorSpace(_wrist, EColorSpace.Gamma);
+        _overlay.SetOverlayAlpha(_wrist, 1f);
+        PositionWristOrFallback();
+        var show = _overlay.ShowOverlay(_wrist);
+        if (show != EVROverlayError.None)
+        {
+            Write(new { type = "error", error = $"SteamVR could not show the wrist overlay: {show}" });
+            return false;
+        }
         PlacePanelInFrontOfHead();
-        _overlay.ShowOverlay(_wrist);
         _overlay.HideOverlay(_panel);
         return true;
     }
@@ -143,7 +155,25 @@ internal static class Program
         try
         {
             lock (VrLock)
-                _overlay?.SetOverlayRaw(kind == WristFrame ? _wrist : _panel, pinned.AddrOfPinnedObject(), width, height, 4);
+            {
+                var handle = kind == WristFrame ? _wrist : _panel;
+                var result = _overlay?.SetOverlayRaw(handle, pinned.AddrOfPinnedObject(), width, height, 4) ?? EVROverlayError.UnknownOverlay;
+                if (result != EVROverlayError.None)
+                {
+                    Write(new { type = "warning", error = $"SteamVR rejected the {kind} overlay frame: {result}" });
+                }
+                else if (kind == WristFrame)
+                {
+                    _wristHasFrame = true;
+                    _overlay?.SetOverlayAlpha(_wrist, 1f);
+                    _overlay?.ShowOverlay(_wrist);
+                    if (!_wristVisibleReported)
+                    {
+                        _wristVisibleReported = true;
+                        Write(new { type = "visible", surface = "wrist", width, height });
+                    }
+                }
+            }
         }
         finally { pinned.Free(); }
     }
@@ -233,18 +263,27 @@ internal static class Program
         }
     }
 
-    private static void PositionWrist()
+    private static bool PositionWrist()
     {
-        if (_system is null || _overlay is null || _wrist == 0) return;
+        if (_system is null || _overlay is null || _wrist == 0) return false;
         var role = _hand == "right" ? ETrackedControllerRole.RightHand : ETrackedControllerRole.LeftHand;
         var device = _system.GetTrackedDeviceIndexForControllerRole(role);
-        if (device == OpenVR.k_unTrackedDeviceIndexInvalid) return;
+        if (device == OpenVR.k_unTrackedDeviceIndexInvalid) return false;
         var side = _hand == "right" ? -.055f : .055f;
         var transform = Matrix(
             1, 0, 0, side,
             0, .35f, -.94f, .035f,
             0, .94f, .35f, -.035f);
-        _overlay.SetOverlayTransformTrackedDeviceRelative(_wrist, device, ref transform);
+        var result = _overlay.SetOverlayTransformTrackedDeviceRelative(_wrist, device, ref transform);
+        return result == EVROverlayError.None;
+    }
+
+    private static void PositionWristOrFallback()
+    {
+        if (PositionWrist() || _overlay is null || _wrist == 0) return;
+        var side = _hand == "right" ? .34f : -.34f;
+        var fallback = Matrix(1, 0, 0, side, 0, 1, 0, -.22f, 0, 0, 1, -0.72f);
+        _overlay.SetOverlayTransformTrackedDeviceRelative(_wrist, HmdIndex, ref fallback);
     }
 
     private static void PositionPanel()
@@ -298,10 +337,15 @@ internal static class Program
     private static void UpdateWristPoseAndFade()
     {
         if (_system is null || _overlay is null) return;
-        PositionWrist();
+        PositionWristOrFallback();
         var role = _hand == "right" ? ETrackedControllerRole.RightHand : ETrackedControllerRole.LeftHand;
         var controller = _system.GetTrackedDeviceIndexForControllerRole(role);
-        if (controller == OpenVR.k_unTrackedDeviceIndexInvalid) return;
+        if (controller == OpenVR.k_unTrackedDeviceIndexInvalid)
+        {
+            _wristAlpha += (.72f - _wristAlpha) * .16f;
+            _overlay.SetOverlayAlpha(_wrist, _wristAlpha);
+            return;
+        }
         var poses = new TrackedDevicePose_t[OpenVR.k_unMaxTrackedDeviceCount];
         _system.GetDeviceToAbsoluteTrackingPose(ETrackingUniverseOrigin.TrackingUniverseStanding, 0, poses);
         if (!poses[HmdIndex].bPoseIsValid || !poses[controller].bPoseIsValid) return;
@@ -312,7 +356,9 @@ internal static class Program
         dx /= length; dy /= length; dz /= length;
         var forwardX = -head.m2; var forwardY = -head.m6; var forwardZ = -head.m10;
         var gaze = dx * forwardX + dy * forwardY + dz * forwardZ;
-        var target = gaze > .73f ? 1f : .06f;
+        var target = !_wristHasFrame || (DateTime.UtcNow - StartedAt).TotalSeconds < 5
+            ? 1f
+            : gaze > .45f ? 1f : .16f;
         _wristAlpha += (target - _wristAlpha) * .12f;
         _overlay.SetOverlayAlpha(_wrist, _wristAlpha);
     }

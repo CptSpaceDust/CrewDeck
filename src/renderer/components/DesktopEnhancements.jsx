@@ -280,9 +280,9 @@ export function WhatsNew() {
             <div>
               <strong>Added</strong>
               <p>
-                Crew Events, private community support, the Crew Inbox, and a
-                configurable VR overlay are complete, with support-request
-                transfer and quiet response reminders.
+                Captain-configured guest Control Center links can now be opened
+                without a CrewDeck login, with limits for devices, strength,
+                duration, expiration, usage, and hold-to-shock behavior.
               </p>
             </div>
           </article>
@@ -291,8 +291,9 @@ export function WhatsNew() {
             <div>
               <strong>Changed</strong>
               <p>
-                Support deadlines, audit history, retention, attachments, and
-                realtime updates now stay synchronized server side.
+                New device safety limits start at 100 intensity and 30 seconds,
+                and SteamVR only reports the wrist launcher as connected after
+                its first visible frame is accepted.
               </p>
             </div>
           </article>
@@ -301,8 +302,9 @@ export function WhatsNew() {
             <div>
               <strong>Fixed</strong>
               <p>
-                Captain board workflow layout, Conversation Information, and
-                immediate Shared Media deletion.
+                Link copying now works when direct clipboard access is blocked,
+                and the SteamVR wrist launcher has a tracked-headset fallback
+                plus clearer startup and rendering errors.
               </p>
             </div>
           </article>

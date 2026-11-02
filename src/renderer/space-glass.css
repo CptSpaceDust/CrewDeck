@@ -2018,21 +2018,55 @@ html[data-motion="reduced"] *::after {
 .control-share-access > div { margin-right: auto; }
 .control-share-access p { margin: 4px 0 0; color: var(--muted); }
 
-.control-safety-settings { grid-column: 1 / -1; }
-.control-safety-settings > p { color: var(--muted); margin-top: -4px; }
+.control-safety-settings {
+  grid-column: 1 / -1;
+  padding: 18px !important;
+  border-color: rgba(111, 205, 255, 0.28) !important;
+  background: radial-gradient(circle at 100% 0, rgba(111, 89, 244, 0.18), transparent 42%), rgba(3, 16, 36, 0.72) !important;
+}
+.control-safety-heading { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; }
+.control-safety-heading > div > span { color: #79d4ff; font-size: 0.68rem; font-weight: 900; letter-spacing: 0.12em; text-transform: uppercase; }
+.control-safety-heading h3 { margin: 3px 0 4px; }
+.control-safety-heading p { margin: 0; color: var(--muted); }
+.control-safety-heading > b { flex: 0 0 auto; padding: 6px 9px; border: 1px solid rgba(116, 211, 255, 0.32); border-radius: 999px; color: #bcecff; background: rgba(17, 73, 118, 0.42); font-size: 0.7rem; }
 .control-safety-fields {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
   margin: 12px 0;
 }
-.control-safety-fields label { display: grid; gap: 5px; font-size: 0.78rem; color: var(--muted); }
+.control-safety-fields label { display: grid; gap: 6px; padding: 10px; border: 1px solid rgba(112, 198, 255, 0.14); border-radius: 12px; font-size: 0.78rem; color: var(--muted); background: rgba(3, 14, 31, 0.44); }
 .control-safety-fields input { width: 100%; }
+.control-safety-toggle { display: grid; grid-template-columns: auto 1fr; gap: 12px; align-items: center; padding: 13px; border: 1px solid rgba(112, 198, 255, 0.16); border-radius: 13px; background: rgba(3, 14, 31, 0.48); cursor: pointer; }
+.control-safety-toggle > input { position: absolute; opacity: 0; pointer-events: none; }
+.control-safety-toggle > span:nth-child(2) { position: relative; width: 46px; height: 25px; border: 1px solid #406889; border-radius: 999px; background: #07152b; transition: 0.2s ease; }
+.control-safety-toggle > span:nth-child(2)::after { content: ""; position: absolute; top: 3px; left: 3px; width: 17px; height: 17px; border-radius: 50%; background: #91a8bf; transition: 0.2s ease; }
+.control-safety-toggle input:checked + span { border-color: #67d2ff; background: linear-gradient(135deg, #176da0, #544bd1); }
+.control-safety-toggle input:checked + span::after { transform: translateX(20px); background: #fff; }
+.control-safety-toggle > span:last-child { display: grid; gap: 3px; }
+.control-safety-toggle small { color: var(--muted); line-height: 1.4; }
+.control-safety-settings > footer { display: flex; justify-content: space-between; gap: 14px; align-items: center; margin-top: 14px; padding-top: 13px; border-top: 1px solid rgba(112, 198, 255, 0.14); color: var(--muted); font-size: 0.74rem; }
+
+.control-link-builder-app { display: grid; gap: 14px; width: min(720px, 76vw); max-width: 100%; }
+.control-link-builder-app > p { margin: 0; color: var(--muted); }
+.control-link-builder-summary { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.control-link-builder-summary label,
+.control-link-output { display: grid; gap: 6px; color: var(--text); font-size: 0.78rem; font-weight: 800; }
+.control-link-builder-summary small { color: var(--muted); }
+.control-link-builder-devices { display: grid; gap: 10px; max-height: 42vh; overflow: auto; padding-right: 4px; }
+.control-link-builder-devices > section { display: grid; gap: 11px; padding: 13px; border: 1px solid rgba(112, 198, 255, 0.16); border-radius: 13px; background: rgba(3, 14, 31, 0.44); }
+.control-link-builder-devices > section > div { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.control-link-builder-devices > section > div label { display: grid; gap: 5px; color: var(--muted); font-size: 0.75rem; }
+.control-link-device-title { display: flex; align-items: center; gap: 9px; }
+.control-link-output { padding: 12px; border: 1px solid rgba(103, 210, 255, 0.3); border-radius: 12px; background: rgba(20, 74, 112, 0.25); }
+.control-link-output input { width: 100%; }
 
 @keyframes control-hold-progress { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 
 @media (max-width: 760px) {
   .control-safety-fields { grid-template-columns: 1fr 1fr; }
+  .control-link-builder-summary,
+  .control-link-builder-devices > section > div { grid-template-columns: 1fr; }
 }
 
 .control-log-panel {
