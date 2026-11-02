@@ -89,3 +89,19 @@ test("SteamVR reports ready only after the wrist surface is visible", () => {
   assert.match(native, /type = "visible"/);
   assert.match(native, /SetOverlayAlpha\(_wrist, 1f\)/);
 });
+
+test("SteamVR never opens automatically with CrewDeck startup", () => {
+  const main = read("src", "main.js");
+  const app = read("src", "renderer", "App.jsx");
+  const settings = read("src", "renderer", "components", "AppSettings.jsx");
+  assert.doesNotMatch(
+    main,
+    /if \(value\.steamvr_enabled\) startSteamVrOverlay/,
+  );
+  assert.match(app, /steamvr_enabled: false/);
+  assert.match(settings, /Starts only when you ask/);
+  assert.doesNotMatch(
+    settings,
+    /Connect the wrist launcher to SteamVR automatically/,
+  );
+});

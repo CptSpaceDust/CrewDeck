@@ -141,7 +141,7 @@ test("group polls announce themselves and group menus stay interactive", () => {
   assert.match(messages, /onClosed=\{\(\) => setOpen\(false\)\}/);
 });
 
-test("the ideas guide only appears on the Ideas Board", () => {
+test("the retired ideas guide is absent from community pages", () => {
   const pages = read("pages/CommunityPagesV2.jsx");
   const introductionsStart = pages.indexOf("export function IntroductionsPage");
   const ideasStart = pages.indexOf("export function IdeasPage");
@@ -150,7 +150,7 @@ test("the ideas guide only appears on the Ideas Board", () => {
   const ideas = pages.slice(ideasStart, collabsStart);
 
   assert.doesNotMatch(introductions, /How the ideas board works/);
-  assert.match(ideas, /How the ideas board works/);
+  assert.doesNotMatch(ideas, /How the ideas board works/);
 });
 
 test("desktop login alerts and support errors mirror the website", () => {

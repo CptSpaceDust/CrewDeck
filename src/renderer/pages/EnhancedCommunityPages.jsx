@@ -42,6 +42,23 @@ const isOnline = (person) =>
       Date.now() - new Date(person.last_seen).getTime() < 120000,
   );
 
+function profileBadges(profile) {
+  let badges = [];
+  if (Array.isArray(profile?.badges)) badges = profile.badges;
+  else if (typeof profile?.badges === "string") {
+    try {
+      const parsed = JSON.parse(profile.badges);
+      badges = Array.isArray(parsed) ? parsed : profile.badges.split(",");
+    } catch {
+      badges = profile.badges.split(",");
+    }
+  }
+  badges = badges.map((badge) => String(badge).trim()).filter(Boolean);
+  if (profile?.support_active && !badges.includes("Supporter"))
+    badges.push("Supporter");
+  return [...new Set(badges)];
+}
+
 export function CrewPage({ onViewProfile }) {
   const pulses = useVisiblePulses();
   const { data, loading, error, reload } = useLoader(() => getProfiles(), []);
@@ -94,9 +111,7 @@ export function CrewPage({ onViewProfile }) {
             const inCall =
               person.in_call_until &&
               new Date(person.in_call_until).getTime() > Date.now();
-            let badges = Array.isArray(person.badges) ? person.badges : [];
-            if (person.support_active && !badges.includes("Supporter"))
-              badges = [...badges, "Supporter"];
+            const badges = profileBadges(person);
             return (
               <article className="panel crew-card" key={person.id}>
                 <div className="crew-avatar-stack">
@@ -264,10 +279,7 @@ export function CrewProfilePage({ person, user, onBack, onNavigate }) {
                 </p>
               )}
             <div className="tag-row">
-              {(badgesVisible && Array.isArray(profile.badges)
-                ? profile.badges
-                : []
-              ).map((badge) => (
+              {(badgesVisible ? profileBadges(profile) : []).map((badge) => (
                 <span key={badge}>{badge}</span>
               ))}
             </div>
@@ -353,8 +365,17 @@ export function CrewProfilePage({ person, user, onBack, onNavigate }) {
                   return;
                 }
                 if (friendship?.status === "accepted") return;
-                const permission = await supabase.rpc("can_interact_with", { target_user:profile.id, interaction_type:"friend" });
-                if (permission.error || permission.data !== true) { setReportMessage(permission.error?.message || "This crew member is not accepting friend requests from you."); return; }
+                const permission = await supabase.rpc("can_interact_with", {
+                  target_user: profile.id,
+                  interaction_type: "friend",
+                });
+                if (permission.error || permission.data !== true) {
+                  setReportMessage(
+                    permission.error?.message ||
+                      "This crew member is not accepting friend requests from you.",
+                  );
+                  return;
+                }
                 result = await supabase.from("friendships").upsert({
                   requester_id: user.id,
                   addressee_id: profile.id,
@@ -416,7 +437,27 @@ export function CrewProfilePage({ person, user, onBack, onNavigate }) {
           </div>
         )}
       </section>
-      {user?.id !== profile.id && <section className="panel profile-planning-actions"><h2>Plan together</h2><p>Open the shared schedule view with {profile.username} already selected.</p><button className="button secondary" onClick={()=>{localStorage.setItem("crewdeck.meetup.prefill",JSON.stringify({personId:profile.id,compare:true}));onNavigate?.("MeetupCalendar.html?compare=1");}}>Compare availability</button></section>}
+      {user?.id !== profile.id && (
+        <section className="panel profile-planning-actions">
+          <h2>Plan together</h2>
+          <p>
+            Open the shared schedule view with {profile.username} already
+            selected.
+          </p>
+          <button
+            className="button secondary"
+            onClick={() => {
+              localStorage.setItem(
+                "crewdeck.meetup.prefill",
+                JSON.stringify({ personId: profile.id, compare: true }),
+              );
+              onNavigate?.("MeetupCalendar.html?compare=1");
+            }}
+          >
+            Compare availability
+          </button>
+        </section>
+      )}
       {reporting && (
         <Modal
           title={`Report ${profile.username}`}

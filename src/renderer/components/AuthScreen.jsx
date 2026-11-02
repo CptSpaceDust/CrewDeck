@@ -1,6 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import HCaptcha from "@hcaptcha/react-hcaptcha";
-import { ArrowLeft, Eye, EyeOff, KeyRound, Mail, Sparkles } from "lucide-react";
+import {
+  ArrowLeft,
+  Eye,
+  EyeOff,
+  KeyRound,
+  Mail,
+  ShieldCheck,
+  Sparkles,
+} from "lucide-react";
 import { HCAPTCHA_HOST, HCAPTCHA_SITE_KEY, supabase } from "../lib/supabase";
 import BrandMark from "./BrandMark";
 

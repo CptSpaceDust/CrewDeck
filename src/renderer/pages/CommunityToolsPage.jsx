@@ -4,11 +4,12 @@ import {
   CalendarDays,
   CheckCircle2,
   HandHelping,
+  Plus,
   RefreshCw,
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { communityBoards } from "../lib/communityBoards";
-import { Empty, Field, Loading, PageHeader } from "../components/ui";
+import { Empty, Field, Loading, Modal, PageHeader } from "../components/ui";
 import { CommunityBoardWorkspace } from "../components/CommunityBoardWorkspace";
 
 function useCommunityRows(kind) {
@@ -37,6 +38,7 @@ function useCommunityRows(kind) {
 export function HelpRequestsPage({ user, profile }) {
   const { rows, loading, error, reload } = useCommunityRows("help");
   const [message, setMessage] = useState("");
+  const [composeOpen, setComposeOpen] = useState(false);
   async function create(event) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
@@ -51,6 +53,7 @@ export function HelpRequestsPage({ user, profile }) {
       });
       setMessage("Help request posted.");
       event.currentTarget.reset();
+      setComposeOpen(false);
       await reload();
     } catch (exception) {
       setMessage(exception.message);
@@ -74,43 +77,59 @@ export function HelpRequestsPage({ user, profile }) {
         title="Help Request Board"
         description="Ask for specific help, claim a request, and close the loop when the job is done."
         action={
-          <button className="button secondary" onClick={reload}>
-            <RefreshCw /> Refresh
-          </button>
+          <div className="button-row">
+            <button
+              className="button primary"
+              onClick={() => setComposeOpen(true)}
+            >
+              <Plus /> Post help request
+            </button>
+            <button className="button secondary" onClick={reload}>
+              <RefreshCw /> Refresh
+            </button>
+          </div>
         }
       />
-      <form className="panel community-tool-compose" onSubmit={create}>
-        <Field label="What do you need help with?">
-          <input
-            name="title"
-            required
-            minLength="3"
-            maxLength="120"
-            placeholder="Can someone test this VRChat world?"
-          />
-        </Field>
-        <Field label="Details">
-          <textarea
-            name="description"
-            required
-            minLength="3"
-            maxLength="3000"
-            rows="4"
-          />
-        </Field>
-        <Field label="Category">
-          <select name="category">
-            <option value="general">General</option>
-            <option value="vrchat">VRChat</option>
-            <option value="testing">Testing</option>
-            <option value="creative">Creative</option>
-            <option value="event">Event</option>
-            <option value="technical">Technical</option>
-          </select>
-        </Field>
-        <button className="button primary">Post request</button>
-        {message && <p className="form-message">{message}</p>}
-      </form>
+      {composeOpen && (
+        <Modal
+          title="Post a help request"
+          onClose={() => setComposeOpen(false)}
+          className="community-tool-compose-modal"
+        >
+          <form className="community-tool-compose" onSubmit={create}>
+            <Field label="What do you need help with?">
+              <input
+                name="title"
+                required
+                minLength="3"
+                maxLength="120"
+                placeholder="Can someone test this VRChat world?"
+              />
+            </Field>
+            <Field label="Details">
+              <textarea
+                name="description"
+                required
+                minLength="3"
+                maxLength="3000"
+                rows="4"
+              />
+            </Field>
+            <Field label="Category">
+              <select name="category">
+                <option value="general">General</option>
+                <option value="vrchat">VRChat</option>
+                <option value="testing">Testing</option>
+                <option value="creative">Creative</option>
+                <option value="event">Event</option>
+                <option value="technical">Technical</option>
+              </select>
+            </Field>
+            <button className="button primary">Post request</button>
+            {message && <p className="form-message">{message}</p>}
+          </form>
+        </Modal>
+      )}
       <CommunityBoardWorkspace
         kind="help"
         user={user}
@@ -173,6 +192,7 @@ export function HelpRequestsPage({ user, profile }) {
 export function BugReportsPage({ user, profile }) {
   const { rows, loading, error, reload } = useCommunityRows("bug");
   const [message, setMessage] = useState("");
+  const [composeOpen, setComposeOpen] = useState(false);
   const appVersion = window.desktop?.appVersion || "2.0.2";
   async function submit(event) {
     event.preventDefault();
@@ -224,6 +244,7 @@ export function BugReportsPage({ user, profile }) {
       });
       setMessage("Bug report sent to the Captain.");
       event.currentTarget.reset();
+      setComposeOpen(false);
       await reload();
     } catch (exception) {
       if (screenshotPath)
@@ -238,50 +259,68 @@ export function BugReportsPage({ user, profile }) {
         title="Bug Report Center"
         description="Send useful diagnostics and follow the Captain’s progress from open to fixed."
         action={
-          <button className="button secondary" onClick={reload}>
-            <RefreshCw /> Refresh
-          </button>
+          <div className="button-row">
+            <button
+              className="button primary"
+              onClick={() => setComposeOpen(true)}
+            >
+              <Plus /> Report a bug
+            </button>
+            <button className="button secondary" onClick={reload}>
+              <RefreshCw /> Refresh
+            </button>
+          </div>
         }
       />
-      <form className="panel community-tool-compose" onSubmit={submit}>
-        <div className="form-grid">
-          <Field label="Affected page">
-            <input
-              name="page_name"
-              required
-              maxLength="120"
-              placeholder="Messages"
-            />
-          </Field>
-          <Field label="Short title">
-            <input name="title" required minLength="3" maxLength="160" />
-          </Field>
-        </div>
-        <Field label="What happened?">
-          <textarea
-            name="description"
-            required
-            minLength="3"
-            maxLength="5000"
-            rows="5"
-          />
-        </Field>
-        <Field label="Screenshot (optional, up to 10 MB)">
-          <input
-            name="screenshot"
-            type="file"
-            accept="image/png,image/jpeg,image/webp,image/gif"
-          />
-        </Field>
-        <p className="micro-copy">
-          CrewDeck {appVersion} ·{" "}
-          {navigator.userAgentData?.platform || navigator.platform || "Windows"}
-        </p>
-        <button className="button primary">
-          <Bug /> Submit report
-        </button>
-        {message && <p className="form-message">{message}</p>}
-      </form>
+      {composeOpen && (
+        <Modal
+          title="Report a CrewDeck bug"
+          onClose={() => setComposeOpen(false)}
+          className="community-tool-compose-modal"
+        >
+          <form className="community-tool-compose" onSubmit={submit}>
+            <div className="form-grid">
+              <Field label="Affected page">
+                <input
+                  name="page_name"
+                  required
+                  maxLength="120"
+                  placeholder="Messages"
+                />
+              </Field>
+              <Field label="Short title">
+                <input name="title" required minLength="3" maxLength="160" />
+              </Field>
+            </div>
+            <Field label="What happened?">
+              <textarea
+                name="description"
+                required
+                minLength="3"
+                maxLength="5000"
+                rows="5"
+              />
+            </Field>
+            <Field label="Screenshot (optional, up to 10 MB)">
+              <input
+                name="screenshot"
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif"
+              />
+            </Field>
+            <p className="micro-copy">
+              CrewDeck {appVersion} ·{" "}
+              {navigator.userAgentData?.platform ||
+                navigator.platform ||
+                "Windows"}
+            </p>
+            <button className="button primary">
+              <Bug /> Submit report
+            </button>
+            {message && <p className="form-message">{message}</p>}
+          </form>
+        </Modal>
+      )}
       <CommunityBoardWorkspace
         kind="bug"
         user={user}

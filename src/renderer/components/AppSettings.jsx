@@ -113,14 +113,16 @@ function VrOverlaySettings({ user }) {
         />
         <span>Enable the desktop overlay preview</span>
       </label>
-      <label className="check-field">
-        <input
-          type="checkbox"
-          checked={value.steamvr_enabled}
-          onChange={(e) => update("steamvr_enabled", e.target.checked)}
-        />
-        <span>Connect the wrist launcher to SteamVR automatically</span>
-      </label>
+      <div className="vr-manual-connect-note">
+        <Power />
+        <div>
+          <strong>Starts only when you ask</strong>
+          <span>
+            CrewDeck will not open the SteamVR wrist launcher during app
+            startup. Use Connect to SteamVR below when you are ready.
+          </span>
+        </div>
+      </div>
       <div className="settings-grid compact">
         <Field label="Wrist">
           <select

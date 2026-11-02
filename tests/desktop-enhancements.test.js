@@ -57,6 +57,9 @@ test("desktop enhancements cover notifications, drafts, reminders, and privacy",
   );
   assert.match(startup, /startup-sequence/);
   assert.match(startup, /startup-scan-line/);
+  assert.match(startup, /startup-orbit-icons/);
+  assert.match(startup, /MessagesSquare/);
+  assert.match(startup, /RadioTower/);
   assert.doesNotMatch(startup, /Mayu|mayu/);
   assert.match(app, /<StartupScreen \/>/);
   assert.match(auth, /auth-card-\$\{mode\}/);
@@ -91,7 +94,10 @@ test("advanced messaging, meetup templates, and profile privacy are wired", () =
   assert.match(composer, /Send silently/);
   assert.match(composer, /Scheduled messages/);
   assert.match(composer, /\bTimer,\s*\n\s*Trash2,/);
-  assert.equal((messages.match(/className="conversation-items"/g) || []).length, 2);
+  assert.equal(
+    (messages.match(/className="conversation-items"/g) || []).length,
+    2,
+  );
   assert.match(styles, /\.conversation-items\s*\{[\s\S]*?overflow-y:\s*auto/);
   assert.match(meetup, /MeetupTemplateControls/);
   assert.match(meetup, /join_instructions/);

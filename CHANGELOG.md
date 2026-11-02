@@ -2,6 +2,29 @@
 
 Every published CrewDeck release is documented here and copied into its GitHub release notes.
 
+## [2.0.6] - 2026-11-01
+
+### Added
+
+- Crew profiles now show visible badges consistently, including Supporter badges and older stored badge formats.
+- Help Requests and Bug Reports now open from clear page actions in centered, dismissible Space Glass dialogs.
+
+### Changed
+
+- Community board filters, visibility controls, and long-term availability checkboxes use consistent square controls and aligned Space Glass styling.
+- Shared community boards use a single page-level refresh action, and the retired Ideas Board tutorial has been removed.
+- Guest Control Center link settings use clearer device cards, included states, usage limits, and safety controls.
+- CrewDeck’s startup experience and SteamVR launch behavior have been polished for a quieter normal startup.
+
+### Fixed
+
+- Schedule scans now preserve previously imported off-time and safely skip duplicate shifts instead of replacing earlier scans.
+- Incoming website meetup requests render correctly and refresh live for the invited member.
+- The website Control Center no longer displays two Emergency Stop controls.
+- Private Support Requests restores the website navbar, centers its dialog, and allows the close button to dismiss without triggering required-field validation.
+- Hidden attachment progress no longer leaves an empty blue bar above the website message composer.
+- Missing icon imports no longer cause the desktop app to render a blank error screen.
+
 ## [2.0.5] - 2026-11-01
 
 ### Added

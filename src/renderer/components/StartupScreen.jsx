@@ -1,4 +1,10 @@
 import BrandMark from "./BrandMark";
+import {
+  CalendarDays,
+  MessagesSquare,
+  RadioTower,
+  UsersRound,
+} from "lucide-react";
 
 export default function StartupScreen() {
   return (
@@ -10,10 +16,24 @@ export default function StartupScreen() {
     >
       <div className="startup-horizon" aria-hidden="true" />
       <section className="startup-sequence" aria-hidden="true">
+        <div className="startup-orbit-icons">
+          <span>
+            <MessagesSquare />
+          </span>
+          <span>
+            <UsersRound />
+          </span>
+          <span>
+            <CalendarDays />
+          </span>
+          <span>
+            <RadioTower />
+          </span>
+        </div>
         <div className="startup-brand-frame">
           <BrandMark />
+          <div className="startup-scan-line" />
         </div>
-        <div className="startup-scan-line" />
         <div className="startup-progress">
           <i />
           <i />

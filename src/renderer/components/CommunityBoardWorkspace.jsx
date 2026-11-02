@@ -7,7 +7,6 @@ import {
   GalleryHorizontal,
   Link2,
   List,
-  RefreshCw,
   Users,
 } from "lucide-react";
 import { communityBoards } from "../lib/communityBoards";
@@ -121,16 +120,9 @@ export function CommunityBoardWorkspace({ kind, user, profile, onChanged }) {
           <span className="eyebrow">Shared board tools</span>
           <h2>Organize {LABELS[kind].toLowerCase()}</h2>
         </div>
-        <button
-          className="icon-button"
-          onClick={load}
-          aria-label="Refresh board tools"
-        >
-          <RefreshCw className={loading ? "spin" : ""} />
-        </button>
       </header>
       <div className="board-workspace-controls">
-        <label>
+        <label className="board-filter-field">
           Status
           <select
             value={status}
@@ -142,7 +134,7 @@ export function CommunityBoardWorkspace({ kind, user, profile, onChanged }) {
             ))}
           </select>
         </label>
-        <label>
+        <label className="board-filter-field">
           Tag
           <select value={tag} onChange={(event) => setTag(event.target.value)}>
             <option value="all">All tags</option>
@@ -168,7 +160,7 @@ export function CommunityBoardWorkspace({ kind, user, profile, onChanged }) {
             </button>
           ))}
         </div>
-        <label className="check-field">
+        <label className="check-field board-visibility-toggle">
           <input
             type="checkbox"
             checked={preference.show_resolved}
@@ -178,7 +170,7 @@ export function CommunityBoardWorkspace({ kind, user, profile, onChanged }) {
           />
           <span>Resolved</span>
         </label>
-        <label className="check-field">
+        <label className="check-field board-visibility-toggle">
           <input
             type="checkbox"
             checked={preference.show_archived}

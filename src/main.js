@@ -723,7 +723,9 @@ function startSteamVrOverlay(hand = overlayState.wristHand || "left") {
           steamVrError: event.error,
         });
       } else if (event.type === "warning") {
-        updateSteamVrState({ steamVrError: event.error || "SteamVR overlay warning." });
+        updateSteamVrState({
+          steamVrError: event.error || "SteamVR overlay warning.",
+        });
       } else if (event.type === "mouse" || event.type === "scroll") {
         sendVrInput(event.surface, event);
       }
@@ -981,7 +983,6 @@ function setupIpc() {
       overlayState = { ...overlayState, wristHand: value.wrist_hand };
       sendVrCommand({ type: "set-hand", hand: value.wrist_hand });
     }
-    if (value.steamvr_enabled) startSteamVrOverlay(value.wrist_hand);
     if (value.steamvr_enabled === false) stopSteamVrOverlay();
     return { ok: true };
   });

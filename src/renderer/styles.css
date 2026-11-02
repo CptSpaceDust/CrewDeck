@@ -6592,76 +6592,159 @@ html[data-motion="full"] dialog {
 
 /* Crisp CrewDeck boot sequence */
 .startup-screen {
+  position: relative;
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
   background:
     radial-gradient(
-      circle at 50% 50%,
-      rgba(35, 95, 155, 0.17),
-      transparent 270px
+      circle at 50% 48%,
+      rgba(42, 136, 210, 0.22),
+      transparent 22rem
     ),
-    #050914;
+    radial-gradient(
+      circle at 18% 12%,
+      rgba(78, 69, 202, 0.14),
+      transparent 28rem
+    ),
+    linear-gradient(145deg, #030711, #071023 56%, #08071a);
 }
 .startup-horizon {
   position: absolute;
-  inset: 50% 0 auto;
+  inset: 50% -10% auto;
   height: 1px;
   background: linear-gradient(
     90deg,
     transparent,
-    rgba(107, 201, 255, 0.12),
-    rgba(107, 201, 255, 0.58),
-    rgba(167, 126, 255, 0.35),
+    rgba(107, 201, 255, 0.08),
+    rgba(107, 201, 255, 0.5),
+    rgba(171, 126, 255, 0.42),
     transparent
   );
-  box-shadow: 0 0 28px rgba(90, 184, 255, 0.24);
-  animation: boot-horizon 2.4s ease both;
+  box-shadow: 0 0 42px rgba(90, 184, 255, 0.28);
+  animation: boot-horizon 2.6s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 .startup-sequence {
   position: relative;
-  width: 170px;
+  width: min(330px, 78vw);
+  aspect-ratio: 1;
   display: grid;
   place-items: center;
-  gap: 24px;
+  isolation: isolate;
+  animation: boot-sequence-enter 700ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 .startup-brand-frame {
-  width: 104px;
-  height: 104px;
+  position: relative;
+  width: 118px;
+  height: 118px;
   display: grid;
   place-items: center;
-  padding: 14px;
-  border: 1px solid rgba(128, 210, 255, 0.52);
-  border-radius: 25px;
-  background: rgba(10, 24, 47, 0.88);
+  padding: 18px;
+  overflow: hidden;
+  border: 1px solid rgba(139, 218, 255, 0.58);
+  border-radius: 31px;
+  background: linear-gradient(
+    145deg,
+    rgba(20, 57, 100, 0.94),
+    rgba(12, 18, 48, 0.96)
+  );
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.1),
-    0 18px 55px rgba(0, 0, 0, 0.45),
-    0 0 54px rgba(77, 170, 255, 0.32);
-  animation: boot-mark 1s cubic-bezier(0.16, 1, 0.3, 1) both;
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    inset 0 -20px 42px rgba(81, 51, 179, 0.14),
+    0 22px 64px rgba(0, 0, 0, 0.48),
+    0 0 72px rgba(77, 180, 255, 0.32);
+  animation: boot-mark 2.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+  z-index: 3;
 }
 .startup-brand-frame svg,
 .startup-brand-frame img {
   width: 100%;
   height: 100%;
-  filter: brightness(1.35) drop-shadow(0 0 12px rgba(89, 198, 255, 0.42));
+  filter: brightness(1.42) drop-shadow(0 0 15px rgba(89, 198, 255, 0.5));
+  animation: boot-logo-pulse 1.8s ease-in-out 700ms infinite alternate;
 }
 .startup-scan-line {
   position: absolute;
-  top: 0;
-  width: 128px;
+  left: -15%;
+  top: 8%;
+  width: 130%;
   height: 2px;
   background: linear-gradient(90deg, transparent, #8fdcff, transparent);
-  filter: drop-shadow(0 0 7px #70c8ff);
-  animation: boot-scan 1.7s ease-in-out infinite;
+  filter: drop-shadow(0 0 8px #70c8ff);
+  animation: boot-scan 1.9s ease-in-out 450ms infinite;
+  z-index: 2;
+}
+.startup-orbit-icons {
+  position: absolute;
+  inset: 0;
+  animation: boot-orbit-turn 11s linear infinite;
+}
+.startup-orbit-icons > span {
+  position: absolute;
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(112, 204, 255, 0.3);
+  border-radius: 15px;
+  color: #9cddff;
+  background: linear-gradient(
+    145deg,
+    rgba(16, 45, 79, 0.92),
+    rgba(11, 18, 45, 0.95)
+  );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 12px 30px rgba(0, 0, 0, 0.3),
+    0 0 24px rgba(66, 178, 241, 0.12);
+  opacity: 0;
+  animation:
+    boot-node-arrive 650ms cubic-bezier(0.16, 1, 0.3, 1) forwards,
+    boot-node-counterturn 11s linear infinite;
+}
+.startup-orbit-icons svg {
+  width: 21px;
+  height: 21px;
+}
+.startup-orbit-icons > span:nth-child(1) {
+  left: 50%;
+  top: 1%;
+  margin-left: -24px;
+  animation-delay: 120ms, 0ms;
+}
+.startup-orbit-icons > span:nth-child(2) {
+  right: 2%;
+  top: 50%;
+  margin-top: -24px;
+  animation-delay: 260ms, 0ms;
+}
+.startup-orbit-icons > span:nth-child(3) {
+  left: 50%;
+  bottom: 1%;
+  margin-left: -24px;
+  animation-delay: 400ms, 0ms;
+}
+.startup-orbit-icons > span:nth-child(4) {
+  left: 2%;
+  top: 50%;
+  margin-top: -24px;
+  animation-delay: 540ms, 0ms;
 }
 .startup-progress {
-  width: 150px;
+  position: absolute;
+  left: 50%;
+  bottom: -16px;
+  width: 176px;
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   gap: 5px;
+  transform: translateX(-50%);
 }
 .startup-progress i {
-  height: 3px;
+  height: 4px;
   border-radius: 99px;
-  background: #2d5a80;
+  background: rgba(49, 91, 128, 0.58);
   animation: boot-segment 1.25s ease-in-out infinite;
 }
 .startup-progress i:nth-child(2) {
@@ -6677,19 +6760,24 @@ html[data-motion="full"] dialog {
   animation-delay: 0.48s;
 }
 @keyframes boot-mark {
-  from {
+  0% {
     opacity: 0;
-    transform: translateY(14px) scale(0.92);
+    transform: scale(0.35) rotate(-8deg);
+    filter: blur(10px);
   }
-  to {
+  38% {
     opacity: 1;
-    transform: none;
+    transform: scale(1.08) rotate(0);
+    filter: blur(0);
+  }
+  100% {
+    transform: scale(1);
   }
 }
 @keyframes boot-scan {
   0%,
   100% {
-    transform: translateY(8px);
+    transform: translateY(0);
     opacity: 0;
   }
   25% {
@@ -6699,7 +6787,7 @@ html[data-motion="full"] dialog {
     opacity: 0.85;
   }
   100% {
-    transform: translateY(86px);
+    transform: translateY(100px);
     opacity: 0;
   }
 }
@@ -6727,6 +6815,44 @@ html[data-motion="full"] dialog {
   to {
     opacity: 0.55;
     transform: scaleX(1);
+  }
+}
+@keyframes boot-sequence-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.72);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes boot-logo-pulse {
+  to {
+    transform: scale(1.06);
+    filter: brightness(1.65) drop-shadow(0 0 22px rgba(89, 198, 255, 0.68));
+  }
+}
+@keyframes boot-orbit-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes boot-node-counterturn {
+  to {
+    transform: rotate(-360deg);
+  }
+}
+@keyframes boot-node-arrive {
+  from {
+    opacity: 0;
+    scale: 0.45;
+    filter: blur(5px);
+  }
+  to {
+    opacity: 1;
+    scale: 1;
+    filter: blur(0);
   }
 }
 
@@ -7906,6 +8032,17 @@ html[data-motion="full"] dialog {
   gap: 14px;
   padding: 20px;
 }
+.community-tool-compose-modal {
+  width: min(720px, 100%);
+  max-height: min(820px, calc(100vh - 60px));
+  overflow: auto;
+}
+.community-tool-compose-modal .community-tool-compose {
+  padding: 4px 0 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
 .community-tool-grid {
   display: grid;
   gap: 14px;
@@ -8502,8 +8639,28 @@ html[data-color-indicators="labeled"] .presence-chip::before {
   font-size: 0.76rem;
   font-weight: 800;
 }
+.board-filter-field {
+  min-width: 170px;
+}
 .board-workspace-controls select {
   min-width: 145px;
+  min-height: 44px;
+  padding: 10px 40px 10px 12px;
+  border: 1px solid rgba(114, 201, 255, 0.36);
+  border-radius: 12px;
+  color: #edf8ff;
+  background-color: #07172e;
+  font: inherit;
+  color-scheme: dark;
+}
+.board-visibility-toggle {
+  min-width: 104px;
+  min-height: 66px;
+  justify-content: center;
+  padding: 10px 14px;
+  color: #cfe4f6;
+  font-weight: 800;
+  text-align: center;
 }
 .board-workflow-editor {
   overflow: hidden;
@@ -9778,14 +9935,14 @@ html[data-vr-surface] #root {
 .vr-panel-anchor {
   width: 118px;
   min-height: 42px;
-  border: 1px solid rgba(108, 198, 255, .42);
+  border: 1px solid rgba(108, 198, 255, 0.42);
   border-radius: 12px;
   color: #e9f7ff;
   background: #08172e;
 }
 
 .vr-wrist-launcher .vr-wrist-stop {
-  border-color: rgba(255, 79, 105, .9);
+  border-color: rgba(255, 79, 105, 0.9);
   background: linear-gradient(145deg, #63142a, #2a0b17);
 }
 
@@ -9793,30 +9950,79 @@ html[data-vr-surface] #root {
   min-height: 100%;
   padding: 28px;
   color: #eff9ff;
-  background: radial-gradient(circle at 50% 0, rgba(43, 120, 185, .2), transparent 44%), #050d1c;
+  background:
+    radial-gradient(circle at 50% 0, rgba(43, 120, 185, 0.2), transparent 44%),
+    #050d1c;
 }
-.vr-control-center > header { display: flex; justify-content: space-between; align-items: center; gap: 20px; }
-.vr-control-center h1 { margin: 4px 0 0; font-size: 2rem; }
-.vr-control-center small { color: #79cfff; letter-spacing: .15em; font-weight: 900; }
-.vr-control-center > header > span { padding: 9px 14px; border-radius: 999px; background: #102948; color: #aee0ff; }
+.vr-control-center > header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+}
+.vr-control-center h1 {
+  margin: 4px 0 0;
+  font-size: 2rem;
+}
+.vr-control-center small {
+  color: #79cfff;
+  letter-spacing: 0.15em;
+  font-weight: 900;
+}
+.vr-control-center > header > span {
+  padding: 9px 14px;
+  border-radius: 999px;
+  background: #102948;
+  color: #aee0ff;
+}
 .vr-device-radial {
   display: flex;
   justify-content: center;
   gap: 14px;
   margin: 28px 0;
   padding: 18px;
-  border: 1px solid rgba(99, 188, 249, .28);
+  border: 1px solid rgba(99, 188, 249, 0.28);
   border-radius: 999px;
-  background: rgba(8, 27, 54, .78);
+  background: rgba(8, 27, 54, 0.78);
 }
-.vr-device-radial button { min-width: 150px; min-height: 72px; border-radius: 999px; }
-.vr-device-radial button.active { box-shadow: 0 0 0 3px #72d3ff, 0 0 30px #2f9fe955; background: #164c7c; }
-.vr-control-sliders { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
-.vr-control-sliders label { padding: 18px; border-radius: 20px; background: #0d223f; font-size: 1.1rem; }
-.vr-control-sliders b { float: right; color: #8dd9ff; }
-.vr-control-sliders input { width: 100%; margin-top: 18px; }
-.vr-control-buttons { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 22px; }
-.vr-control-buttons button, .vr-control-emergency {
+.vr-device-radial button {
+  min-width: 150px;
+  min-height: 72px;
+  border-radius: 999px;
+}
+.vr-device-radial button.active {
+  box-shadow:
+    0 0 0 3px #72d3ff,
+    0 0 30px #2f9fe955;
+  background: #164c7c;
+}
+.vr-control-sliders {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+}
+.vr-control-sliders label {
+  padding: 18px;
+  border-radius: 20px;
+  background: #0d223f;
+  font-size: 1.1rem;
+}
+.vr-control-sliders b {
+  float: right;
+  color: #8dd9ff;
+}
+.vr-control-sliders input {
+  width: 100%;
+  margin-top: 18px;
+}
+.vr-control-buttons {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-top: 22px;
+}
+.vr-control-buttons button,
+.vr-control-emergency {
   min-height: 96px;
   border: 1px solid #3e81b9;
   border-radius: 22px;
@@ -9825,9 +10031,23 @@ html[data-vr-surface] #root {
   font-size: 1.12rem;
   font-weight: 900;
 }
-.vr-control-buttons button.shock { border-color: #ff657e; background: linear-gradient(145deg, #64172b, #280a16); }
-.vr-control-emergency { width: 100%; margin-top: 20px; min-height: 82px; border-color: #ff3b5d; background: #8a0e2a; }
-.vr-control-denied { display: grid; place-items: center; min-height: 100%; text-align: center; }
+.vr-control-buttons button.shock {
+  border-color: #ff657e;
+  background: linear-gradient(145deg, #64172b, #280a16);
+}
+.vr-control-emergency {
+  width: 100%;
+  margin-top: 20px;
+  min-height: 82px;
+  border-color: #ff3b5d;
+  background: #8a0e2a;
+}
+.vr-control-denied {
+  display: grid;
+  place-items: center;
+  min-height: 100%;
+  text-align: center;
+}
 .vr-panel-app {
   height: 100%;
   padding-top: 64px;
@@ -10373,6 +10593,22 @@ input[type="checkbox"]:checked {
 input[type="checkbox"]:focus-visible {
   outline: 2px solid #b8eaff;
   outline-offset: 2px;
+}
+
+/* Long-term availability is a regular, centered square checkbox. */
+.availability-long-toggle > input {
+  position: static;
+  inline-size: 20px !important;
+  block-size: 20px !important;
+  min-inline-size: 20px !important;
+  min-block-size: 20px !important;
+  max-inline-size: 20px;
+  max-block-size: 20px;
+  border-radius: 5px;
+  transform: none;
+}
+.availability-long-toggle > input::after {
+  content: none;
 }
 
 .notification-filters {

@@ -536,29 +536,6 @@ export function IdeasPage({ user, profile }) {
         }
       />
       {message && <p className="form-message">{message}</p>}
-      <section
-        className="panel ideas-guide"
-        aria-label="How the ideas board works"
-      >
-        <div>
-          <strong>1. Share</strong>
-          <span>Explain the problem and the change you want.</span>
-        </div>
-        <div>
-          <strong>2. Vote</strong>
-          <span>Vote for ideas you would actually use.</span>
-        </div>
-        <div>
-          <strong>3. Follow</strong>
-          <span>Status labels show what is being reviewed or built.</span>
-        </div>
-        <div className="ideas-status-key">
-          <span>Pending</span>
-          <span>Considering</span>
-          <span>Working On</span>
-          <span>Completed</span>
-        </div>
-      </section>
       <CommunityBoardWorkspace
         kind="idea"
         user={user}
