@@ -20,7 +20,6 @@ test("CrewDeck routes authorized members to the Control Center", () => {
   );
   assert.doesNotMatch(sidebarAccess, /rank.*captain/i);
 });
-
 test("Control Center verifies auth, Trusted Person badge, and Safe Mode", () => {
   const page = read("src", "renderer", "pages", "ControlCenterPage.jsx");
   assert.match(page, /supabase\.auth\.getUser\(\)/);
@@ -80,28 +79,3 @@ test("Control Center includes device operations and real dials", () => {
     assert.ok(page.includes(safetyFeature), `Missing ${safetyFeature}`);
 });
 
-test("SteamVR reports ready only after the wrist surface is visible", () => {
-  const main = read("src", "main.js");
-  const native = read("native", "CrewDeck.SteamVrOverlay", "Program.cs");
-  assert.match(main, /event\.type === "visible"/);
-  assert.match(native, /PositionWristOrFallback/);
-  assert.match(native, /SetOverlayRaw/);
-  assert.match(native, /type = "visible"/);
-  assert.match(native, /SetOverlayAlpha\(_wrist, 1f\)/);
-});
-
-test("SteamVR never opens automatically with CrewDeck startup", () => {
-  const main = read("src", "main.js");
-  const app = read("src", "renderer", "App.jsx");
-  const settings = read("src", "renderer", "components", "AppSettings.jsx");
-  assert.doesNotMatch(
-    main,
-    /if \(value\.steamvr_enabled\) startSteamVrOverlay/,
-  );
-  assert.match(app, /steamvr_enabled: false/);
-  assert.match(settings, /Starts only when you ask/);
-  assert.doesNotMatch(
-    settings,
-    /Connect the wrist launcher to SteamVR automatically/,
-  );
-});

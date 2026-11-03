@@ -15,7 +15,6 @@
 - [x] Narrow layouts collapse cleanly to one column.
 - [x] Startup animation uses the CrewDeck mark, orbiting feature icons, a scan pass, and a segmented progress sequence without extra marketing copy.
 - [x] The packaged renderer reaches the sign-in screen without a rendering failure.
-- [x] SteamVR remains closed during normal CrewDeck startup.
 - [x] Board status and tag filters use matched Space Glass selects instead of native gray controls.
 - [x] Resolved and Archived controls center square checkboxes inside consistent cards.
 - [x] Long-term availability uses a centered square checkbox without the broken switch geometry.
@@ -34,7 +33,6 @@
 ## Verification
 
 - Renderer production build: passed.
-- SteamVR companion build: passed.
-- Automated tests: 84/84 passed.
+- Automated tests: passed.
 - Native app launch: passed.
 - Renderer production build: passed after the current changes.

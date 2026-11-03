@@ -10,10 +10,9 @@
     "dev": "concurrently -k \"vite --host 127.0.0.1\" \"wait-on http://127.0.0.1:5173 && electron . --dev\"",
     "build:renderer": "vite build",
     "test": "node --test tests/*.test.js",
-    "build:steamvr": "dotnet publish native/CrewDeck.SteamVrOverlay/CrewDeck.SteamVrOverlay.csproj -c Release -o build/steamvr-overlay",
-    "pack": "npm run build:renderer && npm run build:steamvr && electron-builder --dir",
+    "pack": "npm run build:renderer && electron-builder --dir",
     "build:installer-ui": "powershell -NoProfile -NonInteractive -File build/build-installer-ui.ps1",
-    "dist": "npm run build:renderer && npm run build:steamvr && npm run build:installer-ui && electron-builder --win nsis"
+    "dist": "npm run build:renderer && npm run build:installer-ui && electron-builder --win nsis"
   },
   "dependencies": {
     "@hcaptcha/react-hcaptcha": "^1.12.1",
@@ -44,15 +43,6 @@
       "assets/**/*",
       "src/**/*",
       "package.json"
-    ],
-    "extraResources": [
-      {
-        "from": "build/steamvr-overlay",
-        "to": "steamvr-overlay",
-        "filter": [
-          "**/*"
-        ]
-      }
     ],
     "win": {
       "icon": "assets/icon.png",

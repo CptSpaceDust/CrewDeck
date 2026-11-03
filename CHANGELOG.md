@@ -4,6 +4,10 @@ Every published CrewDeck release is documented here and copied into its GitHub r
 
 ## [2.0.7] - 2026-11-02
 
+### Removed
+
+- Removed the SteamVR overlay, wrist launcher, VR panel, native companion, settings, shortcuts, and installer payload.
+
 ### Changed
 
 - Restyled voice-message players to match the Space Glass conversation interface.

@@ -1,9 +1,6 @@
 import React, { Component } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
-import VrOverlayWindow from "./components/VrOverlayWindow";
-import VrWristLauncher from "./components/VrWristLauncher";
-import VrPanelShell from "./components/VrPanelShell";
 import "./styles.css";
 import "./space-glass.css";
 import { applyPreferences } from "./lib/preferences";
@@ -94,45 +91,16 @@ if (!window.desktop) {
       lockNow: async () => ({ ok: false }),
       onState: () => () => {},
     },
-    overlay: {
-      getState: async () => ({}),
-      open: async () => ({ ok: false }),
-      openSteamVr: async () => ({
-        ok: false,
-        error: "SteamVR integration is available in the desktop build.",
-      }),
-      stopSteamVr: async () => ({ ok: true }),
-      showPanel: async () => ({ ok: false }),
-      nativeCommand: async () => ({ ok: false }),
-      close: async () => ({ ok: true }),
-      toggle: async () => ({ ok: true }),
-      setPreferences: async () => ({ ok: true }),
-      update: () => {},
-      onState: () => () => {},
-      command: () => {},
-      onCommand: () => () => {},
-    },
   };
 }
 
 const rootNode = document.getElementById("root");
 if (!rootNode) throw new Error("CrewDeck root element is missing.");
 
-const surface = new URLSearchParams(location.search).get("vrSurface");
-if (surface) document.documentElement.dataset.vrSurface = surface;
-
 createRoot(rootNode).render(
   <RootErrorBoundary>
     <React.StrictMode>
-      {surface === "wrist" ? (
-        <VrWristLauncher />
-      ) : surface === "panel" ? (
-        <VrPanelShell />
-      ) : new URLSearchParams(location.search).get("overlay") === "1" ? (
-        <VrOverlayWindow />
-      ) : (
-        <App />
-      )}
+      <App />
     </React.StrictMode>
   </RootErrorBoundary>,
 );

@@ -38,23 +38,6 @@ contextBridge.exposeInMainWorld("desktop", {
       ipcRenderer.invoke("desktop:set-global-ptt", accelerator),
     onToggle: (callback) => subscribe("desktop:global-ptt", callback),
   },
-  overlay: {
-    getState: () => ipcRenderer.invoke("overlay:get-state"),
-    open: () => ipcRenderer.invoke("overlay:open"),
-    openSteamVr: () => ipcRenderer.invoke("overlay:open-steamvr"),
-    stopSteamVr: () => ipcRenderer.invoke("overlay:stop-steamvr"),
-    showPanel: (route) => ipcRenderer.invoke("overlay:show-panel", route),
-    nativeCommand: (value) =>
-      ipcRenderer.invoke("overlay:native-command", value),
-    close: () => ipcRenderer.invoke("overlay:close"),
-    toggle: () => ipcRenderer.invoke("overlay:toggle"),
-    setPreferences: (value) =>
-      ipcRenderer.invoke("overlay:set-preferences", value),
-    update: (value) => ipcRenderer.send("overlay:update", value),
-    onState: (callback) => subscribe("overlay:state", callback),
-    command: (value) => ipcRenderer.send("overlay:command", value),
-    onCommand: (callback) => subscribe("overlay:command", callback),
-  },
   onDeepLink: (callback) => subscribe("auth:deep-link", callback),
   screenShare: {
     listSources: () => ipcRenderer.invoke("screen-share:list-sources"),

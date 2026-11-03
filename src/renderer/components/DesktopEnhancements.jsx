@@ -291,9 +291,8 @@ export function WhatsNew() {
             <div>
               <strong>Changed</strong>
               <p>
-                New device safety limits start at 100 intensity and 30 seconds,
-                and SteamVR only reports the wrist launcher as connected after
-                its first visible frame is accepted.
+                Voice messages and shared files now use clearer Space Glass
+                controls, including a dedicated Open content action.
               </p>
             </div>
           </article>
@@ -302,9 +301,8 @@ export function WhatsNew() {
             <div>
               <strong>Fixed</strong>
               <p>
-                Link copying now works when direct clipboard access is blocked,
-                and the SteamVR wrist launcher has a tracked-headset fallback
-                plus clearer startup and rendering errors.
+                Text documents now load directly in CrewDeck, and document
+                previews open in a wider, more reliable viewer.
               </p>
             </div>
           </article>

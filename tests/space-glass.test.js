@@ -55,6 +55,6 @@ test("What’s Changed contains Added, Changed, and Fixed summaries", () => {
   assert.match(source, /<strong>Fixed<\/strong>/);
   assert.match(source, /guest Control Center links/);
   assert.match(source, /without a CrewDeck login/);
-  assert.match(source, /100 intensity and 30 seconds/);
-  assert.match(source, /SteamVR/);
+  assert.match(source, /Voice messages and shared files/);
+  assert.match(source, /document\s+previews open in a wider/i);
 });

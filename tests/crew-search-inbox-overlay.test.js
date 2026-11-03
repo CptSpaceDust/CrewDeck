@@ -30,14 +30,8 @@ test("desktop Crew Inbox is realtime and actionable", () => {
   assert.match(ui, /Join call/);
   assert.match(ui, /Snooze|1 hour/);
 });
-test("desktop internal previews and VR overlay use private live state", () => {
-  const previews = read("src/renderer/components/InternalLinkPreviews.jsx"),
-    overlay = read("src/renderer/components/VrOverlayWindow.jsx"),
-    main = read("src/main.js");
+test("desktop internal previews use private live state", () => {
+  const previews = read("src/renderer/components/InternalLinkPreviews.jsx");
   assert.match(previews, /postgres_changes/);
   assert.match(previews, /Content unavailable|content unavailable/i);
-  assert.match(overlay, /streamer_safe/);
-  assert.match(overlay, /vr_overlay_signals/);
-  assert.match(main, /alwaysOnTop:\s*true/);
-  assert.match(main, /overlay:command/);
 });

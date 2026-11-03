@@ -150,7 +150,6 @@ export default function App() {
   const [toast, setToast] = useState(null);
   const [incomingCall, setIncomingCall] = useState(null);
   const [activeCall, setActiveCall] = useState(null);
-  const [overlayPrefs, setOverlayPrefs] = useState(null);
   const incomingCallRef = useRef(null);
   useMessageAlerts(mfaRequired ? null : session?.user?.id);
   useMeetupReminders(mfaRequired ? null : session?.user?.id);
@@ -304,66 +303,13 @@ export default function App() {
   }, []);
   useEffect(() => {
     incomingCallRef.current = incomingCall;
-    const hideRequest =
-      overlayPrefs?.respect_dnd && isQuietTime(getPreferences());
-    window.desktop?.overlay?.update?.({
-      request:
-        incomingCall && !hideRequest
-          ? { id: incomingCall.id, name: incomingCall.title || "Crew member" }
-          : null,
-    });
     if (!incomingCall) return;
     const timeout = window.setTimeout(() => {
       stopRingtone();
       setIncomingCall(null);
     }, 90000);
     return () => window.clearTimeout(timeout);
-  }, [incomingCall, overlayPrefs?.respect_dnd]);
-  useEffect(
-    () =>
-      window.desktop?.overlay?.onCommand?.((command) => {
-        if (command?.type === "request" && command.response === "snooze") {
-          stopRingtone();
-          setIncomingCall(null);
-          window.desktop.overlay.update({ request: null });
-        } else if (command?.type === "request")
-          closeIncomingCall(command.response === "accept");
-        if (command?.type === "navigate" && command.route)
-          navigate(command.route);
-      }),
-    [session?.user?.id, profile?.username],
-  );
-  useEffect(() => {
-    if (!session?.user?.id) return;
-    let pressed = false,
-      timer;
-    supabase
-      .from("vr_overlay_preferences")
-      .select("*")
-      .eq("user_id", session.user.id)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (!data) return;
-        setOverlayPrefs(data);
-        if (data.enabled)
-          window.desktop.overlay.setPreferences({
-            ...data,
-            steamvr_enabled: false,
-          });
-        if (data.enabled && data.state !== "hidden") {
-          window.desktop.overlay.open();
-          timer = window.setInterval(() => {
-            const button = Number(data.controller_button ?? 8),
-              down = [...(navigator.getGamepads?.() || [])].some(
-                (pad) => pad?.buttons?.[button]?.pressed,
-              );
-            if (down && !pressed) window.desktop.overlay.toggle();
-            pressed = down;
-          }, 100);
-        }
-      });
-    return () => timer && window.clearInterval(timer);
-  }, [session?.user?.id]);
+  }, [incomingCall]);
   useEffect(() => {
     if (!toast) return;
     const timeout = window.setTimeout(() => setToast(null), 5000);
