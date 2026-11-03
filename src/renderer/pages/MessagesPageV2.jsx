@@ -1700,6 +1700,14 @@ function DirectMessagesPage({
   const [slowUntil, setSlowUntil] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const dmBurstRef = useRef(new Map());
+  useEffect(() => {
+    if (!notice) return;
+    window.dispatchEvent(
+      new CustomEvent("crewdeck-toast", {
+        detail: { title: "Messages", message: notice },
+      }),
+    );
+  }, [notice]);
   const endRef = useRef();
   const [conversationFeatures, reloadConversationFeatures] =
     useConversationFeatures("dm", selected?.id, user.id);
@@ -2138,7 +2146,6 @@ function DirectMessagesPage({
           {showArchived ? "Back to active" : "Archived"}
         </button>
       </div>
-      {notice && <p className="form-message">{notice}</p>}
       {requests.length > 0 && (
         <section className="panel request-panel">
           <h3>Message requests ({requests.length})</h3>
@@ -3379,6 +3386,14 @@ function GroupMessagesPage({
   const [refreshing, setRefreshing] = useState(false);
   const endRef = useRef();
   useEffect(() => {
+    if (!notice) return;
+    window.dispatchEvent(
+      new CustomEvent("crewdeck-toast", {
+        detail: { title: "Group messages", message: notice },
+      }),
+    );
+  }, [notice]);
+  useEffect(() => {
     const refresh = () => setReadRevision((value) => value + 1);
     window.addEventListener("message-reads", refresh);
     return () => window.removeEventListener("message-reads", refresh);
@@ -3836,7 +3851,6 @@ function GroupMessagesPage({
           {showArchived ? "Back to active" : "Archived"}
         </button>
       </div>
-      {notice && <p className="form-message">{notice}</p>}
       {invites.length > 0 && (
         <section className="panel group-invite-panel">
           <header>

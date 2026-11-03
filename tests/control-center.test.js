@@ -6,19 +6,14 @@ const test = require("node:test");
 const root = path.join(__dirname, "..");
 const read = (...parts) => fs.readFileSync(path.join(root, ...parts), "utf8");
 
-test("CrewDeck routes authorized members to the Control Center", () => {
+test("CrewDeck routes every member to the Control Center entry point", () => {
   const app = read("src", "renderer", "App.jsx");
   const sidebar = read("src", "renderer", "components", "Sidebar.jsx");
   assert.match(app, /import ControlCenterPage/);
   assert.match(app, /case "control-center"/);
   assert.match(app, /<ControlCenterPage \{\.\.\.props\} \/>/);
   assert.match(sidebar, /Control Center/);
-  assert.match(sidebar, /trusted person/);
-  const sidebarAccess = sidebar.slice(
-    sidebar.indexOf("function controlCenterAccess"),
-    sidebar.indexOf("const groups"),
-  );
-  assert.doesNotMatch(sidebarAccess, /rank.*captain/i);
+  assert.doesNotMatch(sidebar, /controlCenterAccess/);
 });
 test("Control Center verifies auth, Trusted Person badge, and Safe Mode", () => {
   const page = read("src", "renderer", "pages", "ControlCenterPage.jsx");
@@ -32,7 +27,8 @@ test("Control Center verifies auth, Trusted Person badge, and Safe Mode", () => 
   assert.doesNotMatch(pageAccess, /rank.*captain/i);
   assert.match(page, /from\("site_settings"\)/);
   assert.match(page, /safe_mode/);
-  assert.match(page, /Control Center access is required|Access denied/);
+  assert.match(page, /Enter a Control Center code/);
+  assert.match(page, /redeem_code/);
 });
 
 test("Control Center includes device operations and real dials", () => {
@@ -75,7 +71,7 @@ test("Control Center includes device operations and real dials", () => {
     "Only the Captain can change device safety limits",
     "Maximum uses",
     "copyControlText",
+    "Quick access code",
   ])
     assert.ok(page.includes(safetyFeature), `Missing ${safetyFeature}`);
 });
-

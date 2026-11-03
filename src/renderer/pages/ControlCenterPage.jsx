@@ -31,7 +31,6 @@ const initialSafety = () => ({
   max_duration: 30,
   high_intensity_threshold: 40,
   cooldown_seconds: 3,
-  max_intensity_step: 15,
   hold_milliseconds: 800,
   require_hold_to_shock: true,
 });
@@ -131,6 +130,14 @@ function canUseControlCenter(profile) {
   );
 }
 
+function formatAccessCode(value) {
+  const code = String(value || "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "")
+    .slice(0, 8);
+  return code.length > 4 ? `${code.slice(0, 4)}-${code.slice(4)}` : code;
+}
+
 async function functionError(error, fallback) {
   try {
     const body = await error?.context?.json?.();
@@ -226,6 +233,90 @@ function Dial({
   );
 }
 
+function GuestDeviceCard({ device, onCommand }) {
+  const [intensity, setIntensity] = useState(
+    Math.min(10, Number(device.max_intensity) || 100),
+  );
+  const [duration, setDuration] = useState(
+    Math.min(1, Number(device.max_duration) || 30),
+  );
+  const [busy, setBusy] = useState(false);
+  const run = async (action) => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await onCommand(action, intensity, duration);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <article className="panel control-device-card guest-device-card">
+      <header>
+        <div>
+          <span className="eyebrow">Shared device</span>
+          <h2>{device.shocker_name || "Control module"}</h2>
+        </div>
+        <b>
+          {device.max_intensity}% · {device.max_duration}s max
+        </b>
+      </header>
+      <label className="guest-control-slider">
+        <span>
+          Intensity <output>{intensity}%</output>
+        </span>
+        <input
+          type="range"
+          min="1"
+          max={device.max_intensity}
+          value={intensity}
+          onChange={(event) => setIntensity(Number(event.target.value))}
+        />
+      </label>
+      <label className="guest-control-slider">
+        <span>
+          Duration <output>{duration}s</output>
+        </span>
+        <input
+          type="range"
+          min="0.3"
+          max={device.max_duration}
+          step="0.1"
+          value={duration}
+          onChange={(event) => setDuration(Number(event.target.value))}
+        />
+      </label>
+      <div className="control-action-row">
+        <button disabled={busy} onClick={() => run("vibrate")}>
+          Vibrate
+        </button>
+        {device.require_hold_to_shock === false ? (
+          <button
+            className="danger"
+            disabled={busy}
+            onClick={() => run("shock")}
+          >
+            Shock
+          </button>
+        ) : (
+          <HoldCommandButton
+            className="danger"
+            disabled={busy}
+            holdMs={device.hold_milliseconds || 800}
+            onActivate={() => run("shock")}
+            onRelease={() => onCommand("stop", 0, 0)}
+          >
+            Hold to shock
+          </HoldCommandButton>
+        )}
+        <button disabled={busy} onClick={() => run("stop")}>
+          Stop
+        </button>
+      </div>
+    </article>
+  );
+}
+
 export default function ControlCenterPage({ user, profile }) {
   const [access, setAccess] = useState("checking");
   const [devices, setDevices] = useState([]);
@@ -240,6 +331,11 @@ export default function ControlCenterPage({ user, profile }) {
   const [pendingWarning, setPendingWarning] = useState(null);
   const [emergencyActive, setEmergencyActive] = useState(false);
   const [shareLink, setShareLink] = useState("");
+  const [shareCode, setShareCode] = useState("");
+  const [accessCode, setAccessCode] = useState("");
+  const [guestSession, setGuestSession] = useState("");
+  const [guestDevices, setGuestDevices] = useState([]);
+  const [codeBusy, setCodeBusy] = useState(false);
   const [linkBuilderOpen, setLinkBuilderOpen] = useState(false);
   const [linkCreating, setLinkCreating] = useState(false);
   const [linkSettings, setLinkSettings] = useState({
@@ -276,6 +372,24 @@ export default function ControlCenterPage({ user, profile }) {
         supabase.from("site_settings").select("safe_mode").eq("id", 1).single(),
       ]);
     if (profileError || !canUseControlCenter(verifiedProfile)) {
+      const storedGuest = sessionStorage.getItem(
+        "crewdeck_guest_control_session",
+      );
+      if (storedGuest) {
+        const { data } = await supabase.functions.invoke(
+          "openshock-guest-control",
+          {
+            body: { action: "session", session_token: storedGuest },
+          },
+        );
+        if (data?.success) {
+          setGuestSession(storedGuest);
+          setGuestDevices(data.devices || []);
+          setAccess("guest");
+          return false;
+        }
+        sessionStorage.removeItem("crewdeck_guest_control_session");
+      }
       setAccess("denied");
       return false;
     }
@@ -499,6 +613,7 @@ export default function ControlCenterPage({ user, profile }) {
 
   function openSafetyLinkBuilder() {
     setShareLink("");
+    setShareCode("");
     setLinkSettings({
       expiryMinutes: 1440,
       maxUses: 1,
@@ -532,11 +647,17 @@ export default function ControlCenterPage({ user, profile }) {
       .map((byte) => byte.toString(16).padStart(2, "0"))
       .join("");
     const tokenHash = await sha256(token);
+    const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    const codeBytes = crypto.getRandomValues(new Uint8Array(8));
+    const code = [...codeBytes]
+      .map((byte) => alphabet[byte % alphabet.length])
+      .join("");
     const expiresAt = new Date(
       Date.now() + Number(linkSettings.expiryMinutes) * 60 * 1000,
     ).toISOString();
     const { error } = await supabase.rpc("captain_create_control_access_link", {
       p_token_hash: tokenHash,
+      p_share_code_hash: await sha256(code),
       p_expires_at: expiresAt,
       p_max_uses: Number(linkSettings.maxUses),
       p_devices: selectedDevices.map((device) => ({
@@ -552,6 +673,7 @@ export default function ControlCenterPage({ user, profile }) {
     if (error) throw error;
     const link = `https://www.cptspacedust.com/control-center.html?control_invite=${token}`;
     setShareLink(link);
+    setShareCode(code);
     const copied = await copyControlText(link);
     setNotice(
       copied
@@ -566,6 +688,7 @@ export default function ControlCenterPage({ user, profile }) {
     intensity,
     duration,
     skipLog = false,
+    liveCommand = false,
   ) {
     if (access !== "allowed") throw new Error("Control access is unavailable.");
     const fingerprint = `${device.id}:${action}:${Number(intensity)}:${Number(duration)}`;
@@ -585,6 +708,7 @@ export default function ControlCenterPage({ user, profile }) {
           action,
           intensity: Number(intensity),
           duration: Number(duration),
+          live: liveCommand,
         },
       },
     );
@@ -674,7 +798,7 @@ export default function ControlCenterPage({ user, profile }) {
         queue.pending.clear();
         await Promise.all(
           batch.map(({ device, action, value: latestValue }) =>
-            sendCommand(device, action, latestValue, 0.3, true),
+            sendCommand(device, action, latestValue, 0.3, true, true),
           ),
         );
       }
@@ -821,8 +945,117 @@ export default function ControlCenterPage({ user, profile }) {
     }
   }
 
+  async function redeemAccessCode(event) {
+    event.preventDefault();
+    const code = accessCode.replace(/[^A-Z0-9]/gi, "").toUpperCase();
+    if (code.length !== 8) {
+      setNotice("Enter the complete eight-character access code.");
+      return;
+    }
+    setCodeBusy(true);
+    setNotice("");
+    try {
+      const { data, error } = await supabase.functions.invoke(
+        "openshock-guest-control",
+        { body: { action: "redeem_code", share_code: code } },
+      );
+      if (error)
+        throw new Error(
+          await functionError(error, "The code could not be checked."),
+        );
+      if (!data?.success || !data?.session_token)
+        throw new Error(data?.error || "This code cannot be used.");
+      sessionStorage.setItem(
+        "crewdeck_guest_control_session",
+        data.session_token,
+      );
+      setGuestSession(data.session_token);
+      setGuestDevices(data.devices || []);
+      setAccess("guest");
+      setNotice("Limited Control Center access confirmed.");
+    } catch (error) {
+      setNotice(error.message || "This code cannot be used.");
+    } finally {
+      setCodeBusy(false);
+    }
+  }
+
+  async function sendGuestCommand(device, action, intensity = 0, duration = 0) {
+    const { data, error } = await supabase.functions.invoke(
+      "openshock-guest-control",
+      {
+        body: {
+          action,
+          session_token: guestSession,
+          shocker_id: device?.shocker_id,
+          intensity: Number(intensity),
+          duration: Number(duration),
+        },
+      },
+    );
+    if (error)
+      throw new Error(await functionError(error, "The command was rejected."));
+    if (!data?.success) throw new Error(data?.error || "The command failed.");
+  }
+
   if (access === "checking")
     return <Loading label="Verifying control access…" />;
+  if (access === "guest")
+    return (
+      <div className="page control-center-page guest-control-page">
+        <PageHeader
+          title="Limited Control Center"
+          description="The Captain selected the devices and limits available in this session."
+          action={
+            <button
+              className="button ghost"
+              onClick={() => {
+                sessionStorage.removeItem("crewdeck_guest_control_session");
+                setGuestSession("");
+                setGuestDevices([]);
+                setAccess("denied");
+              }}
+            >
+              Leave access session
+            </button>
+          }
+        />
+        {notice && (
+          <div className="control-center-notice" role="status">
+            {notice}
+          </div>
+        )}
+        <div className="control-device-grid guest-control-grid">
+          {guestDevices.map((device) => (
+            <GuestDeviceCard
+              device={device}
+              key={device.shocker_id}
+              onCommand={async (...args) => {
+                try {
+                  await sendGuestCommand(device, ...args);
+                  setNotice("Command sent.");
+                } catch (error) {
+                  setNotice(error.message);
+                }
+              }}
+            />
+          ))}
+        </div>
+        <button
+          className="button danger control-emergency guest-emergency"
+          onClick={async () => {
+            try {
+              await sendGuestCommand(null, "stop_all");
+              setNotice("Emergency stop sent to every shared device.");
+            } catch (error) {
+              setNotice(error.message);
+            }
+          }}
+        >
+          <AlertTriangle /> Emergency Stop
+        </button>
+      </div>
+    );
   if (access === "locked")
     return (
       <div className="control-center-access panel">
@@ -834,25 +1067,39 @@ export default function ControlCenterPage({ user, profile }) {
     );
   if (access !== "allowed" || !canUseControlCenter(profile))
     return (
-      <div className="control-center-access panel">
-        <ShieldAlert />
-        <span className="eyebrow">Restricted system</span>
-        <h1>
-          {access === "locked" ? "Control Center locked" : "Access denied"}
-        </h1>
-        <p>
-          {access === "locked"
-            ? "Safe Mode is active. Emergency Stop remains available."
-            : "The Trusted Person badge is required."}
-        </p>
-        {access === "locked" && canUseControlCenter(profile) && (
-          <button
-            className="button danger control-emergency"
-            onClick={emergencyStop}
-          >
-            <AlertTriangle /> Emergency Stop
-          </button>
-        )}
+      <div className="control-center-code-shell">
+        <section className="control-center-access control-code-card panel">
+          <span className="control-code-mark">#</span>
+          <span className="eyebrow">Limited access</span>
+          <h1>Enter a Control Center code</h1>
+          <p>
+            Use the eight-character code shared by the Captain. Only the
+            selected devices and limits will become available.
+          </p>
+          <form onSubmit={redeemAccessCode}>
+            <label htmlFor="control-access-code">Access code</label>
+            <input
+              id="control-access-code"
+              value={accessCode}
+              onChange={(event) =>
+                setAccessCode(formatAccessCode(event.target.value))
+              }
+              placeholder="ABCD-2345"
+              maxLength={9}
+              autoComplete="one-time-code"
+              required
+            />
+            <small>Letters and numbers only. Dashes are optional.</small>
+            <button className="button primary" disabled={codeBusy}>
+              {codeBusy ? "Checking code…" : "Open Control Center"}
+            </button>
+          </form>
+          {notice && (
+            <div className="control-code-status" role="status">
+              {notice}
+            </div>
+          )}
+        </section>
       </div>
     );
 
@@ -928,7 +1175,7 @@ export default function ControlCenterPage({ user, profile }) {
         {profile.rank?.trim().toLowerCase() === "captain" && (
           <div className="control-share-access">
             <div>
-              <strong>Limited access link</strong>
+              <strong>Limited guest access</strong>
               <p>
                 Choose the devices, limits, expiration, and number of guest
                 sessions.
@@ -939,7 +1186,7 @@ export default function ControlCenterPage({ user, profile }) {
               onClick={openSafetyLinkBuilder}
               disabled={!devices.length}
             >
-              <Link2 /> Generate link
+              <Link2 /> Generate access
             </button>
             {shareLink && (
               <button
@@ -960,7 +1207,7 @@ export default function ControlCenterPage({ user, profile }) {
       </section>
       {linkBuilderOpen && (
         <Modal
-          title="Create a guest Control Center link"
+          title="Create guest Control Center access"
           onClose={() => setLinkBuilderOpen(false)}
         >
           <div className="control-link-builder-app">
@@ -969,10 +1216,10 @@ export default function ControlCenterPage({ user, profile }) {
                 <ShieldCheck />
               </span>
               <div>
-                <strong>Captain-controlled guest access</strong>
+                <strong>Guest access</strong>
                 <p>
-                  Anyone with this link can use only the devices and maximum
-                  settings selected below.
+                  Anyone with the link or quick code can use only the devices
+                  and maximum settings selected below.
                 </p>
               </div>
             </div>
@@ -1117,6 +1364,16 @@ export default function ControlCenterPage({ user, profile }) {
                 />
               </label>
             )}
+            {shareCode && (
+              <label className="control-link-output control-code-output">
+                <span>Quick access code</span>
+                <input
+                  readOnly
+                  value={shareCode}
+                  onFocus={(event) => event.currentTarget.select()}
+                />
+              </label>
+            )}
             <div className="modal-actions">
               <button
                 className="button ghost"
@@ -1136,6 +1393,20 @@ export default function ControlCenterPage({ user, profile }) {
                   }
                 >
                   <Copy /> Copy link
+                </button>
+              )}
+              {shareCode && (
+                <button
+                  className="button secondary"
+                  onClick={async () =>
+                    setNotice(
+                      (await copyControlText(shareCode))
+                        ? "Quick access code copied."
+                        : "Select the generated code and copy it manually.",
+                    )
+                  }
+                >
+                  <Copy /> Copy code
                 </button>
               )}
               <button
@@ -1191,7 +1462,10 @@ export default function ControlCenterPage({ user, profile }) {
                     updateControl(device.id, { intensity: value });
                     sendLive(device.id, value);
                   }}
-                  onRelease={stopLive}
+                  onRelease={() => {
+                    stopLive();
+                    stopTargets(device.id);
+                  }}
                 />
                 {!live && (
                   <Dial
@@ -1292,7 +1566,6 @@ export default function ControlCenterPage({ user, profile }) {
                               behavior for this device.
                             </p>
                           </div>
-                          <b>Captain only</b>
                         </header>
                         <div className="control-safety-fields">
                           {[
@@ -1317,13 +1590,6 @@ export default function ControlCenterPage({ user, profile }) {
                               0,
                               60,
                               0.5,
-                            ],
-                            [
-                              "max_intensity_step",
-                              "Maximum increase",
-                              1,
-                              100,
-                              1,
                             ],
                             [
                               "hold_milliseconds",

@@ -53,8 +53,8 @@ test("What’s Changed contains Added, Changed, and Fixed summaries", () => {
   assert.match(source, /<strong>Added<\/strong>/);
   assert.match(source, /<strong>Changed<\/strong>/);
   assert.match(source, /<strong>Fixed<\/strong>/);
-  assert.match(source, /guest Control Center links/);
-  assert.match(source, /without a CrewDeck login/);
-  assert.match(source, /Voice messages and shared files/);
-  assert.match(source, /document\s+previews open in a wider/i);
+  assert.match(source, /Control Center quick codes/);
+  assert.match(source, /every member can enter a code/);
+  assert.match(source, /Live Control is smoother/);
+  assert.match(source, /maximum-increase setting has been removed/i);
 });

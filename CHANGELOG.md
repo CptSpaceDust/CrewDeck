@@ -2,6 +2,29 @@
 
 Every published CrewDeck release is documented here and copied into its GitHub release notes.
 
+## [2.0.8] - 2026-11-03
+
+### Added
+
+- Captains can generate an eight-character quick access code alongside every limited Control Center link.
+- Every member can open Control Center and enter a code; device details and controls remain hidden until the server validates the code.
+- The website Account menu now includes a styled **Enter Code** page for signed-in and signed-out visitors.
+
+### Changed
+
+- Live Control now coalesces rapid dial changes and uses overlapping control packets, keeping the latest value responsive without filling a command backlog.
+- Crew Inbox notification cards have a clearer Space Glass hierarchy, aligned selection controls, and grouped actions.
+- Message success and status updates now appear as app toast notifications instead of inline red text.
+- Guest links and quick codes share the same Captain-configured expiration, use count, device, intensity, duration, and hold-to-shock limits.
+
+### Fixed
+
+- Releasing a Live Control dial now sends Stop immediately on both the website and desktop app.
+- The stray blue bar above the website message composer is removed by preventing horizontal scrolling in the conversation history.
+- Attachment previews no longer create hidden progress elements when no upload is active.
+- Removed the unused maximum-increase safety setting and its server-side rule.
+- Removed the redundant Captain-only badge from device safety settings while preserving Captain-only editing and guest-access generation.
+
 ## [2.0.7] - 2026-11-02
 
 ### Removed

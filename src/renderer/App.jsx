@@ -316,6 +316,19 @@ export default function App() {
     return () => window.clearTimeout(timeout);
   }, [toast]);
   useEffect(() => {
+    const showToast = (event) => {
+      const detail = event.detail || {};
+      setToast({
+        title: detail.title || "CrewDeck",
+        message: detail.message || "Action completed.",
+        link: detail.link || "",
+        tone: detail.tone || "info",
+      });
+    };
+    window.addEventListener("crewdeck-toast", showToast);
+    return () => window.removeEventListener("crewdeck-toast", showToast);
+  }, []);
+  useEffect(() => {
     if (!session?.user) return;
     const userId = session.user.id;
     let alive = true;
@@ -733,7 +746,7 @@ export default function App() {
       {toast && !incomingCall && (
         <button
           type="button"
-          className="desktop-notification-toast"
+          className={`desktop-notification-toast ${toast.tone || "info"}`}
           onClick={() => {
             if (toast.link) navigate(toast.link);
             setToast(null);

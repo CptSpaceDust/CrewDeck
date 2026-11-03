@@ -280,9 +280,9 @@ export function WhatsNew() {
             <div>
               <strong>Added</strong>
               <p>
-                Captain-configured guest Control Center links can now be opened
-                without a CrewDeck login, with limits for devices, strength,
-                duration, expiration, usage, and hold-to-shock behavior.
+                Control Center quick codes provide the same limited guest access
+                as links, and every member can enter a code from the Control
+                Center page.
               </p>
             </div>
           </article>
@@ -291,8 +291,9 @@ export function WhatsNew() {
             <div>
               <strong>Changed</strong>
               <p>
-                Voice messages and shared files now use clearer Space Glass
-                controls, including a dedicated Open content action.
+                Live Control is smoother and keeps only the newest dial value,
+                while Crew Inbox cards and in-app status notifications use a
+                cleaner Space Glass layout.
               </p>
             </div>
           </article>
@@ -301,8 +302,9 @@ export function WhatsNew() {
             <div>
               <strong>Fixed</strong>
               <p>
-                Text documents now load directly in CrewDeck, and document
-                previews open in a wider, more reliable viewer.
+                Live Control stops immediately on release, and the unused
+                maximum-increase setting has been removed from every safety
+                surface.
               </p>
             </div>
           </article>

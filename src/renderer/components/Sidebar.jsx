@@ -19,26 +19,6 @@ import {
 import { Avatar } from "./ui";
 import BrandMark from "./BrandMark";
 
-function controlCenterAccess(profile) {
-  let badges = profile?.badges;
-  if (!Array.isArray(badges) && typeof badges === "string") {
-    try {
-      badges = JSON.parse(badges);
-    } catch {
-      badges = badges
-        .replace(/[\[\]"]/g, "")
-        .split(",")
-        .map((badge) => badge.trim());
-    }
-  }
-  return (
-    Array.isArray(badges) &&
-    badges.some(
-      (badge) => String(badge).trim().toLowerCase() === "trusted person",
-    )
-  );
-}
-
 const groups = [
   {
     label: "Community",
@@ -64,7 +44,10 @@ const groups = [
   },
   {
     label: "Support",
-    items: [["support-requests", "Private Support", HandHelping],["support", "Support Captain", Heart]],
+    items: [
+      ["support-requests", "Private Support", HandHelping],
+      ["support", "Support Captain", Heart],
+    ],
   },
 ];
 
@@ -107,22 +90,20 @@ export default function Sidebar({ page, setPage, profile, onLogout, unread }) {
             ))}
           </section>
         ))}
-        {controlCenterAccess(profile) && (
-          <section className="nav-group">
-            <span>VRChat</span>
-            <button
-              type="button"
-              className={
-                page === "control-center" ? "nav-item active" : "nav-item"
-              }
-              aria-current={page === "control-center" ? "page" : undefined}
-              onClick={() => setPage("control-center")}
-            >
-              <Gauge />
-              <span>Control Center</span>
-            </button>
-          </section>
-        )}
+        <section className="nav-group">
+          <span>VRChat</span>
+          <button
+            type="button"
+            className={
+              page === "control-center" ? "nav-item active" : "nav-item"
+            }
+            aria-current={page === "control-center" ? "page" : undefined}
+            onClick={() => setPage("control-center")}
+          >
+            <Gauge />
+            <span>Control Center</span>
+          </button>
+        </section>
       </nav>
       <div className="sidebar-footer">
         <button
@@ -149,7 +130,12 @@ export default function Sidebar({ page, setPage, profile, onLogout, unread }) {
           >
             <Settings />
           </button>
-          <button type="button" onClick={onLogout} title="Sign out" aria-label="Sign out">
+          <button
+            type="button"
+            onClick={onLogout}
+            title="Sign out"
+            aria-label="Sign out"
+          >
             <LogOut />
           </button>
         </div>
