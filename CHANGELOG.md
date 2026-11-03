@@ -2,6 +2,19 @@
 
 Every published CrewDeck release is documented here and copied into its GitHub release notes.
 
+## [2.0.7] - 2026-11-02
+
+### Changed
+
+- Restyled voice-message players to match the Space Glass conversation interface.
+- Reworked file attachments with clearer metadata and a dedicated **Open content** action.
+- Expanded the shared-document viewer for easier reading.
+
+### Fixed
+
+- Text documents now load directly inside the app instead of displaying an empty preview.
+- PDF and document previews now use a reliable local preview URL when opened from messages.
+
 ## [2.0.6] - 2026-11-01
 
 ### Added

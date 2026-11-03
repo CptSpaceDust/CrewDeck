@@ -67,7 +67,9 @@ test("desktop messaging exposes the selected realtime conversation tools", () =>
   assert.match(features, /emoji-picker-popover/);
   assert.match(features, /ConversationDetails/);
   assert.match(features, /AttachmentPreviewDialog/);
-  assert.match(features, /Open document/);
+  assert.match(features, /Open content/);
+  assert.match(features, /fetch\(preview\.url\)/);
+  assert.match(features, /attachment-text-preview/);
   assert.doesNotMatch(features, /Conversation theme/);
   assert.doesNotMatch(features, /Conversation folder/);
   assert.doesNotMatch(features, /Conversation sound/);

@@ -4899,6 +4899,60 @@ html[data-motion="full"] dialog {
   border-radius: 0.8rem;
   background: rgba(5, 22, 48, 0.76);
 }
+.message-file-card {
+  width: min(100%, 28rem);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border: 1px solid rgba(102, 190, 255, 0.3);
+  border-radius: 0.9rem;
+  background: linear-gradient(145deg, rgba(12, 38, 73, 0.94), rgba(5, 20, 45, 0.98));
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.04), 0 10px 24px rgba(0, 0, 0, 0.2);
+}
+.message-file-card-copy {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+.message-file-card-copy > svg {
+  flex: 0 0 auto;
+  width: 1.3rem;
+  height: 1.3rem;
+  color: #7bd1ff;
+}
+.message-file-card-copy > span {
+  min-width: 0;
+  display: grid;
+  gap: 0.12rem;
+}
+.message-file-card-copy strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.message-file-card-copy small {
+  color: var(--text-muted);
+}
+.message-file-open {
+  min-height: 2.35rem;
+  padding: 0.55rem 0.8rem;
+  border: 1px solid rgba(111, 204, 255, 0.44);
+  border-radius: 0.72rem;
+  color: #e8f7ff;
+  background: linear-gradient(145deg, rgba(47, 142, 214, 0.42), rgba(50, 93, 184, 0.34));
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+.message-file-open:hover,
+.message-file-open:focus-visible {
+  border-color: rgba(133, 222, 255, 0.8);
+  filter: brightness(1.14);
+}
 .message-media-preview {
   width: min(100%, 32rem);
   overflow: hidden;
@@ -4922,6 +4976,16 @@ html[data-motion="full"] dialog {
   display: grid;
   gap: 0.5rem;
   padding: 0.7rem;
+  border-color: rgba(111, 204, 255, 0.34);
+  background: linear-gradient(145deg, rgba(11, 38, 70, 0.96), rgba(4, 17, 37, 0.98));
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.04), 0 10px 24px rgba(0, 0, 0, 0.22);
+}
+.message-media-preview.audio::before {
+  content: "VOICE MESSAGE";
+  color: #82d3ff;
+  font-size: 0.64rem;
+  font-weight: 900;
+  letter-spacing: 0.13em;
 }
 .message-media-preview.audio strong {
   color: #dff4ff;
@@ -4929,7 +4993,18 @@ html[data-motion="full"] dialog {
 }
 .message-media-preview audio {
   width: 100%;
+  height: 42px;
   min-width: min(18rem, 100%);
+  border-radius: 999px;
+  color-scheme: dark;
+  background: #07172e;
+}
+.message-media-preview audio::-webkit-media-controls-enclosure {
+  border-radius: 999px;
+  background: #0b2442;
+}
+.message-media-preview audio::-webkit-media-controls-panel {
+  background: #0b2442;
 }
 .message-media-loading {
   width: min(100%, 24rem);
@@ -4962,8 +5037,10 @@ html[data-motion="full"] dialog {
 }
 
 .attachment-preview-modal {
-  width: min(900px, 100%);
-  max-height: 92vh;
+  width: min(1120px, calc(100vw - 36px));
+  max-width: none;
+  height: min(88vh, 820px);
+  max-height: none;
   padding: 0;
   overflow: hidden;
   background:
@@ -5001,7 +5078,8 @@ html[data-motion="full"] dialog {
 
 .attachment-preview-body {
   display: grid;
-  min-height: min(65vh, 580px);
+  min-height: 0;
+  height: calc(100% - 78px);
   padding: 16px;
   place-items: center;
   background: rgba(1, 7, 18, 0.72);
@@ -5009,10 +5087,39 @@ html[data-motion="full"] dialog {
 
 .attachment-preview-body iframe {
   width: 100%;
-  height: min(65vh, 580px);
+  height: 100%;
+  min-height: 32rem;
   border: 0;
   border-radius: 12px;
   background: #fff;
+}
+.attachment-text-preview {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  min-height: 32rem;
+  margin: 0;
+  overflow: auto;
+  padding: 1rem;
+  border: 1px solid rgba(111, 193, 255, 0.2);
+  border-radius: 12px;
+  color: #eaf6ff;
+  background: #061226;
+  font: 0.86rem/1.6 ui-monospace, SFMono-Regular, Consolas, monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.attachment-preview-status {
+  padding: 1rem 1.2rem;
+  border: 1px solid rgba(111, 193, 255, 0.22);
+  border-radius: 12px;
+  color: #b9d9ee;
+  background: rgba(10, 30, 58, 0.72);
+}
+.attachment-preview-status.error {
+  border-color: rgba(255, 126, 147, 0.34);
+  color: #ffc4cf;
+  background: rgba(72, 18, 35, 0.58);
 }
 
 .attachment-preview-body img,
@@ -5026,6 +5133,7 @@ html[data-motion="full"] dialog {
 
 .attachment-preview-body audio {
   width: min(100%, 34rem);
+  color-scheme: dark;
 }
 
 .composer-history-panel {

@@ -109,18 +109,20 @@ function MessageAttachment({ item, onNotice }) {
     );
   }
   return (
-    <>
-      <button
-        type="button"
-        className="message-file-download"
-        onClick={() => setPreviewOpen(true)}
-      >
+    <div className="message-file-card">
+      <div className="message-file-card-copy">
         <Paperclip />
         <span>
-          <small>{item.file_name || "Shared document"}</small>
-          <strong>Open document</strong>
+          <strong>{item.file_name || "Shared document"}</strong>
           <small>{Math.max(1, Math.ceil(item.byte_size / 1024))} KB</small>
         </span>
+      </div>
+      <button
+        type="button"
+        className="message-file-open"
+        onClick={() => setPreviewOpen(true)}
+      >
+        Open content
       </button>
       {previewOpen && (
         <AttachmentPreviewDialog
@@ -128,11 +130,17 @@ function MessageAttachment({ item, onNotice }) {
           onClose={() => setPreviewOpen(false)}
         />
       )}
-    </>
+    </div>
   );
 }
 
 function AttachmentPreviewDialog({ preview, onClose }) {
+  const [documentPreview, setDocumentPreview] = useState({
+    loading: false,
+    url: "",
+    text: "",
+    error: "",
+  });
   useEffect(() => {
     const closeOnEscape = (event) => {
       if (event.key === "Escape") onClose();
@@ -141,6 +149,46 @@ function AttachmentPreviewDialog({ preview, onClose }) {
     return () => document.removeEventListener("keydown", closeOnEscape);
   }, [onClose]);
   const mimeType = String(preview?.mimeType || "");
+  const isNativeMedia =
+    mimeType.startsWith("image/") ||
+    mimeType.startsWith("video/") ||
+    mimeType.startsWith("audio/");
+  useEffect(() => {
+    if (isNativeMedia || !preview?.url) return undefined;
+    let active = true;
+    let localUrl = "";
+    setDocumentPreview({ loading: true, url: "", text: "", error: "" });
+    fetch(preview.url)
+      .then((response) => {
+        if (!response.ok) throw new Error("The document could not be loaded.");
+        if (mimeType.startsWith("text/") || mimeType === "application/json") {
+          return response.text().then((text) => ({ text }));
+        }
+        return response.blob().then((blob) => ({ blob }));
+      })
+      .then((result) => {
+        if (!active) return;
+        if (result.text !== undefined) {
+          setDocumentPreview({ loading: false, url: "", text: result.text, error: "" });
+          return;
+        }
+        localUrl = URL.createObjectURL(result.blob);
+        setDocumentPreview({ loading: false, url: localUrl, text: "", error: "" });
+      })
+      .catch((error) => {
+        if (active)
+          setDocumentPreview({
+            loading: false,
+            url: "",
+            text: "",
+            error: error.message || "The document could not be loaded.",
+          });
+      });
+    return () => {
+      active = false;
+      if (localUrl) URL.revokeObjectURL(localUrl);
+    };
+  }, [isNativeMedia, mimeType, preview?.url]);
   const title = mimeType.startsWith("image/")
     ? "Image preview"
     : mimeType.startsWith("video/")
@@ -182,8 +230,19 @@ function AttachmentPreviewDialog({ preview, onClose }) {
             <video src={preview.url} controls playsInline />
           ) : mimeType.startsWith("audio/") ? (
             <audio src={preview.url} controls />
+          ) : documentPreview.loading ? (
+            <div className="attachment-preview-status">Loading document…</div>
+          ) : documentPreview.error ? (
+            <div className="attachment-preview-status error">
+              {documentPreview.error}
+            </div>
+          ) : documentPreview.text !== "" ? (
+            <pre className="attachment-text-preview">{documentPreview.text}</pre>
           ) : (
-            <iframe src={preview.url} title="Shared document preview" />
+            <iframe
+              src={documentPreview.url}
+              title="Shared document preview"
+            />
           )}
         </div>
       </section>
