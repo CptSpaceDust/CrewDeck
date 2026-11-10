@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Bell, MessageCircle, Phone, PhoneOff } from "lucide-react";
+import { Bell, CheckCircle2, MessageCircle, Phone, PhoneOff, X } from "lucide-react";
 import AuthScreen from "./components/AuthScreen";
 import LockScreen from "./components/LockScreen";
 import ResetPasswordScreen from "./components/ResetPasswordScreen";
@@ -744,20 +744,34 @@ export default function App() {
         </div>
       </main>
       {toast && !incomingCall && (
-        <button
-          type="button"
+        <aside
           className={`desktop-notification-toast ${toast.tone || "info"}`}
-          onClick={() => {
-            if (toast.link) navigate(toast.link);
-            setToast(null);
-          }}
+          role="status"
+          aria-live="polite"
         >
-          <Bell />
-          <span>
+          <span className="desktop-toast-icon">
+            {toast.tone === "error" ? <Bell /> : <CheckCircle2 />}
+          </span>
+          <button
+            type="button"
+            className="desktop-toast-content"
+            onClick={() => {
+              if (toast.link) navigate(toast.link);
+              setToast(null);
+            }}
+          >
             <strong>{toast.title || "Community update"}</strong>
             <small>{toast.message || "You have a new notification."}</small>
-          </span>
-        </button>
+          </button>
+          <button
+            type="button"
+            className="desktop-toast-close"
+            aria-label="Dismiss notification"
+            onClick={() => setToast(null)}
+          >
+            <X />
+          </button>
+        </aside>
       )}
       {incomingCall && (
         <section

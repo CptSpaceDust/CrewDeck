@@ -1704,7 +1704,11 @@ function DirectMessagesPage({
     if (!notice) return;
     window.dispatchEvent(
       new CustomEvent("crewdeck-toast", {
-        detail: { title: "Messages", message: notice },
+        detail: {
+          title: "Messages",
+          message: notice,
+          tone: /failed|unable|error|blocked|could not|invalid|denied/i.test(notice) ? "error" : "success",
+        },
       }),
     );
   }, [notice]);
@@ -3389,7 +3393,11 @@ function GroupMessagesPage({
     if (!notice) return;
     window.dispatchEvent(
       new CustomEvent("crewdeck-toast", {
-        detail: { title: "Group messages", message: notice },
+        detail: {
+          title: "Group messages",
+          message: notice,
+          tone: /failed|unable|error|blocked|could not|invalid|denied/i.test(notice) ? "error" : "success",
+        },
       }),
     );
   }, [notice]);

@@ -4489,7 +4489,7 @@ html[data-motion="full"] dialog {
   bottom: 24px;
   z-index: 180;
   display: grid;
-  grid-template-columns: 38px minmax(0, 1fr);
+  grid-template-columns: 42px minmax(0, 1fr) 34px;
   align-items: center;
   gap: 12px;
   width: min(390px, calc(100vw - 48px));
@@ -4506,29 +4506,78 @@ html[data-motion="full"] dialog {
   box-shadow:
     0 22px 70px rgba(0, 0, 0, 0.48),
     0 0 30px rgba(77, 163, 255, 0.13);
-  cursor: pointer;
+  overflow: hidden;
+  animation: desktop-toast-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-.desktop-notification-toast > svg {
+.desktop-notification-toast::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0;
+  height: 3px;
+  background: linear-gradient(90deg, #72d8ff, #786cff);
+}
+.desktop-notification-toast.error::after {
+  background: linear-gradient(90deg, #ff6681, #ffaf6b);
+}
+.desktop-toast-icon {
+  display: grid !important;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border: 1px solid rgba(112, 211, 255, 0.3);
+  border-radius: 13px;
+  color: #75d6ff;
+  background: rgba(34, 111, 177, 0.24);
+}
+.desktop-toast-icon > svg {
   width: 22px;
-  color: #67acf8;
 }
-
-.desktop-notification-toast span {
+.desktop-toast-content {
   display: grid;
   gap: 3px;
   min-width: 0;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  text-align: left;
+  background: transparent;
+  cursor: pointer;
 }
-
-.desktop-notification-toast strong,
-.desktop-notification-toast small {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.desktop-toast-content strong,
+.desktop-toast-content small {
+  white-space: normal;
 }
-
-.desktop-notification-toast small {
+.desktop-toast-content small {
   color: #a9bfd7;
+  line-height: 1.4;
+}
+.desktop-toast-close {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(120, 186, 235, 0.2);
+  border-radius: 9px;
+  color: #b8cce0;
+  background: rgba(4, 13, 28, 0.44);
+  cursor: pointer;
+}
+.desktop-toast-close svg { width: 16px; }
+@keyframes desktop-toast-in {
+  from { opacity: 0; transform: translateY(14px) scale(0.97); }
+}
+.sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
 }
 
 .incoming-call-card {
@@ -9815,6 +9864,8 @@ html[data-color-indicators="labeled"] .presence-chip::before {
   border-radius: 18px;
   cursor: default;
   overflow: hidden;
+  background: linear-gradient(145deg, rgba(16, 44, 82, .9), rgba(7, 21, 45, .94));
+  box-shadow: inset 0 1px rgba(255,255,255,.045), 0 14px 32px rgba(0,0,0,.16);
 }
 .crew-inbox-list .notification-row.unread::before {
   content: "";
@@ -9857,7 +9908,13 @@ html[data-color-indicators="labeled"] .presence-chip::before {
   width: 44px;
   height: 44px;
   border-radius: 13px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(111, 204, 255, .25);
+  color: #79d8ff;
+  background: rgba(21, 79, 126, .4);
 }
+.crew-inbox-list .notification-icon svg { width: 20px; }
 .inbox-card-heading {
   display: flex;
   align-items: center;

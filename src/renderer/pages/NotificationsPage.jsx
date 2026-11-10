@@ -14,7 +14,7 @@ import {
   performInboxAction,
   saveInboxState,
 } from "../lib/crewInbox";
-import { markNotificationRead } from "../lib/data";
+import { clearNotifications, markNotificationRead } from "../lib/data";
 import { supabase } from "../lib/supabase";
 import {
   Empty,
@@ -183,13 +183,14 @@ export default function NotificationsPage({ user, onNavigate }) {
           type="button"
           disabled={!items.length}
           onClick={async () => {
-            await bulkInbox(
-              user.id,
-              items.map((item) => item.id),
-              "dismiss",
-            );
-            await load();
-            window.dispatchEvent(new CustomEvent("notifications-changed"));
+            try {
+              await clearNotifications(user.id);
+              setSelected(new Set());
+              await load();
+              window.dispatchEvent(new CustomEvent("notifications-changed"));
+            } catch (nextError) {
+              setError(nextError.message);
+            }
           }}
         >
           <Trash2 />

@@ -9,6 +9,8 @@ import {
   RefreshCw,
   ShieldAlert,
   ShieldCheck,
+  SlidersHorizontal,
+  Trash2,
   Unlink2,
   UsersRound,
 } from "lucide-react";
@@ -241,6 +243,10 @@ function GuestDeviceCard({ device, onCommand }) {
     Math.min(1, Number(device.max_duration) || 30),
   );
   const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    setIntensity((value) => Math.max(1, Math.min(value, Number(device.max_intensity) || 100)));
+    setDuration((value) => Math.max(0.3, Math.min(value, Number(device.max_duration) || 30)));
+  }, [device.max_duration, device.max_intensity]);
   const run = async (action) => {
     if (busy) return;
     setBusy(true);
@@ -337,6 +343,10 @@ export default function ControlCenterPage({ user, profile }) {
   const [guestDevices, setGuestDevices] = useState([]);
   const [codeBusy, setCodeBusy] = useState(false);
   const [linkBuilderOpen, setLinkBuilderOpen] = useState(false);
+  const [activeLinksOpen, setActiveLinksOpen] = useState(false);
+  const [activeLinks, setActiveLinks] = useState([]);
+  const [editingLink, setEditingLink] = useState(null);
+  const [activeLinksBusy, setActiveLinksBusy] = useState(false);
   const [linkCreating, setLinkCreating] = useState(false);
   const [linkSettings, setLinkSettings] = useState({
     expiryMinutes: 1440,
@@ -409,6 +419,19 @@ export default function ControlCenterPage({ user, profile }) {
       .limit(10);
     if (!error) setLogs(data || []);
   }, []);
+
+  const loadActiveLinks = useCallback(async () => {
+    if (String(profile.rank || "").trim().toLowerCase() !== "captain") return;
+    const { data, error } = await supabase
+      .from("control_access_links")
+      .select("id,expires_at,max_uses,use_count,created_at,updated_at,control_access_link_devices(*)")
+      .eq("created_by", user.id)
+      .is("revoked_at", null)
+      .gt("expires_at", new Date().toISOString())
+      .order("created_at", { ascending: false });
+    if (error) throw error;
+    setActiveLinks(data || []);
+  }, [profile.rank, user.id]);
 
   const loadPresets = useCallback(
     async (nextDevices) => {
@@ -509,6 +532,12 @@ export default function ControlCenterPage({ user, profile }) {
         loadLogs,
       )
       .subscribe();
+    const accessChannel = supabase
+      .channel(`control-access-live-${user.id}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "control_access_links" }, loadActiveLinks)
+      .on("postgres_changes", { event: "*", schema: "public", table: "control_access_link_devices" }, loadActiveLinks)
+      .subscribe();
+    loadActiveLinks().catch(() => {});
     return () => {
       warningRun.current = null;
       liveQueue.current.generation += 1;
@@ -516,8 +545,85 @@ export default function ControlCenterPage({ user, profile }) {
       window.clearTimeout(emergencyTimer.current);
       supabase.removeChannel(safety);
       supabase.removeChannel(logChannel);
+      supabase.removeChannel(accessChannel);
     };
-  }, [loadDevices, loadLogs, user.id, verifyAccess]);
+  }, [loadActiveLinks, loadDevices, loadLogs, user.id, verifyAccess]);
+
+  useEffect(() => {
+    if (access !== "guest" || !guestSession) return undefined;
+    let cancelled = false;
+    const refreshGuestAccess = async () => {
+      const { data, error } = await supabase.functions.invoke("openshock-guest-control", {
+        body: { action: "session", session_token: guestSession },
+      });
+      if (cancelled) return;
+      if (error || !data?.success) {
+        sessionStorage.removeItem("crewdeck_guest_control_session");
+        setGuestSession("");
+        setGuestDevices([]);
+        setAccess("denied");
+        setNotice("This shared access ended or expired.");
+        return;
+      }
+      setGuestDevices(data.devices || []);
+    };
+    const timer = window.setInterval(refreshGuestAccess, 1800);
+    return () => { cancelled = true; window.clearInterval(timer); };
+  }, [access, guestSession]);
+
+  function editActiveLink(link) {
+    const remainingMinutes = Math.max(1, Math.round((new Date(link.expires_at).getTime() - Date.now()) / 60000));
+    const shared = new Map((link.control_access_link_devices || []).map((device) => [device.shocker_id, device]));
+    setEditingLink({
+      ...link,
+      expiryMinutes: remainingMinutes,
+      devices: Object.fromEntries(devices.map((device) => {
+        const existing = shared.get(device.id);
+        const defaults = safety[device.id] || initialSafety();
+        return [device.id, existing
+          ? { ...existing, included: true }
+          : { shocker_id: device.id, shocker_name: device.name || "Control module", max_intensity: defaults.max_intensity, max_duration: defaults.max_duration, require_hold_to_shock: defaults.require_hold_to_shock !== false, hold_milliseconds: defaults.hold_milliseconds, included: false }];
+      })),
+    });
+  }
+
+  async function saveActiveLink() {
+    if (!editingLink) return;
+    const selected = Object.values(editingLink.devices || {}).filter((device) => device.included);
+    if (!selected.length) throw new Error("Keep at least one shared device.");
+    setActiveLinksBusy(true);
+    try {
+      const { error } = await supabase.rpc("captain_update_control_access_link", {
+        p_link_id: editingLink.id,
+        p_expires_at: new Date(Date.now() + Number(editingLink.expiryMinutes) * 60000).toISOString(),
+        p_max_uses: Number(editingLink.max_uses),
+        p_devices: selected.map((device) => ({
+          shocker_id: device.shocker_id,
+          shocker_name: device.shocker_name,
+          max_intensity: Number(device.max_intensity),
+          max_duration: Number(device.max_duration),
+          require_hold_to_shock: device.require_hold_to_shock !== false,
+          hold_milliseconds: Number(device.hold_milliseconds || 800),
+        })),
+      });
+      if (error) throw error;
+      await Promise.allSettled(devices.map((device) => sendCommand(device, "stop", 0, 0, true)));
+      setNotice("Live guest limits updated and active commands stopped.");
+      setEditingLink(null);
+      await loadActiveLinks();
+    } finally {
+      setActiveLinksBusy(false);
+    }
+  }
+
+  async function revokeActiveLink(linkId) {
+    if (!(await confirmInApp("End this shared Control Center access now?", { title: "End shared access", confirmLabel: "End access" }))) return;
+    const { error } = await supabase.rpc("captain_revoke_control_access_link", { p_link_id: linkId });
+    if (error) throw error;
+    await Promise.allSettled(devices.map((device) => sendCommand(device, "stop", 0, 0, true)));
+    setNotice("Shared access ended immediately.");
+    await loadActiveLinks();
+  }
 
   function updateControl(id, patch, sync = true) {
     setControls((current) => {
@@ -1188,6 +1294,15 @@ export default function ControlCenterPage({ user, profile }) {
             >
               <Link2 /> Generate access
             </button>
+            <button
+              className="button secondary"
+              onClick={async () => {
+                await loadActiveLinks();
+                setActiveLinksOpen(true);
+              }}
+            >
+              <SlidersHorizontal /> Manage active access
+            </button>
             {shareLink && (
               <button
                 className="button ghost"
@@ -1426,6 +1541,66 @@ export default function ControlCenterPage({ user, profile }) {
                 {linkCreating ? "Creating…" : "Create link"}
               </button>
             </div>
+          </div>
+        </Modal>
+      )}
+      {activeLinksOpen && (
+        <Modal title="Live shared access" onClose={() => { setActiveLinksOpen(false); setEditingLink(null); }}>
+          <div className="control-active-access-manager">
+            <div className="control-active-access-intro">
+              <ShieldCheck />
+              <div>
+                <strong>Changes apply while guests are using Control Center</strong>
+                <p>Updated limits appear automatically. Saving or ending access also stops active device commands.</p>
+              </div>
+            </div>
+            {!activeLinks.length ? (
+              <p className="control-active-empty">No live links or codes are active.</p>
+            ) : (
+              <div className="control-active-access-list">
+                {activeLinks.map((link) => (
+                  <article key={link.id} className={editingLink?.id === link.id ? "editing" : ""}>
+                    <header>
+                      <div>
+                        <span className="eyebrow">Live access</span>
+                        <strong>Access {link.id.slice(0, 8).toUpperCase()}</strong>
+                        <small>{link.use_count} of {link.max_uses} sessions used · expires {new Date(link.expires_at).toLocaleString()}</small>
+                      </div>
+                      <div className="control-active-card-actions">
+                        <button className="button secondary" onClick={() => editActiveLink(link)}><SlidersHorizontal /> Edit</button>
+                        <button className="button danger" onClick={() => revokeActiveLink(link.id).catch((error) => setNotice(error.message))}><Trash2 /> End</button>
+                      </div>
+                    </header>
+                    <div className="control-active-device-chips">
+                      {(link.control_access_link_devices || []).map((device) => <span key={device.shocker_id}>{device.shocker_name || "Device"} · {device.max_intensity}% · {device.max_duration}s</span>)}
+                    </div>
+                  </article>
+                ))}
+              </div>
+            )}
+            {editingLink && (
+              <section className="control-active-editor">
+                <h3>Edit live limits</h3>
+                <div className="control-link-builder-summary">
+                  <label><span>Access remains active for</span><select value={editingLink.expiryMinutes} onChange={(event) => setEditingLink((current) => ({ ...current, expiryMinutes: Number(event.target.value) }))}><option value="15">15 minutes</option><option value="60">1 hour</option><option value="1440">24 hours</option><option value="10080">7 days</option><option value="43200">30 days</option></select></label>
+                  <label><span>Maximum sessions</span><input type="number" min={Math.max(1, editingLink.use_count)} max="100" value={editingLink.max_uses} onChange={(event) => setEditingLink((current) => ({ ...current, max_uses: Number(event.target.value) }))} /></label>
+                </div>
+                <div className="control-active-editor-devices">
+                  {Object.values(editingLink.devices || {}).map((device) => {
+                    const update = (patch) => setEditingLink((current) => ({ ...current, devices: { ...current.devices, [device.shocker_id]: { ...device, ...patch } } }));
+                    return <article key={device.shocker_id}>
+                      <label className="control-link-check"><input type="checkbox" checked={device.included} onChange={(event) => update({ included: event.target.checked })} /><span aria-hidden="true" /><strong>{device.shocker_name || "Device"}</strong></label>
+                      <div className="control-link-device-limits">
+                        <label><span>Max intensity</span><input type="number" min="1" max="100" disabled={!device.included} value={device.max_intensity} onChange={(event) => update({ max_intensity: Number(event.target.value) })} /></label>
+                        <label><span>Max duration</span><input type="number" min="0.3" max="30" step="0.1" disabled={!device.included} value={device.max_duration} onChange={(event) => update({ max_duration: Number(event.target.value) })} /></label>
+                      </div>
+                      <label className="control-link-hold-toggle"><input type="checkbox" disabled={!device.included} checked={device.require_hold_to_shock !== false} onChange={(event) => update({ require_hold_to_shock: event.target.checked })} /><span aria-hidden="true" /><span><strong>Require hold to shock</strong><small>{device.hold_milliseconds || 800} ms safety hold</small></span></label>
+                    </article>;
+                  })}
+                </div>
+                <div className="modal-actions"><button className="button ghost" onClick={() => setEditingLink(null)}>Cancel</button><button className="button primary" disabled={activeLinksBusy} onClick={() => saveActiveLink().catch((error) => setNotice(error.message))}>{activeLinksBusy ? "Applying…" : "Apply live changes"}</button></div>
+              </section>
+            )}
           </div>
         </Modal>
       )}

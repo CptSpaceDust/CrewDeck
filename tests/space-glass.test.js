@@ -53,8 +53,8 @@ test("What’s Changed contains Added, Changed, and Fixed summaries", () => {
   assert.match(source, /<strong>Added<\/strong>/);
   assert.match(source, /<strong>Changed<\/strong>/);
   assert.match(source, /<strong>Fixed<\/strong>/);
-  assert.match(source, /Control Center quick codes/);
-  assert.match(source, /every member can enter a code/);
-  assert.match(source, /Live Control is smoother/);
-  assert.match(source, /maximum-increase setting has been removed/i);
+  assert.match(source, /manage every active Control Center link and code/);
+  assert.match(source, /Guests receive live/);
+  assert.match(source, /Notification counts stay synchronized/);
+  assert.match(source, /stops active device commands/);
 });

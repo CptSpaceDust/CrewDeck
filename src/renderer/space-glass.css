@@ -2027,7 +2027,7 @@ html[data-motion="reduced"] *::after {
 
 .control-safety-settings {
   grid-column: 1 / -1;
-  padding: 18px !important;
+  padding: 22px !important;
   border-color: rgba(111, 205, 255, 0.28) !important;
   background:
     radial-gradient(
@@ -2035,7 +2035,8 @@ html[data-motion="reduced"] *::after {
       rgba(111, 89, 244, 0.18),
       transparent 42%
     ),
-    rgba(3, 16, 36, 0.72) !important;
+    linear-gradient(145deg, rgba(8, 27, 57, 0.96), rgba(4, 14, 33, 0.94)) !important;
+  box-shadow: inset 0 1px rgba(255,255,255,.05), 0 18px 45px rgba(0,0,0,.2);
 }
 .control-safety-heading {
   display: flex;
@@ -2075,15 +2076,25 @@ html[data-motion="reduced"] *::after {
 .control-safety-fields label {
   display: grid;
   gap: 6px;
-  padding: 10px;
+  min-height: 102px;
+  padding: 13px;
   border: 1px solid rgba(112, 198, 255, 0.14);
   border-radius: 12px;
   font-size: 0.78rem;
   color: var(--muted);
-  background: rgba(3, 14, 31, 0.44);
+  background: linear-gradient(145deg, rgba(11, 35, 68, 0.86), rgba(5, 19, 40, 0.84));
+  box-shadow: inset 0 1px rgba(255,255,255,.04);
 }
 .control-safety-fields input {
   width: 100%;
+  min-height: 44px;
+  box-sizing: border-box;
+  border: 1px solid rgba(112, 206, 255, .3);
+  border-radius: 10px;
+  padding: 0 12px;
+  color: #f3fbff;
+  background: rgba(2, 11, 27, .82);
+  font: 800 1rem/1 inherit;
 }
 .control-safety-toggle {
   display: grid;
@@ -2147,6 +2158,39 @@ html[data-motion="reduced"] *::after {
   border-top: 1px solid rgba(112, 198, 255, 0.14);
   color: var(--muted);
   font-size: 0.74rem;
+}
+.control-safety-settings > footer button {
+  min-height: 44px;
+  border: 1px solid rgba(114, 212, 255, .36);
+  border-radius: 11px;
+  padding: 0 16px;
+  color: #061423;
+  background: linear-gradient(135deg, #b5ebff, #69c8ff);
+  font: inherit;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.control-active-access-manager { display: grid; gap: 16px; width: min(780px, 100%); }
+.control-active-access-intro { display: flex; gap: 12px; align-items: center; padding: 14px; border: 1px solid rgba(111,205,255,.25); border-radius: 15px; background: rgba(10,35,67,.65); }
+.control-active-access-intro > svg { flex: 0 0 auto; color: #78d8ff; }
+.control-active-access-intro p { margin: 3px 0 0; color: var(--muted); }
+.control-active-access-list { display: grid; gap: 10px; }
+.control-active-access-list > article { display: grid; gap: 12px; padding: 15px; border: 1px solid rgba(107,190,246,.22); border-radius: 15px; background: linear-gradient(145deg, rgba(12,39,74,.82), rgba(5,18,39,.88)); }
+.control-active-access-list > article.editing { border-color: #72d4ff; box-shadow: 0 0 24px rgba(76,188,255,.14); }
+.control-active-access-list header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.control-active-access-list header > div:first-child { display: grid; gap: 3px; }
+.control-active-access-list small { color: var(--muted); }
+.control-active-card-actions, .control-active-device-chips { display: flex; flex-wrap: wrap; gap: 7px; }
+.control-active-device-chips span { padding: 6px 9px; border: 1px solid rgba(99,183,242,.2); border-radius: 999px; color: #bdd8ea; background: rgba(3,16,34,.6); font-size: .72rem; }
+.control-active-editor { display: grid; gap: 14px; padding: 17px; border: 1px solid rgba(115,211,255,.3); border-radius: 17px; background: rgba(3,15,34,.86); }
+.control-active-editor h3 { margin: 0; }
+.control-active-editor-devices { display: grid; gap: 10px; }
+.control-active-editor-devices > article { display: grid; gap: 11px; padding: 13px; border: 1px solid rgba(105,192,247,.2); border-radius: 13px; background: rgba(11,32,62,.68); }
+.control-active-empty { margin: 0; padding: 28px; border: 1px dashed rgba(115,194,246,.28); border-radius: 15px; color: var(--muted); text-align: center; }
+@media (max-width: 760px) {
+  .control-safety-fields { grid-template-columns: 1fr; }
+  .control-active-access-list header { align-items: flex-start; flex-direction: column; }
 }
 
 .modal:has(.control-link-builder-app) {

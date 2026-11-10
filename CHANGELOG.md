@@ -2,6 +2,24 @@
 
 Every published CrewDeck release is documented here and copied into its GitHub release notes.
 
+## [2.0.9] - 2026-11-09
+
+### Added
+
+- Captains can review every active Control Center link or quick code and change its expiration, session limit, shared devices, intensity, duration, and hold-to-shock settings while it is in use.
+- Active guest sessions receive revised device limits automatically without reloading the website or desktop app.
+
+### Changed
+
+- Crew Inbox cards, selection controls, Captain device-safety settings, and app status notifications now use clearer Space Glass layouts.
+- Trusted People and the Captain no longer see the unnecessary **Enter Code** item in the website account menu.
+
+### Fixed
+
+- **Clear All** now removes the shared notification records so the app and website badge counts stay synchronized.
+- Tightening or ending shared Control Center access immediately stops active device commands and enforces the new limits server-side.
+- Removed the orphaned upload-progress element responsible for the blue bar above the website message composer.
+
 ## [2.0.8] - 2026-11-03
 
 ### Added

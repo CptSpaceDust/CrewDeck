@@ -280,9 +280,8 @@ export function WhatsNew() {
             <div>
               <strong>Added</strong>
               <p>
-                Control Center quick codes provide the same limited guest access
-                as links, and every member can enter a code from the Control
-                Center page.
+                Captains can manage every active Control Center link and code,
+                including its devices, limits, expiration, and session count.
               </p>
             </div>
           </article>
@@ -291,9 +290,9 @@ export function WhatsNew() {
             <div>
               <strong>Changed</strong>
               <p>
-                Live Control is smoother and keeps only the newest dial value,
-                while Crew Inbox cards and in-app status notifications use a
-                cleaner Space Glass layout.
+                Crew Inbox cards, status notifications, and device safety
+                settings use clearer Space Glass layouts. Guests receive live
+                limit changes without refreshing.
               </p>
             </div>
           </article>
@@ -302,9 +301,9 @@ export function WhatsNew() {
             <div>
               <strong>Fixed</strong>
               <p>
-                Live Control stops immediately on release, and the unused
-                maximum-increase setting has been removed from every safety
-                surface.
+                Notification counts stay synchronized across the app and
+                website, and ending or tightening shared access immediately
+                stops active device commands.
               </p>
             </div>
           </article>
