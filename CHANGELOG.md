@@ -2,6 +2,12 @@
 
 Every published CrewDeck release is documented here and copied into its GitHub release notes.
 
+## [2.0.13] - 2026-11-10
+
+### Fixed
+
+- Made the app-lock release test verify the stored hash structure instead of searching the random hash text for the PIN, eliminating a rare false failure during installer builds.
+
 ## [2.0.12] - 2026-11-10
 
 ### Added

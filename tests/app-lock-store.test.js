@@ -16,8 +16,11 @@ test("stores a salted hash and verifies the PIN", () => {
   const store = new AppLockStore(file);
   assert.equal(store.setPin("2468").ok, true);
   assert.equal(store.verify("2468"), true); assert.equal(store.verify("1111"), false);
-  const saved = fs.readFileSync(file, "utf8");
-  assert.equal(saved.includes("2468"), false);
+  const saved = JSON.parse(fs.readFileSync(file, "utf8"));
+  assert.equal(Object.hasOwn(saved, "pin"), false);
+  assert.equal(saved.enabled, true);
+  assert.match(saved.salt, /^[a-f0-9]{48}$/);
+  assert.match(saved.pinHash, /^[a-f0-9]{128}$/);
   assert.equal(new AppLockStore(file).verify("2468"), true);
 });
 
