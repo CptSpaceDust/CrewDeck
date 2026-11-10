@@ -2,6 +2,26 @@
 
 Every published CrewDeck release is documented here and copied into its GitHub release notes.
 
+## [2.0.10] - 2026-11-09
+
+### Added
+
+- Crew members can securely pair their own OpenShock or PiShock devices and open paired Control Centers from the crew directory.
+- Device owners can grant accepted friends persistent trusted access or generate temporary links and quick codes with live-editable limits.
+- Logged-out guests choose a nickname that appears in PiShock activity and CrewDeck device logs.
+
+### Changed
+
+- Control Center now uses a cleaner Space Glass console with separate Shock and Vibrate rails around central Stop, Beep, and warning controls.
+- Guest-access and live-access dialogs are wider, responsive, and organize device settings in readable cards.
+- Control Center is available to every signed-in member; controls remain hidden until they pair devices, receive trusted access, or enter an owner’s code.
+
+### Fixed
+
+- Provider credentials are encrypted in Supabase Vault and never returned to the app.
+- Invalid or expired provider credentials automatically return the owner to the pairing flow.
+- Live access edits now use the paired owner’s authorization instead of the legacy Captain-only route.
+
 ## [2.0.9] - 2026-11-09
 
 ### Added

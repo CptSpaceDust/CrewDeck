@@ -15,7 +15,7 @@ test("CrewDeck routes every member to the Control Center entry point", () => {
   assert.match(sidebar, /Control Center/);
   assert.doesNotMatch(sidebar, /controlCenterAccess/);
 });
-test("Control Center verifies auth, Trusted Person badge, and Safe Mode", () => {
+test("Control Center verifies auth, keeps legacy Trusted access, and opens owner-specific codes", () => {
   const page = read("src", "renderer", "pages", "ControlCenterPage.jsx");
   assert.match(page, /supabase\.auth\.getUser\(\)/);
   assert.match(page, /select\("badges"\)/);
@@ -27,8 +27,10 @@ test("Control Center verifies auth, Trusted Person badge, and Safe Mode", () => 
   assert.doesNotMatch(pageAccess, /rank.*captain/i);
   assert.match(page, /from\("site_settings"\)/);
   assert.match(page, /safe_mode/);
-  assert.match(page, /Enter a Control Center code/);
+  assert.match(page, /Pair API/);
+  assert.match(page, /Open \$\{ownerAccessOpen\.profile\?\.username/);
   assert.match(page, /redeem_code/);
+  assert.match(page, /control-provider/);
 });
 
 test("Control Center includes device operations and real dials", () => {

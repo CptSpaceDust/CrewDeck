@@ -1,10 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   AlertTriangle,
+  Activity,
+  Bell,
+  ChevronRight,
   Clock3,
   Copy,
   Gauge,
+  Hand,
+  KeyRound,
   Link2,
+  PlugZap,
   Radio,
   RefreshCw,
   ShieldAlert,
@@ -12,7 +18,10 @@ import {
   SlidersHorizontal,
   Trash2,
   Unlink2,
+  UserPlus,
+  UserRound,
   UsersRound,
+  Zap,
 } from "lucide-react";
 import { promptInApp, confirmInApp } from "../components/InAppDialog";
 import { Loading, Modal, PageHeader } from "../components/ui";
@@ -235,6 +244,26 @@ function Dial({
   );
 }
 
+function ControlRail({ label, value, min = 0, max = 100, step = 1, suffix = "", tone = "cyan", disabled, onChange, icon: Icon = Activity }) {
+  const percent = max === min ? 0 : ((Number(value) - min) / (max - min)) * 100;
+  return (
+    <label className={`control-rail control-rail-${tone}${disabled ? " disabled" : ""}`}>
+      <span className="control-rail-heading"><Icon /><b>{label}</b><output>{value}{suffix}</output></span>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        disabled={disabled}
+        style={{ "--rail-progress": `${percent}%` }}
+        onChange={(event) => onChange(Number(event.target.value))}
+      />
+      <span className="control-rail-scale"><small>{min}{suffix}</small><small>{max}{suffix}</small></span>
+    </label>
+  );
+}
+
 function GuestDeviceCard({ device, onCommand }) {
   const [intensity, setIntensity] = useState(
     Math.min(10, Number(device.max_intensity) || 100),
@@ -353,6 +382,12 @@ export default function ControlCenterPage({ user, profile }) {
     maxUses: 1,
     devices: {},
   });
+  const [providerStatus, setProviderStatus] = useState({ paired: null, owners: [], trusted_people: [], friend_options: [] });
+  const [activeOwner, setActiveOwner] = useState(null);
+  const [pairOpen, setPairOpen] = useState(false);
+  const [pairBusy, setPairBusy] = useState(false);
+  const [pairForm, setPairForm] = useState({ apiToken: "", username: "" });
+  const [ownerAccessOpen, setOwnerAccessOpen] = useState(null);
   const commandGate = useRef(new Map());
   const warningRun = useRef(null);
   const lastLiveCommand = useRef(0);
@@ -381,7 +416,7 @@ export default function ControlCenterPage({ user, profile }) {
           .single(),
         supabase.from("site_settings").select("safe_mode").eq("id", 1).single(),
       ]);
-    if (profileError || !canUseControlCenter(verifiedProfile)) {
+    if (profileError) {
       const storedGuest = sessionStorage.getItem(
         "crewdeck_guest_control_session",
       );
@@ -411,6 +446,70 @@ export default function ControlCenterPage({ user, profile }) {
     return true;
   }, [user.id]);
 
+  const invokeProvider = useCallback(async (body) => {
+    const { data, error } = await supabase.functions.invoke("control-provider", { body });
+    if (error) throw new Error(await functionError(error, "Control provider request failed."));
+    if (!data?.success) throw new Error(data?.error || "Control provider request failed.");
+    return data;
+  }, []);
+
+  const loadProviderStatus = useCallback(async () => {
+    const data = await invokeProvider({ action: "status" });
+    setProviderStatus({
+      paired: data.paired || null,
+      owners: data.owners || [],
+      trusted_people: data.trusted_people || [],
+      friend_options: data.friend_options || [],
+    });
+    return data;
+  }, [invokeProvider]);
+
+  const loadOwnerDevices = useCallback(async (owner) => {
+    setLoading(true);
+    setNotice("");
+    try {
+      const result = await invokeProvider({ action: "devices", owner_id: owner.user_id });
+      const nextDevices = (result.devices || []).map((device) => ({
+        id: device.device_id,
+        name: device.device_name,
+        provider: device.provider,
+        paused: device.is_paused,
+      }));
+      setDevices(nextDevices);
+      setSafety(Object.fromEntries((result.devices || []).map((device) => [device.device_id, { ...initialSafety(), ...(device.safety || {}) }])));
+      setControls(Object.fromEntries(nextDevices.map((device) => [device.id, initialControl()])));
+      setActiveOwner({ id: owner.user_id, username: owner.profile?.username || "Crew member", provider: owner.provider, trusted: true });
+      setNotice(`Controlling ${owner.profile?.username || "this crew member"}’s paired devices.`);
+    } catch (error) {
+      setNotice(error.message || "Unable to open this Control Center.");
+    } finally {
+      setLoading(false);
+    }
+  }, [invokeProvider]);
+
+  async function pairProvider(event) {
+    event.preventDefault();
+    setPairBusy(true);
+    setNotice("");
+    try {
+      const result = await invokeProvider({ action: "pair", api_token: pairForm.apiToken, username: pairForm.username });
+      setPairForm({ apiToken: "", username: "" });
+      setPairOpen(false);
+      setNotice(`${result.provider === "pishock" ? "PiShock" : "OpenShock"} paired successfully. ${result.device_count} device${result.device_count === 1 ? "" : "s"} found.`);
+      await loadDevices();
+    } catch (error) {
+      setNotice(error.message || "The provider could not be paired.");
+    } finally {
+      setPairBusy(false);
+    }
+  }
+
+  async function changeTrustedPerson(targetUserId, trusted) {
+    await invokeProvider({ action: trusted ? "trust" : "untrust", target_user_id: targetUserId });
+    await loadProviderStatus();
+    setNotice(trusted ? "Trusted device access added." : "Trusted device access removed immediately.");
+  }
+
   const loadLogs = useCallback(async () => {
     const { data, error } = await supabase
       .from("control_logs")
@@ -421,6 +520,11 @@ export default function ControlCenterPage({ user, profile }) {
   }, []);
 
   const loadActiveLinks = useCallback(async () => {
+    if (providerStatus.paired) {
+      const data = await invokeProvider({ action: "shares" });
+      setActiveLinks(data.links || []);
+      return;
+    }
     if (String(profile.rank || "").trim().toLowerCase() !== "captain") return;
     const { data, error } = await supabase
       .from("control_access_links")
@@ -431,7 +535,7 @@ export default function ControlCenterPage({ user, profile }) {
       .order("created_at", { ascending: false });
     if (error) throw error;
     setActiveLinks(data || []);
-  }, [profile.rank, user.id]);
+  }, [invokeProvider, profile.rank, providerStatus.paired, user.id]);
 
   const loadPresets = useCallback(
     async (nextDevices) => {
@@ -483,16 +587,29 @@ export default function ControlCenterPage({ user, profile }) {
     setNotice("");
     try {
       if (!(await verifyAccess())) return;
-      const { data, error } =
-        await supabase.functions.invoke("openshock-devices");
-      if (error)
-        throw new Error(await functionError(error, "Unable to load devices."));
-      if (data?.error) throw new Error(data.error);
-      let nextDevices = data?.devices;
-      if (!Array.isArray(nextDevices)) {
-        const decoded =
-          typeof data?.raw === "string" ? JSON.parse(data.raw) : data;
-        nextDevices = decoded?.data?.[0]?.shockers || [];
+      const provider = await loadProviderStatus();
+      let nextDevices = [];
+      if (provider.paired) {
+        const result = await invokeProvider({ action: "devices", owner_id: user.id });
+        nextDevices = (result.devices || []).map((device) => ({
+          id: device.device_id,
+          name: device.device_name,
+          provider: device.provider,
+          paused: device.is_paused,
+        }));
+        setActiveOwner({ id: user.id, username: profile.username || "You", own: true, provider: provider.paired.provider });
+      } else if (canUseControlCenter(profile)) {
+        const { data, error } = await supabase.functions.invoke("openshock-devices");
+        if (error) throw new Error(await functionError(error, "Unable to load devices."));
+        if (data?.error) throw new Error(data.error);
+        nextDevices = data?.devices;
+        if (!Array.isArray(nextDevices)) {
+          const decoded = typeof data?.raw === "string" ? JSON.parse(data.raw) : data;
+          nextDevices = decoded?.data?.[0]?.shockers || [];
+        }
+        setActiveOwner({ id: user.id, username: profile.username || "You", own: true, provider: "openshock" });
+      } else {
+        setActiveOwner(null);
       }
       setDevices(nextDevices);
       setControls((current) => {
@@ -512,7 +629,7 @@ export default function ControlCenterPage({ user, profile }) {
     } finally {
       setLoading(false);
     }
-  }, [loadLogs, loadPresets, loadSafety, verifyAccess]);
+  }, [invokeProvider, loadLogs, loadPresets, loadProviderStatus, loadSafety, profile, user.id, verifyAccess]);
 
   useEffect(() => {
     loadDevices();
@@ -593,20 +710,26 @@ export default function ControlCenterPage({ user, profile }) {
     if (!selected.length) throw new Error("Keep at least one shared device.");
     setActiveLinksBusy(true);
     try {
-      const { error } = await supabase.rpc("captain_update_control_access_link", {
-        p_link_id: editingLink.id,
-        p_expires_at: new Date(Date.now() + Number(editingLink.expiryMinutes) * 60000).toISOString(),
-        p_max_uses: Number(editingLink.max_uses),
-        p_devices: selected.map((device) => ({
+      const expiresAt = new Date(Date.now() + Number(editingLink.expiryMinutes) * 60000).toISOString();
+      const sharedDevices = selected.map((device) => ({
           shocker_id: device.shocker_id,
           shocker_name: device.shocker_name,
           max_intensity: Number(device.max_intensity),
           max_duration: Number(device.max_duration),
           require_hold_to_shock: device.require_hold_to_shock !== false,
           hold_milliseconds: Number(device.hold_milliseconds || 800),
-        })),
-      });
-      if (error) throw error;
+        }));
+      if (providerStatus.paired) {
+        await invokeProvider({ action: "update_share", link_id: editingLink.id, expires_at: expiresAt, max_uses: Number(editingLink.max_uses), devices: sharedDevices });
+      } else {
+        const { error } = await supabase.rpc("captain_update_control_access_link", {
+          p_link_id: editingLink.id,
+          p_expires_at: expiresAt,
+          p_max_uses: Number(editingLink.max_uses),
+          p_devices: sharedDevices,
+        });
+        if (error) throw error;
+      }
       await Promise.allSettled(devices.map((device) => sendCommand(device, "stop", 0, 0, true)));
       setNotice("Live guest limits updated and active commands stopped.");
       setEditingLink(null);
@@ -618,8 +741,11 @@ export default function ControlCenterPage({ user, profile }) {
 
   async function revokeActiveLink(linkId) {
     if (!(await confirmInApp("End this shared Control Center access now?", { title: "End shared access", confirmLabel: "End access" }))) return;
-    const { error } = await supabase.rpc("captain_revoke_control_access_link", { p_link_id: linkId });
-    if (error) throw error;
+    if (providerStatus.paired) await invokeProvider({ action: "revoke_share", link_id: linkId });
+    else {
+      const { error } = await supabase.rpc("captain_revoke_control_access_link", { p_link_id: linkId });
+      if (error) throw error;
+    }
     await Promise.allSettled(devices.map((device) => sendCommand(device, "stop", 0, 0, true)));
     setNotice("Shared access ended immediately.");
     await loadActiveLinks();
@@ -761,12 +887,7 @@ export default function ControlCenterPage({ user, profile }) {
     const expiresAt = new Date(
       Date.now() + Number(linkSettings.expiryMinutes) * 60 * 1000,
     ).toISOString();
-    const { error } = await supabase.rpc("captain_create_control_access_link", {
-      p_token_hash: tokenHash,
-      p_share_code_hash: await sha256(code),
-      p_expires_at: expiresAt,
-      p_max_uses: Number(linkSettings.maxUses),
-      p_devices: selectedDevices.map((device) => ({
+    const sharedDevices = selectedDevices.map((device) => ({
         shocker_id: device.id,
         shocker_name: device.name || "Control module",
         max_intensity: linkSettings.devices[device.id].max_intensity,
@@ -774,9 +895,26 @@ export default function ControlCenterPage({ user, profile }) {
         require_hold_to_shock:
           linkSettings.devices[device.id].require_hold_to_shock,
         hold_milliseconds: linkSettings.devices[device.id].hold_milliseconds,
-      })),
-    });
-    if (error) throw error;
+      }));
+    if (providerStatus.paired) {
+      await invokeProvider({
+        action: "create_share",
+        token_hash: tokenHash,
+        share_code_hash: await sha256(code),
+        expires_at: expiresAt,
+        max_uses: Number(linkSettings.maxUses),
+        devices: sharedDevices,
+      });
+    } else {
+      const { error } = await supabase.rpc("captain_create_control_access_link", {
+        p_token_hash: tokenHash,
+        p_share_code_hash: await sha256(code),
+        p_expires_at: expiresAt,
+        p_max_uses: Number(linkSettings.maxUses),
+        p_devices: sharedDevices,
+      });
+      if (error) throw error;
+    }
     const link = `https://www.cptspacedust.com/control-center.html?control_invite=${token}`;
     setShareLink(link);
     setShareCode(code);
@@ -806,21 +944,33 @@ export default function ControlCenterPage({ user, profile }) {
     )
       throw new Error("Duplicate command blocked.");
     commandGate.current.set(fingerprint, Date.now());
-    const { data, error } = await supabase.functions.invoke(
-      "openshock-control",
-      {
-        body: {
-          shocker_id: device.id,
-          action,
-          intensity: Number(intensity),
-          duration: Number(duration),
-          live: liveCommand,
+    if (providerStatus.paired || (activeOwner?.id && activeOwner.id !== user.id)) {
+      await invokeProvider({
+        action: "control",
+        owner_id: activeOwner?.id || user.id,
+        device_id: device.id,
+        command: action,
+        intensity: Number(intensity),
+        duration: Number(duration),
+        live: liveCommand,
+      });
+    } else {
+      const { data, error } = await supabase.functions.invoke(
+        "openshock-control",
+        {
+          body: {
+            shocker_id: device.id,
+            action,
+            intensity: Number(intensity),
+            duration: Number(duration),
+            live: liveCommand,
+          },
         },
-      },
-    );
-    if (error)
-      throw new Error(await functionError(error, "The command was rejected."));
-    if (!data?.success) throw new Error(data?.error || "The command failed.");
+      );
+      if (error)
+        throw new Error(await functionError(error, "The command was rejected."));
+      if (!data?.success) throw new Error(data?.error || "The command failed.");
+    }
     if (!skipLog) await logCommand(device, action, intensity, duration);
   }
 
@@ -1063,7 +1213,7 @@ export default function ControlCenterPage({ user, profile }) {
     try {
       const { data, error } = await supabase.functions.invoke(
         "openshock-guest-control",
-        { body: { action: "redeem_code", share_code: code } },
+        { body: { action: "redeem_code", share_code: code, guest_name: profile.username || "CrewDeck member" } },
       );
       if (error)
         throw new Error(
@@ -1078,6 +1228,7 @@ export default function ControlCenterPage({ user, profile }) {
       setGuestSession(data.session_token);
       setGuestDevices(data.devices || []);
       setAccess("guest");
+      setOwnerAccessOpen(null);
       setNotice("Limited Control Center access confirmed.");
     } catch (error) {
       setNotice(error.message || "This code cannot be used.");
@@ -1111,7 +1262,7 @@ export default function ControlCenterPage({ user, profile }) {
       <div className="page control-center-page guest-control-page">
         <PageHeader
           title="Limited Control Center"
-          description="The Captain selected the devices and limits available in this session."
+          description="The device owner selected the devices and limits available in this session."
           action={
             <button
               className="button ghost"
@@ -1119,7 +1270,8 @@ export default function ControlCenterPage({ user, profile }) {
                 sessionStorage.removeItem("crewdeck_guest_control_session");
                 setGuestSession("");
                 setGuestDevices([]);
-                setAccess("denied");
+                setAccess("allowed");
+                loadDevices();
               }}
             >
               Leave access session
@@ -1171,35 +1323,17 @@ export default function ControlCenterPage({ user, profile }) {
         <p>This restricted system is unavailable while Safe Mode is active.</p>
       </div>
     );
-  if (access !== "allowed" || !canUseControlCenter(profile))
+  if (access !== "allowed")
     return (
       <div className="control-center-code-shell">
         <section className="control-center-access control-code-card panel">
-          <span className="control-code-mark">#</span>
-          <span className="eyebrow">Limited access</span>
-          <h1>Enter a Control Center code</h1>
+          <ShieldAlert />
+          <span className="eyebrow">Control Center unavailable</span>
+          <h1>Sign in again to continue</h1>
           <p>
-            Use the eight-character code shared by the Captain. Only the
-            selected devices and limits will become available.
+            CrewDeck could not verify this session. Reopen the app or sign in
+            again before pairing or controlling devices.
           </p>
-          <form onSubmit={redeemAccessCode}>
-            <label htmlFor="control-access-code">Access code</label>
-            <input
-              id="control-access-code"
-              value={accessCode}
-              onChange={(event) =>
-                setAccessCode(formatAccessCode(event.target.value))
-              }
-              placeholder="ABCD-2345"
-              maxLength={9}
-              autoComplete="one-time-code"
-              required
-            />
-            <small>Letters and numbers only. Dashes are optional.</small>
-            <button className="button primary" disabled={codeBusy}>
-              {codeBusy ? "Checking code…" : "Open Control Center"}
-            </button>
-          </form>
           {notice && (
             <div className="control-code-status" role="status">
               {notice}
@@ -1221,6 +1355,54 @@ export default function ControlCenterPage({ user, profile }) {
       <div className="control-center-notice" role="status">
         {notice || "Control access confirmed."}
       </div>
+      <section className="panel control-owner-hub">
+        <header>
+          <div>
+            <span className="eyebrow">Crew device network</span>
+            <h2>Choose a Control Center</h2>
+            <p>Open a trusted crew member’s devices or use their temporary link or code.</p>
+          </div>
+          {!providerStatus.paired ? (
+            <button className="button primary" onClick={() => setPairOpen(true)}><PlugZap /> Pair API</button>
+          ) : (
+            <span className="control-provider-connected"><ShieldCheck /> {providerStatus.paired.provider === "pishock" ? "PiShock" : "OpenShock"} paired</span>
+          )}
+        </header>
+        <div className="control-owner-list">
+          {providerStatus.paired && (
+            <button className={activeOwner?.id === user.id ? "active" : ""} onClick={loadDevices}>
+              <span className="control-owner-avatar"><UserRound /></span>
+              <span><strong>My devices</strong><small>{providerStatus.paired.device_count} paired · {providerStatus.paired.provider}</small></span>
+              <ChevronRight />
+            </button>
+          )}
+          {providerStatus.owners.map((owner) => (
+            <button
+              key={owner.user_id}
+              className={activeOwner?.id === owner.user_id ? "active" : ""}
+              onClick={() => owner.trusted ? loadOwnerDevices(owner) : setOwnerAccessOpen(owner)}
+            >
+              <span className="control-owner-avatar">{owner.profile?.avatar ? <img src={owner.profile.avatar} alt="" /> : <UserRound />}</span>
+              <span><strong>{owner.profile?.username || "Crew member"}</strong><small>{owner.device_count} device{owner.device_count === 1 ? "" : "s"} · {owner.trusted ? "Trusted access" : "Code required"}</small></span>
+              {owner.trusted ? <ShieldCheck /> : <KeyRound />}
+            </button>
+          ))}
+          {!providerStatus.paired && !providerStatus.owners.length && (
+            <div className="control-owner-empty"><PlugZap /><span><strong>No paired Control Centers yet</strong><small>Pair OpenShock or PiShock to make your devices available here.</small></span></div>
+          )}
+        </div>
+        {providerStatus.paired && (
+          <details className="control-trusted-manager">
+            <summary><UserPlus /> Trusted people</summary>
+            <p>Trusted friends can open your devices without a temporary code. Your safety limits and emergency stop still apply.</p>
+            <div className="control-trusted-list">
+              {providerStatus.trusted_people.map((person) => <span key={person.id}>{person.username}<button onClick={() => changeTrustedPerson(person.id, false)}>Remove</button></span>)}
+              {providerStatus.friend_options.map((person) => <span key={person.id}>{person.username}<button onClick={() => changeTrustedPerson(person.id, true)}>Trust</button></span>)}
+              {!providerStatus.trusted_people.length && !providerStatus.friend_options.length && <small>Add crew friends before granting trusted access.</small>}
+            </div>
+          </details>
+        )}
+      </section>
       <section className="panel control-global-panel">
         <div className="control-global-heading">
           <div>
@@ -1278,7 +1460,7 @@ export default function ControlCenterPage({ user, profile }) {
             </button>
           </div>
         )}
-        {profile.rank?.trim().toLowerCase() === "captain" && (
+        {(profile.rank?.trim().toLowerCase() === "captain" || providerStatus.paired) && activeOwner?.id === user.id && (
           <div className="control-share-access">
             <div>
               <strong>Limited guest access</strong>
@@ -1320,9 +1502,40 @@ export default function ControlCenterPage({ user, profile }) {
           </div>
         )}
       </section>
+      {pairOpen && (
+        <Modal title="Pair a shocker API" className="control-pair-modal" onClose={() => setPairOpen(false)}>
+          <form className="control-pair-flow" onSubmit={pairProvider}>
+            <div className="control-pair-guide">
+              <span><PlugZap /></span>
+              <div><strong>Connect OpenShock or PiShock</strong><p>Your API credential is sent directly to CrewDeck’s secure server and stored encrypted. It is never shown again.</p></div>
+            </div>
+            <ol>
+              <li><b>1</b><span>Go to your shocker brand’s API Token page. CrewDeck supports OpenShock and PiShock.</span></li>
+              <li><b>2</b><span>Generate a new API credential with the device permissions you want CrewDeck to use.</span></li>
+              <li><b>3</b><span>Copy it and keep your own backup somewhere safe.</span></li>
+              <li><b>4</b><span>Paste it below and select <strong>Pair devices</strong>.</span></li>
+            </ol>
+            <label><span>API token</span><input type="password" value={pairForm.apiToken} onChange={(event) => setPairForm((current) => ({ ...current, apiToken: event.target.value }))} autoComplete="off" required /></label>
+            <label><span>PiShock username <small>Only required for PiShock</small></span><input value={pairForm.username} onChange={(event) => setPairForm((current) => ({ ...current, username: event.target.value }))} autoComplete="username" /></label>
+            <p className="control-pair-detect-note"><Activity /> CrewDeck tries OpenShock first, then PiShock when a username is provided.</p>
+            <div className="modal-actions"><button type="button" className="button ghost" onClick={() => setPairOpen(false)}>Cancel</button><button className="button primary" disabled={pairBusy}>{pairBusy ? "Checking provider…" : "Pair devices"}</button></div>
+          </form>
+        </Modal>
+      )}
+      {ownerAccessOpen && (
+        <Modal title={`Open ${ownerAccessOpen.profile?.username || "crew member"}’s Control Center`} className="control-owner-access-modal" onClose={() => setOwnerAccessOpen(null)}>
+          <form className="control-owner-access-form" onSubmit={redeemAccessCode}>
+            <KeyRound />
+            <p>Ask this device owner for their current eight-character code. Their selected devices and limits will open after it is accepted.</p>
+            <label><span>Access code</span><input value={accessCode} onChange={(event) => setAccessCode(formatAccessCode(event.target.value))} placeholder="ABCD-2345" maxLength={9} autoComplete="one-time-code" required /></label>
+            <div className="modal-actions"><button type="button" className="button ghost" onClick={() => setOwnerAccessOpen(null)}>Cancel</button><button className="button primary" disabled={codeBusy}>{codeBusy ? "Checking code…" : "Open Control Center"}</button></div>
+          </form>
+        </Modal>
+      )}
       {linkBuilderOpen && (
         <Modal
           title="Create guest Control Center access"
+          className="control-share-builder-modal"
           onClose={() => setLinkBuilderOpen(false)}
         >
           <div className="control-link-builder-app">
@@ -1545,7 +1758,7 @@ export default function ControlCenterPage({ user, profile }) {
         </Modal>
       )}
       {activeLinksOpen && (
-        <Modal title="Live shared access" onClose={() => { setActiveLinksOpen(false); setEditingLink(null); }}>
+        <Modal className="control-live-access-modal" title="Live shared access" onClose={() => { setActiveLinksOpen(false); setEditingLink(null); }}>
           <div className="control-active-access-manager">
             <div className="control-active-access-intro">
               <ShieldCheck />
@@ -1626,36 +1839,40 @@ export default function ControlCenterPage({ user, profile }) {
                   {control.synced ? "Linked" : "Sync"}
                 </button>
               </header>
-              <div className="control-dial-panel">
-                <Dial
-                  label="Intensity"
-                  value={control.intensity}
-                  min={0}
-                  max={deviceSafety.max_intensity}
-                  disabled={busy}
-                  onChange={(value) => {
-                    updateControl(device.id, { intensity: value });
-                    sendLive(device.id, value);
-                  }}
-                  onRelease={() => {
-                    stopLive();
-                    stopTargets(device.id);
-                  }}
-                />
-                {!live && (
-                  <Dial
-                    label="Duration"
-                    tone="duration"
-                    value={control.duration}
-                    min={1}
-                    max={Math.max(1, Math.floor(deviceSafety.max_duration))}
-                    suffix="s"
-                    disabled={busy}
-                    onChange={(value) =>
-                      updateControl(device.id, { duration: value })
+              <div className="control-console">
+                <section className="control-console-lane shock-lane">
+                  <header><span><Zap /></span><div><small>Shock</small><strong>{control.intensity}%</strong></div></header>
+                  <ControlRail label="Intensity" icon={Gauge} tone="danger" value={control.intensity} min={0} max={deviceSafety.max_intensity} suffix="%" disabled={busy} onChange={(value) => { updateControl(device.id, { intensity: value }); sendLive(device.id, value); }} />
+                  {!live && <ControlRail label="Duration" icon={Clock3} tone="danger" value={control.duration} min={1} max={Math.max(1, Math.floor(deviceSafety.max_duration))} suffix="s" disabled={busy} onChange={(value) => updateControl(device.id, { duration: value })} />}
+                  {!live && (deviceSafety.require_hold_to_shock !== false ? (
+                    <HoldCommandButton className="control-console-operate shock" disabled={busy && pendingWarning !== device.id} holdMs={deviceSafety.hold_milliseconds} onActivate={() => runAction(device.id, "shock")} onRelease={() => stopTargets(device.id)}>
+                      {pendingWarning === device.id ? "Cancel shock" : "Hold to shock"}
+                    </HoldCommandButton>
+                  ) : (
+                    <button className="control-console-operate shock" disabled={busy && pendingWarning !== device.id} onClick={() => runAction(device.id, "shock")}>{pendingWarning === device.id ? "Cancel shock" : "Shock"}</button>
+                  ))}
+                </section>
+                <section className="control-console-core">
+                  <button className="control-console-stop" onClick={() => stopTargets(device.id)} disabled={busy}><ShieldAlert /><strong>STOP</strong><small>Release all</small></button>
+                  <button
+                    onClick={() => runAction(device.id, "beep")}
+                    disabled={
+                      busy ||
+                      (!providerStatus.paired &&
+                        activeOwner?.id === user.id &&
+                        profile.rank?.toLowerCase() !== "captain")
                     }
-                  />
-                )}
+                  >
+                    <Bell /><span>Beep</span>
+                  </button>
+                  {!live && <button className={control.warningEnabled ? "active" : ""} onClick={() => updateControl(device.id, { warningEnabled: !control.warningEnabled })}><AlertTriangle /><span>{control.warningEnabled ? "Warning on" : "Warning off"}</span></button>}
+                </section>
+                <section className="control-console-lane vibrate-lane">
+                  <header><span><Hand /></span><div><small>Vibrate</small><strong>{control.intensity}%</strong></div></header>
+                  <ControlRail label="Intensity" icon={Gauge} value={control.intensity} min={0} max={deviceSafety.max_intensity} suffix="%" disabled={busy} onChange={(value) => { updateControl(device.id, { intensity: value }); sendLive(device.id, value); }} />
+                  {!live && <ControlRail label="Duration" icon={Clock3} value={control.duration} min={1} max={Math.max(1, Math.floor(deviceSafety.max_duration))} suffix="s" disabled={busy} onChange={(value) => updateControl(device.id, { duration: value })} />}
+                  {!live && <button className="control-console-operate" disabled={busy} onClick={() => runAction(device.id, "vibrate")}>Vibrate</button>}
+                </section>
               </div>
               {!live && (
                 <details className="control-advanced">
@@ -1840,66 +2057,6 @@ export default function ControlCenterPage({ user, profile }) {
                     )}
                   </div>
                 </details>
-              )}
-              {!live && (
-                <div className="control-action-row">
-                  {control.intensity >=
-                  deviceSafety.high_intensity_threshold ? (
-                    <HoldCommandButton
-                      disabled={busy}
-                      holdMs={deviceSafety.hold_milliseconds}
-                      onActivate={() => runAction(device.id, "vibrate")}
-                      onRelease={() => stopTargets(device.id)}
-                    >
-                      Hold to vibrate
-                    </HoldCommandButton>
-                  ) : (
-                    <button
-                      disabled={busy}
-                      onClick={() => runAction(device.id, "vibrate")}
-                    >
-                      Vibrate
-                    </button>
-                  )}
-                  <button
-                    disabled={busy || profile.rank?.toLowerCase() !== "captain"}
-                    title={
-                      profile.rank?.toLowerCase() === "captain"
-                        ? "Beep"
-                        : "Only the Captain can use beep"
-                    }
-                    onClick={() => runAction(device.id, "beep")}
-                  >
-                    Beep
-                  </button>
-                  {deviceSafety.require_hold_to_shock !== false ? (
-                    <HoldCommandButton
-                      className="shock"
-                      disabled={busy && pendingWarning !== device.id}
-                      holdMs={deviceSafety.hold_milliseconds}
-                      onActivate={() => runAction(device.id, "shock")}
-                      onRelease={() => stopTargets(device.id)}
-                    >
-                      {pendingWarning === device.id
-                        ? "Cancel Shock"
-                        : control.warningEnabled
-                          ? "Hold · Warning On"
-                          : "Hold to shock"}
-                    </HoldCommandButton>
-                  ) : (
-                    <button
-                      className="shock"
-                      disabled={busy && pendingWarning !== device.id}
-                      onClick={() => runAction(device.id, "shock")}
-                    >
-                      {pendingWarning === device.id
-                        ? "Cancel Shock"
-                        : control.warningEnabled
-                          ? "Shock · Warning On"
-                          : "Shock"}
-                    </button>
-                  )}
-                </div>
               )}
             </article>
           );
