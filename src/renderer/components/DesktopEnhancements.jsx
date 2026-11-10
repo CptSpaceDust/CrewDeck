@@ -280,8 +280,8 @@ export function WhatsNew() {
             <div>
               <strong>Added</strong>
               <p>
-                Device owners can trust any crew member, disconnect a paired
-                API, and pause a device for every active access method.
+                Device owners can rename and configure their devices and
+                privately review or clear their command history.
               </p>
             </div>
           </article>
@@ -290,8 +290,8 @@ export function WhatsNew() {
             <div>
               <strong>Changed</strong>
               <p>
-                Shock and Vibrate now use independent vertical controls with
-                clearer press and successful-command feedback.
+                Authorized controllers now share Beep, one Warning control,
+                and personal presets in a responsive vertical console.
               </p>
             </div>
           </article>
@@ -300,8 +300,8 @@ export function WhatsNew() {
             <div>
               <strong>Fixed</strong>
               <p>
-                The Captain automatically uses the existing stored provider
-                API, and live links or codes immediately respect device pauses.
+                PiShock pairing, Emergency Stop, narrow-window styling, and
+                repeated provider refreshes are corrected.
               </p>
             </div>
           </article>

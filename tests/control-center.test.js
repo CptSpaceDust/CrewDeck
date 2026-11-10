@@ -15,11 +15,9 @@ test("CrewDeck routes every member to the Control Center entry point", () => {
   assert.match(sidebar, /Control Center/);
   assert.doesNotMatch(sidebar, /controlCenterAccess/);
 });
-test("Control Center verifies auth, keeps legacy Trusted access, and opens owner-specific codes", () => {
+test("Control Center verifies auth and opens paired owner-specific access", () => {
   const page = read("src", "renderer", "pages", "ControlCenterPage.jsx");
   assert.match(page, /supabase\.auth\.getUser\(\)/);
-  assert.match(page, /select\("badges"\)/);
-  assert.match(page, /trusted person/);
   const pageAccess = page.slice(
     page.indexOf("function canUseControlCenter"),
     page.indexOf("async function functionError"),
@@ -33,22 +31,23 @@ test("Control Center verifies auth, keeps legacy Trusted access, and opens owner
   assert.match(page, /control-provider/);
 });
 
-test("Control Center includes device operations and real dials", () => {
+test("Control Center includes provider controls, vertical rails, and owner tools", () => {
   const page = read("src", "renderer", "pages", "ControlCenterPage.jsx");
   const css = read("src", "renderer", "space-glass.css");
   for (const feature of [
-    "openshock-devices",
-    "openshock-control",
+    "control-provider",
     "shocker_presets",
     "control_logs",
-    "Warning duration",
+    "Warning on",
     "Live Control",
     "Emergency Stop",
+    "Device settings and safety",
+    'action: "update_device"',
   ])
     assert.ok(page.includes(feature), `Missing ${feature}`);
-  assert.match(page, /role="slider"/);
-  assert.match(page, /pointerAngle - 135/);
-  assert.match(page, /--dial-color/);
+  assert.match(page, /vertical label="Intensity"/);
+  assert.match(page, /shockIntensity/);
+  assert.match(page, /vibrateIntensity/);
   assert.match(page, /sendCommand\(device, "stop", 0, 0, true\)/);
   assert.match(
     page,
@@ -57,20 +56,16 @@ test("Control Center includes device operations and real dials", () => {
   assert.doesNotMatch(page, /nextDevices\.length\} connected device/);
   assert.doesNotMatch(page, /Authorized systems|Secure control link/);
   assert.doesNotMatch(page, /[⚡🔊]\s*(?:Vibrate|Beep|Shock)/);
-  assert.match(css, /\.control-dial/);
-  assert.match(css, /repeating-conic-gradient/);
-  assert.match(css, /--dial-angle/);
-  assert.match(css, /--dial-color/);
+  assert.match(css, /\.control-rail\.vertical/);
+  assert.match(css, /\.control-vertical-rails/);
   assert.match(css, /control-emergency-flash/);
   assert.match(css, /user-select: none/);
   for (const safetyFeature of [
-    "control_device_safety_limits",
     "captain_create_control_access_link",
     "Duplicate command blocked",
     "Hold to shock",
-    "Device safety limits",
+    "Device settings and safety",
     "require_hold_to_shock",
-    "Only the Captain can change device safety limits",
     "Maximum uses",
     "copyControlText",
     "Quick access code",

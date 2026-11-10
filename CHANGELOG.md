@@ -2,6 +2,24 @@
 
 Every published CrewDeck release is documented here and copied into its GitHub release notes.
 
+## [2.0.12] - 2026-11-10
+
+### Added
+
+- Device owners can rename and configure their paired devices and privately review or clear their device activity.
+- Beep, one warning control, and personal presets are available to every authorized controller.
+
+### Changed
+
+- The paired-device console now stacks before labels or values can overlap, keeping vertical controls usable on smaller windows.
+- Owner-only settings and logs remain hidden from trusted users and temporary access sessions.
+
+### Fixed
+
+- PiShock pairing accepts documented response variants and gives useful errors for invalid usernames, keys, or device responses.
+- Emergency Stop now stops the active paired-provider devices.
+- Removed the legacy dial controls and eliminated repeated provider refresh calls caused by unstable state dependencies.
+
 ## [2.0.11] - 2026-11-10
 
 ### Added

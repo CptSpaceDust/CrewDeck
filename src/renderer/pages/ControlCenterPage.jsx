@@ -12,7 +12,6 @@ import {
   Link2,
   PlugZap,
   Radio,
-  RefreshCw,
   ShieldAlert,
   ShieldCheck,
   SlidersHorizontal,
@@ -123,24 +122,8 @@ function HoldCommandButton({
   );
 }
 
-function badgesOf(profile) {
-  if (Array.isArray(profile?.badges)) return profile.badges;
-  if (typeof profile?.badges !== "string") return [];
-  try {
-    const parsed = JSON.parse(profile.badges);
-    if (Array.isArray(parsed)) return parsed;
-  } catch {}
-  return profile.badges
-    .replace(/[\[\]"]/g, "")
-    .split(",")
-    .map((badge) => badge.trim())
-    .filter(Boolean);
-}
-
-function canUseControlCenter(profile) {
-  return badgesOf(profile).some(
-    (badge) => badge.trim().toLowerCase() === "trusted person",
-  );
+function canUseControlCenter() {
+  return true;
 }
 
 function formatAccessCode(value) {
@@ -158,92 +141,6 @@ async function functionError(error, fallback) {
   } catch {
     return error?.message || fallback;
   }
-}
-
-function Dial({
-  label,
-  value,
-  min,
-  max,
-  suffix = "",
-  tone = "danger",
-  disabled = false,
-  onChange,
-  onRelease,
-}) {
-  const percent = max === min ? 0 : (value - min) / (max - min);
-  const hue =
-    tone === "safe"
-      ? 190 - percent * 70
-      : tone === "duration"
-        ? 190 - percent * 160
-        : 190 - percent * 188;
-  function update(event) {
-    if (disabled) return;
-    event.preventDefault();
-    const rect = event.currentTarget.getBoundingClientRect();
-    const x = event.clientX - (rect.left + rect.width / 2);
-    const y = event.clientY - (rect.top + rect.height / 2);
-    const pointerAngle = (Math.atan2(y, x) * 180) / Math.PI;
-    let angle = (pointerAngle - 135 + 360) % 360;
-    if (angle > 270) angle = value >= (min + max) / 2 ? 270 : 0;
-    onChange(Math.round(min + (angle / 270) * (max - min)));
-  }
-  function key(event) {
-    if (disabled) return;
-    let next = value;
-    if (event.key === "ArrowUp" || event.key === "ArrowRight")
-      next = Math.min(max, value + 1);
-    else if (event.key === "ArrowDown" || event.key === "ArrowLeft")
-      next = Math.max(min, value - 1);
-    else if (event.key === "Home") next = min;
-    else if (event.key === "End") next = max;
-    else return;
-    event.preventDefault();
-    onChange(next);
-  }
-  return (
-    <div className="control-dial-group">
-      <span>{label}</span>
-      <div
-        className={`control-dial${disabled ? " disabled" : ""}`}
-        style={{
-          "--dial-angle": `${percent * 270}deg`,
-          "--dial-color": `hsl(${hue} 88% 62%)`,
-        }}
-        role="slider"
-        tabIndex={disabled ? -1 : 0}
-        aria-label={label}
-        aria-valuemin={min}
-        aria-valuemax={max}
-        aria-valuenow={value}
-        aria-disabled={disabled}
-        onKeyDown={key}
-        onPointerDown={(event) => {
-          if (disabled) return;
-          event.currentTarget.setPointerCapture(event.pointerId);
-          update(event);
-        }}
-        onPointerMove={(event) => {
-          if (event.currentTarget.hasPointerCapture(event.pointerId))
-            update(event);
-        }}
-        onPointerUp={(event) => {
-          if (event.currentTarget.hasPointerCapture(event.pointerId))
-            event.currentTarget.releasePointerCapture(event.pointerId);
-          onRelease?.();
-        }}
-        onPointerCancel={() => onRelease?.()}
-      >
-        <div className="control-dial-face">
-          <b>
-            {value}
-            {suffix}
-          </b>
-        </div>
-      </div>
-    </div>
-  );
 }
 
 function ControlRail({ label, value, min = 0, max = 100, step = 1, suffix = "", tone = "cyan", disabled, vertical = false, onChange, icon: Icon = Activity }) {
@@ -276,6 +173,8 @@ function GuestDeviceCard({ device, onCommand }) {
   );
   const [vibrateIntensity, setVibrateIntensity] = useState(Math.min(10, Number(device.max_intensity) || 100));
   const [vibrateDuration, setVibrateDuration] = useState(Math.min(1, Number(device.max_duration) || 30));
+  const [warningEnabled, setWarningEnabled] = useState(false);
+  const [warningDelay, setWarningDelay] = useState(1);
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState("");
   useEffect(() => {
@@ -290,6 +189,10 @@ function GuestDeviceCard({ device, onCommand }) {
     try {
       const intensity = action === "vibrate" ? vibrateIntensity : shockIntensity;
       const duration = action === "vibrate" ? vibrateDuration : shockDuration;
+      if (action === "shock" && warningEnabled) {
+        await onCommand("vibrate", intensity, warningDelay);
+        await new Promise((resolve) => window.setTimeout(resolve, warningDelay * 1000));
+      }
       await onCommand(action, intensity, duration);
       setFeedback(action);
       window.setTimeout(() => setFeedback((current) => current === action ? "" : current), 800);
@@ -338,7 +241,14 @@ function GuestDeviceCard({ device, onCommand }) {
         <button className={feedback === "stop" ? "command-confirmed" : ""} disabled={busy} onClick={() => run("stop")}>
           Stop now
         </button>
+        <button className={feedback === "beep" ? "command-confirmed" : ""} disabled={busy || device.is_paused} onClick={() => run("beep")}>
+          Beep
+        </button>
+        <button className={warningEnabled ? "active" : ""} disabled={busy || device.is_paused} onClick={() => setWarningEnabled((current) => !current)}>
+          Warning {warningEnabled ? "on" : "off"}
+        </button>
       </div>
+      {warningEnabled && <label className="guest-warning-delay"><span>Warning vibration</span><input type="range" min="1" max="10" value={warningDelay} onChange={(event) => setWarningDelay(Number(event.target.value))} /><output>{warningDelay}s</output></label>}
     </article>
   );
 }
@@ -465,12 +375,18 @@ export default function ControlCenterPage({ user, profile }) {
       const nextDevices = (result.devices || []).map((device) => ({
         id: device.device_id,
         name: device.device_name,
+        providerName: device.provider_name || device.device_name,
         provider: device.provider,
         paused: device.is_paused,
       }));
+      const { data: presetRows } = await supabase
+        .from("shocker_presets")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: true });
       setDevices(nextDevices);
       setSafety(Object.fromEntries((result.devices || []).map((device) => [device.device_id, { ...initialSafety(), ...(device.safety || {}) }])));
-      setControls(Object.fromEntries(nextDevices.map((device) => [device.id, initialControl()])));
+      setControls(Object.fromEntries(nextDevices.map((device) => [device.id, { ...initialControl(), presets: (presetRows || []).filter((preset) => preset.shocker_id === device.id) }])));
       setActiveOwner({ id: owner.user_id, username: owner.profile?.username || "Crew member", provider: owner.provider, trusted: true });
       setNotice(`Controlling ${owner.profile?.username || "this crew member"}’s paired devices.`);
     } catch (error) {
@@ -478,7 +394,7 @@ export default function ControlCenterPage({ user, profile }) {
     } finally {
       setLoading(false);
     }
-  }, [invokeProvider]);
+  }, [invokeProvider, user.id]);
 
   async function pairProvider(event) {
     event.preventDefault();
@@ -544,7 +460,7 @@ export default function ControlCenterPage({ user, profile }) {
       .order("created_at", { ascending: false });
     if (error) throw error;
     setActiveLinks(data || []);
-  }, [invokeProvider, profile.rank, providerStatus.paired, user.id]);
+  }, [invokeProvider, profile.rank, providerStatus.paired?.user_id, user.id]);
 
   const loadPresets = useCallback(
     async (nextDevices) => {
@@ -568,29 +484,6 @@ export default function ControlCenterPage({ user, profile }) {
     [user.id],
   );
 
-  const loadSafety = useCallback(
-    async (nextDevices) => {
-      const { data } = await supabase
-        .from("control_device_safety_limits")
-        .select("*")
-        .eq("user_id", user.id);
-      const rows = data || [];
-      setSafety((current) =>
-        Object.fromEntries(
-          nextDevices.map((device) => [
-            device.id,
-            {
-              ...initialSafety(),
-              ...current[device.id],
-              ...rows.find((row) => row.shocker_id === device.id),
-            },
-          ]),
-        ),
-      );
-    },
-    [user.id],
-  );
-
   const loadDevices = useCallback(async () => {
     setLoading(true);
     setNotice("");
@@ -603,22 +496,15 @@ export default function ControlCenterPage({ user, profile }) {
         nextDevices = (result.devices || []).map((device) => ({
           id: device.device_id,
           name: device.device_name,
+          providerName: device.provider_name || device.device_name,
           provider: device.provider,
           paused: device.is_paused,
         }));
+        setSafety(Object.fromEntries((result.devices || []).map((device) => [device.device_id, { ...initialSafety(), ...(device.safety || {}) }])));
         setActiveOwner({ id: user.id, username: profile.username || "You", own: true, provider: provider.paired.provider });
-      } else if (canUseControlCenter(profile)) {
-        const { data, error } = await supabase.functions.invoke("openshock-devices");
-        if (error) throw new Error(await functionError(error, "Unable to load devices."));
-        if (data?.error) throw new Error(data.error);
-        nextDevices = data?.devices;
-        if (!Array.isArray(nextDevices)) {
-          const decoded = typeof data?.raw === "string" ? JSON.parse(data.raw) : data;
-          nextDevices = decoded?.data?.[0]?.shockers || [];
-        }
-        setActiveOwner({ id: user.id, username: profile.username || "You", own: true, provider: "openshock" });
       } else {
         setActiveOwner(null);
+        setSafety({});
       }
       setDevices(nextDevices);
       setControls((current) => {
@@ -629,7 +515,6 @@ export default function ControlCenterPage({ user, profile }) {
       });
       await Promise.all([
         loadPresets(nextDevices),
-        loadSafety(nextDevices),
         loadLogs(),
       ]);
       setNotice(nextDevices.length ? "" : "No connected devices were found.");
@@ -638,7 +523,7 @@ export default function ControlCenterPage({ user, profile }) {
     } finally {
       setLoading(false);
     }
-  }, [invokeProvider, loadLogs, loadPresets, loadProviderStatus, loadSafety, profile, user.id, verifyAccess]);
+  }, [invokeProvider, loadLogs, loadPresets, loadProviderStatus, profile.username, user.id, verifyAccess]);
 
   useEffect(() => {
     loadDevices();
@@ -824,36 +709,20 @@ export default function ControlCenterPage({ user, profile }) {
     });
   }
 
-  async function logCommand(device, action, intensity, duration) {
-    await supabase.from("control_logs").insert({
-      user_id: user.id,
-      username: profile.username || "Unknown",
-      avatar_url: profile.avatar || null,
-      shocker_id: device.id,
-      shocker_name: device.name || "Unknown Shocker",
-      action,
-      intensity: Number(intensity),
-      duration: Number(duration),
-    });
-  }
-
   async function saveSafety(deviceId) {
-    if (profile.rank?.trim().toLowerCase() !== "captain")
-      throw new Error("Only the Captain can change device safety limits.");
+    if (activeOwner?.id !== user.id)
+      throw new Error("Only the device owner can change these settings.");
     const values = { ...initialSafety(), ...safety[deviceId] };
-    const { error } = await supabase
-      .from("control_device_safety_limits")
-      .upsert(
-        {
-          user_id: user.id,
-          shocker_id: deviceId,
-          ...values,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "user_id,shocker_id" },
-      );
-    if (error) throw error;
-    setNotice("Device safety limits saved.");
+    const device = devices.find((item) => item.id === deviceId);
+    const result = await invokeProvider({
+      action: "update_device",
+      owner_id: user.id,
+      device_id: deviceId,
+      custom_name: device?.name === device?.providerName ? "" : device?.name,
+      safety: values,
+    });
+    setSafety((current) => ({ ...current, [deviceId]: { ...values, ...(result.safety || {}) } }));
+    setNotice("Device name and safety settings saved.");
   }
 
   function openSafetyLinkBuilder() {
@@ -957,34 +826,15 @@ export default function ControlCenterPage({ user, profile }) {
     )
       throw new Error("Duplicate command blocked.");
     commandGate.current.set(fingerprint, Date.now());
-    if (providerStatus.paired || (activeOwner?.id && activeOwner.id !== user.id)) {
-      await invokeProvider({
-        action: "control",
-        owner_id: activeOwner?.id || user.id,
-        device_id: device.id,
-        command: action,
-        intensity: Number(intensity),
-        duration: Number(duration),
-        live: liveCommand,
-      });
-    } else {
-      const { data, error } = await supabase.functions.invoke(
-        "openshock-control",
-        {
-          body: {
-            shocker_id: device.id,
-            action,
-            intensity: Number(intensity),
-            duration: Number(duration),
-            live: liveCommand,
-          },
-        },
-      );
-      if (error)
-        throw new Error(await functionError(error, "The command was rejected."));
-      if (!data?.success) throw new Error(data?.error || "The command failed.");
-    }
-    if (!skipLog) await logCommand(device, action, intensity, duration);
+    await invokeProvider({
+      action: "control",
+      owner_id: activeOwner?.id || user.id,
+      device_id: device.id,
+      command: action,
+      intensity: Number(intensity),
+      duration: Number(duration),
+      live: liveCommand,
+    });
   }
 
   async function stopTargets(id) {
@@ -1127,18 +977,22 @@ export default function ControlCenterPage({ user, profile }) {
     window.requestAnimationFrame(() => setEmergencyActive(true));
     setBusy(true);
     try {
-      const { data, error } = await supabase.functions.invoke(
-        "openshock-control",
-        {
-          body: { action: "stop_all" },
-        },
+      const results = await Promise.allSettled(
+        devices.map((device) =>
+          invokeProvider({
+            action: "control",
+            owner_id: activeOwner?.id || user.id,
+            device_id: device.id,
+            command: "stop",
+            intensity: 0,
+            duration: 0,
+          }),
+        ),
       );
-      if (error || !data?.success)
-        throw new Error(
-          await functionError(error, data?.error || "Emergency stop failed."),
-        );
+      const stopped = results.filter((result) => result.status === "fulfilled").length;
+      if (!stopped && devices.length) throw results.find((result) => result.status === "rejected")?.reason || new Error("Emergency stop failed.");
       setNotice(
-        `Emergency stop sent to ${data.stopped} device${data.stopped === 1 ? "" : "s"}.`,
+        `Emergency stop sent to ${stopped} device${stopped === 1 ? "" : "s"}.`,
       );
     } catch (error) {
       setNotice(error.message || "Emergency stop failed.");
@@ -1446,15 +1300,8 @@ export default function ControlCenterPage({ user, profile }) {
         <div className="control-global-heading">
           <div>
             <h2>Shock controls</h2>
+            <p>Devices and access update automatically.</p>
           </div>
-          <button
-            className="button secondary"
-            onClick={loadDevices}
-            disabled={loading || busy}
-          >
-            <RefreshCw className={loading ? "spin" : ""} />
-            {loading ? "Refreshing…" : "Refresh"}
-          </button>
         </div>
         <div className="control-global-actions">
           <button
@@ -1897,17 +1744,12 @@ export default function ControlCenterPage({ user, profile }) {
                   <button
                     className={commandFeedback === `${device.id}:beep` ? "command-confirmed" : ""}
                     onClick={() => runAction(device.id, "beep")}
-                    disabled={
-                      device.paused ||
-                      busy ||
-                      (!providerStatus.paired &&
-                        activeOwner?.id === user.id &&
-                        profile.rank?.toLowerCase() !== "captain")
-                    }
+                    disabled={device.paused || busy}
                   >
                     <Bell /><span>Beep</span>
                   </button>
                   {!live && <button className={control.warningEnabled ? "active" : ""} onClick={() => updateControl(device.id, { warningEnabled: !control.warningEnabled })}><AlertTriangle /><span>{control.warningEnabled ? "Warning on" : "Warning off"}</span></button>}
+                  {!live && control.warningEnabled && <label className="control-warning-delay"><span>Warning</span><input type="range" min="1" max="10" value={control.warningDelay} onChange={(event) => updateControl(device.id, { warningDelay: Number(event.target.value) })} /><output>{control.warningDelay}s</output></label>}
                 </section>
                 <section className="control-console-lane vibrate-lane">
                   <header><span><Hand /></span><div><small>Vibrate</small><strong>{control.vibrateIntensity}%</strong></div></header>
@@ -1920,40 +1762,6 @@ export default function ControlCenterPage({ user, profile }) {
                 <details className="control-advanced">
                   <summary>Advanced Settings</summary>
                   <div className="control-advanced-grid">
-                    <section>
-                      <div className="control-setting-heading">
-                        <div>
-                          <h3>Warnings</h3>
-                          <p>Vibrate before a shock command is sent.</p>
-                        </div>
-                        <label className="control-switch">
-                          <input
-                            type="checkbox"
-                            checked={control.warningEnabled}
-                            onChange={(event) =>
-                              updateControl(device.id, {
-                                warningEnabled: event.target.checked,
-                              })
-                            }
-                          />
-                          <span />
-                        </label>
-                      </div>
-                      {control.warningEnabled && (
-                        <Dial
-                          label="Warning duration"
-                          tone="safe"
-                          value={control.warningDelay}
-                          min={1}
-                          max={10}
-                          suffix="s"
-                          disabled={busy}
-                          onChange={(value) =>
-                            updateControl(device.id, { warningDelay: value })
-                          }
-                        />
-                      )}
-                    </section>
                     <section>
                       <h3>User Presets</h3>
                       <select
@@ -1989,18 +1797,26 @@ export default function ControlCenterPage({ user, profile }) {
                         </button>
                       </div>
                     </section>
-                    {profile.rank?.trim().toLowerCase() === "captain" && (
+                    {activeOwner?.id === user.id && (
                       <section className="control-safety-settings">
                         <header className="control-safety-heading">
                           <div>
-                            <span>Captain controls</span>
-                            <h3>Device safety limits</h3>
+                            <span>Owner tools</span>
+                            <h3>Device settings and safety</h3>
                             <p>
-                              Set the maximum command strength and safety
-                              behavior for this device.
+                              Rename and configure only the devices you own.
                             </p>
                           </div>
                         </header>
+                        <label className="control-device-name-field">
+                          <span>Device name</span>
+                          <input
+                            value={device.name || ""}
+                            maxLength="80"
+                            onChange={(event) => setDevices((current) => current.map((item) => item.id === device.id ? { ...item, name: event.target.value } : item))}
+                          />
+                          <small>Leave the provider name unchanged to use “{device.providerName || device.name}”.</small>
+                        </label>
                         <div className="control-safety-fields">
                           {[
                             ["max_intensity", "Max intensity", 1, 100, 1],
@@ -2083,7 +1899,7 @@ export default function ControlCenterPage({ user, profile }) {
                         <footer>
                           <span>
                             These limits are enforced before a command reaches
-                            OpenShock.
+                            the paired provider.
                           </span>
                           <button
                             onClick={() =>
@@ -2104,7 +1920,7 @@ export default function ControlCenterPage({ user, profile }) {
           );
         })}
       </div>
-      <section className="panel control-log-panel">
+      {activeOwner?.id === user.id && <section className="panel control-log-panel">
         <header>
           <div>
             <span className="eyebrow">Recent activity</span>
@@ -2131,7 +1947,7 @@ export default function ControlCenterPage({ user, profile }) {
             </article>
           ))}
         </div>
-      </section>
+      </section>}
     </div>
   );
 }
