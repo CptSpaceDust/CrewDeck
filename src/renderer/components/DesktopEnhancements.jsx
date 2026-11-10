@@ -280,8 +280,8 @@ export function WhatsNew() {
             <div>
               <strong>Added</strong>
               <p>
-                Captains can manage every active Control Center link and code,
-                including its devices, limits, expiration, and session count.
+                Device owners can trust any crew member, disconnect a paired
+                API, and pause a device for every active access method.
               </p>
             </div>
           </article>
@@ -290,9 +290,8 @@ export function WhatsNew() {
             <div>
               <strong>Changed</strong>
               <p>
-                Crew Inbox cards, status notifications, and device safety
-                settings use clearer Space Glass layouts. Guests receive live
-                limit changes without refreshing.
+                Shock and Vibrate now use independent vertical controls with
+                clearer press and successful-command feedback.
               </p>
             </div>
           </article>
@@ -301,9 +300,8 @@ export function WhatsNew() {
             <div>
               <strong>Fixed</strong>
               <p>
-                Notification counts stay synchronized across the app and
-                website, and ending or tightening shared access immediately
-                stops active device commands.
+                The Captain automatically uses the existing stored provider
+                API, and live links or codes immediately respect device pauses.
               </p>
             </div>
           </article>

@@ -2,6 +2,24 @@
 
 Every published CrewDeck release is documented here and copied into its GitHub release notes.
 
+## [2.0.11] - 2026-11-10
+
+### Added
+
+- Device owners can trust any crew member, disconnect their provider API, and pause individual devices for every owner, trusted-user, link, and code session.
+- The Captain automatically uses the existing server-stored OpenShock API until it is explicitly disconnected.
+
+### Changed
+
+- Shock and Vibrate use independent vertical intensity and duration controls with larger, easier drag targets.
+- Control buttons now show immediate pressed and successful-command feedback.
+- Owner Pause replaces the ambiguous per-device Stop control and updates active guest access without a reload.
+
+### Fixed
+
+- Shock intensity no longer changes Vibrate intensity.
+- Paused devices remain paused when provider devices are refreshed.
+
 ## [2.0.10] - 2026-11-09
 
 ### Added

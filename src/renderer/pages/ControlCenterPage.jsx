@@ -28,8 +28,10 @@ import { Loading, Modal, PageHeader } from "../components/ui";
 import { supabase } from "../lib/supabase";
 
 const initialControl = () => ({
-  intensity: 0,
-  duration: 1,
+  shockIntensity: 0,
+  shockDuration: 1,
+  vibrateIntensity: 0,
+  vibrateDuration: 1,
   warningEnabled: false,
   warningDelay: 1,
   synced: false,
@@ -244,13 +246,14 @@ function Dial({
   );
 }
 
-function ControlRail({ label, value, min = 0, max = 100, step = 1, suffix = "", tone = "cyan", disabled, onChange, icon: Icon = Activity }) {
+function ControlRail({ label, value, min = 0, max = 100, step = 1, suffix = "", tone = "cyan", disabled, vertical = false, onChange, icon: Icon = Activity }) {
   const percent = max === min ? 0 : ((Number(value) - min) / (max - min)) * 100;
   return (
-    <label className={`control-rail control-rail-${tone}${disabled ? " disabled" : ""}`}>
+    <label className={`control-rail control-rail-${tone}${vertical ? " vertical" : ""}${disabled ? " disabled" : ""}`}>
       <span className="control-rail-heading"><Icon /><b>{label}</b><output>{value}{suffix}</output></span>
       <input
         type="range"
+        orient={vertical ? "vertical" : undefined}
         min={min}
         max={max}
         step={step}
@@ -265,78 +268,66 @@ function ControlRail({ label, value, min = 0, max = 100, step = 1, suffix = "", 
 }
 
 function GuestDeviceCard({ device, onCommand }) {
-  const [intensity, setIntensity] = useState(
+  const [shockIntensity, setShockIntensity] = useState(
     Math.min(10, Number(device.max_intensity) || 100),
   );
-  const [duration, setDuration] = useState(
+  const [shockDuration, setShockDuration] = useState(
     Math.min(1, Number(device.max_duration) || 30),
   );
+  const [vibrateIntensity, setVibrateIntensity] = useState(Math.min(10, Number(device.max_intensity) || 100));
+  const [vibrateDuration, setVibrateDuration] = useState(Math.min(1, Number(device.max_duration) || 30));
   const [busy, setBusy] = useState(false);
+  const [feedback, setFeedback] = useState("");
   useEffect(() => {
-    setIntensity((value) => Math.max(1, Math.min(value, Number(device.max_intensity) || 100)));
-    setDuration((value) => Math.max(0.3, Math.min(value, Number(device.max_duration) || 30)));
+    setShockIntensity((value) => Math.max(1, Math.min(value, Number(device.max_intensity) || 100)));
+    setVibrateIntensity((value) => Math.max(1, Math.min(value, Number(device.max_intensity) || 100)));
+    setShockDuration((value) => Math.max(0.3, Math.min(value, Number(device.max_duration) || 30)));
+    setVibrateDuration((value) => Math.max(0.3, Math.min(value, Number(device.max_duration) || 30)));
   }, [device.max_duration, device.max_intensity]);
   const run = async (action) => {
     if (busy) return;
     setBusy(true);
     try {
+      const intensity = action === "vibrate" ? vibrateIntensity : shockIntensity;
+      const duration = action === "vibrate" ? vibrateDuration : shockDuration;
       await onCommand(action, intensity, duration);
+      setFeedback(action);
+      window.setTimeout(() => setFeedback((current) => current === action ? "" : current), 800);
     } finally {
       setBusy(false);
     }
   };
   return (
-    <article className="panel control-device-card guest-device-card">
+    <article className={`panel control-device-card guest-device-card${device.is_paused ? " is-paused" : ""}`}>
       <header>
         <div>
           <span className="eyebrow">Shared device</span>
           <h2>{device.shocker_name || "Control module"}</h2>
         </div>
         <b>
-          {device.max_intensity}% · {device.max_duration}s max
+          {device.is_paused ? "Paused by owner" : `${device.max_intensity}% · ${device.max_duration}s max`}
         </b>
       </header>
-      <label className="guest-control-slider">
-        <span>
-          Intensity <output>{intensity}%</output>
-        </span>
-        <input
-          type="range"
-          min="1"
-          max={device.max_intensity}
-          value={intensity}
-          onChange={(event) => setIntensity(Number(event.target.value))}
-        />
-      </label>
-      <label className="guest-control-slider">
-        <span>
-          Duration <output>{duration}s</output>
-        </span>
-        <input
-          type="range"
-          min="0.3"
-          max={device.max_duration}
-          step="0.1"
-          value={duration}
-          onChange={(event) => setDuration(Number(event.target.value))}
-        />
-      </label>
+      <div className="guest-control-pair">
+        <section><h3>Shock</h3><ControlRail vertical tone="danger" label="Intensity" value={shockIntensity} min={1} max={device.max_intensity} suffix="%" disabled={busy || device.is_paused} onChange={setShockIntensity} /><ControlRail vertical tone="danger" label="Duration" value={shockDuration} min={0.3} max={device.max_duration} step={0.1} suffix="s" disabled={busy || device.is_paused} onChange={setShockDuration} /></section>
+        <section><h3>Vibrate</h3><ControlRail vertical label="Intensity" value={vibrateIntensity} min={1} max={device.max_intensity} suffix="%" disabled={busy || device.is_paused} onChange={setVibrateIntensity} /><ControlRail vertical label="Duration" value={vibrateDuration} min={0.3} max={device.max_duration} step={0.1} suffix="s" disabled={busy || device.is_paused} onChange={setVibrateDuration} /></section>
+      </div>
       <div className="control-action-row">
-        <button disabled={busy} onClick={() => run("vibrate")}>
+        <button className={feedback === "vibrate" ? "command-confirmed" : ""} disabled={busy || device.is_paused} onClick={() => run("vibrate")}>
           Vibrate
         </button>
         {device.require_hold_to_shock === false ? (
           <button
-            className="danger"
-            disabled={busy}
+            className={`danger${feedback === "shock" ? " command-confirmed" : ""}`}
+            disabled={busy || device.is_paused}
             onClick={() => run("shock")}
           >
             Shock
           </button>
         ) : (
           <HoldCommandButton
-            className="danger"
-            disabled={busy}
+            className={`danger${feedback === "shock" ? " command-confirmed" : ""}`}
+            disabled={busy || device.is_paused}
             holdMs={device.hold_milliseconds || 800}
             onActivate={() => run("shock")}
             onRelease={() => onCommand("stop", 0, 0)}
@@ -344,8 +335,8 @@ function GuestDeviceCard({ device, onCommand }) {
             Hold to shock
           </HoldCommandButton>
         )}
-        <button disabled={busy} onClick={() => run("stop")}>
-          Stop
+        <button className={feedback === "stop" ? "command-confirmed" : ""} disabled={busy} onClick={() => run("stop")}>
+          Stop now
         </button>
       </div>
     </article>
@@ -382,8 +373,10 @@ export default function ControlCenterPage({ user, profile }) {
     maxUses: 1,
     devices: {},
   });
-  const [providerStatus, setProviderStatus] = useState({ paired: null, owners: [], trusted_people: [], friend_options: [] });
+  const [providerStatus, setProviderStatus] = useState({ paired: null, owners: [], trusted_people: [], crew_options: [] });
   const [activeOwner, setActiveOwner] = useState(null);
+  const [trustedSelection, setTrustedSelection] = useState("");
+  const [commandFeedback, setCommandFeedback] = useState("");
   const [pairOpen, setPairOpen] = useState(false);
   const [pairBusy, setPairBusy] = useState(false);
   const [pairForm, setPairForm] = useState({ apiToken: "", username: "" });
@@ -459,7 +452,7 @@ export default function ControlCenterPage({ user, profile }) {
       paired: data.paired || null,
       owners: data.owners || [],
       trusted_people: data.trusted_people || [],
-      friend_options: data.friend_options || [],
+      crew_options: data.crew_options || [],
     });
     return data;
   }, [invokeProvider]);
@@ -508,6 +501,22 @@ export default function ControlCenterPage({ user, profile }) {
     await invokeProvider({ action: trusted ? "trust" : "untrust", target_user_id: targetUserId });
     await loadProviderStatus();
     setNotice(trusted ? "Trusted device access added." : "Trusted device access removed immediately.");
+  }
+
+  async function disconnectProvider() {
+    if (!(await confirmInApp("Disconnect this provider API and remove its saved credential from CrewDeck?", { title: "Disconnect provider", confirmLabel: "Disconnect" }))) return;
+    setBusy(true);
+    try {
+      await invokeProvider({ action: "unpair" });
+      setDevices([]);
+      setActiveOwner(null);
+      await loadProviderStatus();
+      setNotice("Provider API disconnected.");
+    } catch (error) {
+      setNotice(error.message || "The provider could not be disconnected.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   const loadLogs = useCallback(async () => {
@@ -775,8 +784,10 @@ export default function ControlCenterPage({ user, profile }) {
         ...next[id],
         ...(enabled && source
           ? {
-              intensity: source.intensity,
-              duration: source.duration,
+              shockIntensity: source.shockIntensity,
+              shockDuration: source.shockDuration,
+              vibrateIntensity: source.vibrateIntensity,
+              vibrateDuration: source.vibrateDuration,
               warningEnabled: source.warningEnabled,
               warningDelay: source.warningDelay,
             }
@@ -798,8 +809,10 @@ export default function ControlCenterPage({ user, profile }) {
             ...item,
             ...(shouldSync
               ? {
-                  intensity: source.intensity,
-                  duration: source.duration,
+                  shockIntensity: source.shockIntensity,
+                  shockDuration: source.shockDuration,
+                  vibrateIntensity: source.vibrateIntensity,
+                  vibrateDuration: source.vibrateDuration,
                   warningEnabled: source.warningEnabled,
                   warningDelay: source.warningDelay,
                 }
@@ -984,6 +997,23 @@ export default function ControlCenterPage({ user, profile }) {
     );
   }
 
+  async function toggleDevicePause(device) {
+    if (activeOwner?.id !== user.id) return;
+    const paused = !device.paused;
+    setBusy(true);
+    try {
+      await invokeProvider({ action: "set_pause", owner_id: user.id, device_id: device.id, paused });
+      setDevices((current) => current.map((item) => item.id === device.id ? { ...item, paused } : item));
+      setCommandFeedback(`${device.id}:pause`);
+      window.setTimeout(() => setCommandFeedback((current) => current === `${device.id}:pause` ? "" : current), 800);
+      setNotice(`${device.name || "Device"} is now ${paused ? "paused for you, trusted people, and every live link or code" : "available again"}.`);
+    } catch (error) {
+      setNotice(error.message || "The device pause could not be changed.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function targetDevices(id) {
     const syncedIds = Object.entries(controls)
       .filter(([, control]) => control.synced)
@@ -1016,7 +1046,7 @@ export default function ControlCenterPage({ user, profile }) {
           await sendCommand(
             device,
             "vibrate",
-            control.intensity,
+            control.vibrateIntensity,
             control.warningDelay,
           );
           await new Promise((resolve) =>
@@ -1024,8 +1054,12 @@ export default function ControlCenterPage({ user, profile }) {
           );
           if (warningRun.current !== runId) return;
         }
-        await sendCommand(device, action, control.intensity, control.duration);
+        const intensity = action === "vibrate" ? control.vibrateIntensity : control.shockIntensity;
+        const duration = action === "vibrate" ? control.vibrateDuration : control.shockDuration;
+        await sendCommand(device, action, intensity, duration);
       }
+      setCommandFeedback(`${id}:${action}`);
+      window.setTimeout(() => setCommandFeedback((current) => current === `${id}:${action}` ? "" : current), 800);
       setNotice(
         `${action[0].toUpperCase()}${action.slice(1)} command sent to ${targets.length} device${targets.length === 1 ? "" : "s"}.`,
       );
@@ -1038,13 +1072,13 @@ export default function ControlCenterPage({ user, profile }) {
     }
   }
 
-  async function sendLive(id, value) {
-    if (!live || value <= 0 || Date.now() - lastLiveCommand.current < 160)
+  async function sendLive(id, action, value) {
+    if (!live || liveMode !== action || value <= 0 || Date.now() - lastLiveCommand.current < 160)
       return;
     lastLiveCommand.current = Date.now();
     const queue = liveQueue.current;
     for (const device of targetDevices(id))
-      queue.pending.set(device.id, { device, action: liveMode, value });
+      queue.pending.set(device.id, { device, action, value });
     if (queue.running) return;
     queue.running = true;
     const generation = queue.generation;
@@ -1075,7 +1109,7 @@ export default function ControlCenterPage({ user, profile }) {
       Object.fromEntries(
         Object.entries(current).map(([id, item]) => [
           id,
-          { ...item, intensity: 0 },
+          { ...item, shockIntensity: 0, vibrateIntensity: 0 },
         ]),
       ),
     );
@@ -1130,8 +1164,8 @@ export default function ControlCenterPage({ user, profile }) {
       user_id: user.id,
       shocker_id: device.id,
       preset_name: name,
-      intensity: control.intensity,
-      duration: control.duration,
+      intensity: control.shockIntensity,
+      duration: control.shockDuration,
       warning_enabled: control.warningEnabled,
       warning_delay: control.warningDelay,
     });
@@ -1149,8 +1183,10 @@ export default function ControlCenterPage({ user, profile }) {
     );
     if (!preset) return;
     updateControl(device.id, {
-      intensity: Number(preset.intensity),
-      duration: Number(preset.duration),
+      shockIntensity: Number(preset.intensity),
+      shockDuration: Number(preset.duration),
+      vibrateIntensity: Number(preset.intensity),
+      vibrateDuration: Number(preset.duration),
       warningEnabled: Boolean(preset.warning_enabled),
       warningDelay: Number(preset.warning_delay),
     });
@@ -1365,7 +1401,7 @@ export default function ControlCenterPage({ user, profile }) {
           {!providerStatus.paired ? (
             <button className="button primary" onClick={() => setPairOpen(true)}><PlugZap /> Pair API</button>
           ) : (
-            <span className="control-provider-connected"><ShieldCheck /> {providerStatus.paired.provider === "pishock" ? "PiShock" : "OpenShock"} paired</span>
+            <div className="control-provider-actions"><span className="control-provider-connected"><ShieldCheck /> {providerStatus.paired.provider === "pishock" ? "PiShock" : "OpenShock"} paired</span><button className="button ghost" onClick={disconnectProvider} disabled={busy}><Unlink2 /> Disconnect API</button></div>
           )}
         </header>
         <div className="control-owner-list">
@@ -1394,11 +1430,14 @@ export default function ControlCenterPage({ user, profile }) {
         {providerStatus.paired && (
           <details className="control-trusted-manager">
             <summary><UserPlus /> Trusted people</summary>
-            <p>Trusted friends can open your devices without a temporary code. Your safety limits and emergency stop still apply.</p>
+            <p>Choose any crew member to give ongoing access without a temporary code. You can remove access at any time.</p>
+            <div className="control-trusted-picker">
+              <select value={trustedSelection} onChange={(event) => setTrustedSelection(event.target.value)} aria-label="Crew member to trust"><option value="">Choose a crew member…</option>{providerStatus.crew_options.map((person) => <option value={person.id} key={person.id}>{person.username || "Crew member"}</option>)}</select>
+              <button disabled={!trustedSelection} onClick={async () => { await changeTrustedPerson(trustedSelection, true); setTrustedSelection(""); }}>Trust person</button>
+            </div>
             <div className="control-trusted-list">
               {providerStatus.trusted_people.map((person) => <span key={person.id}>{person.username}<button onClick={() => changeTrustedPerson(person.id, false)}>Remove</button></span>)}
-              {providerStatus.friend_options.map((person) => <span key={person.id}>{person.username}<button onClick={() => changeTrustedPerson(person.id, true)}>Trust</button></span>)}
-              {!providerStatus.trusted_people.length && !providerStatus.friend_options.length && <small>Add crew friends before granting trusted access.</small>}
+              {!providerStatus.trusted_people.length && <small>No one has permanent access yet.</small>}
             </div>
           </details>
         )}
@@ -1823,12 +1862,13 @@ export default function ControlCenterPage({ user, profile }) {
           const deviceSafety = safety[device.id] || initialSafety();
           return (
             <article
-              className={`panel control-device-card${control.synced ? " synced" : ""}`}
+              className={`panel control-device-card${control.synced ? " synced" : ""}${device.paused ? " is-paused" : ""}`}
               key={device.id}
             >
               <header>
                 <div>
                   <h2>{device.name || "Control module"}</h2>
+                  {device.paused && <span className="control-paused-badge">Paused for everyone</span>}
                 </div>
                 <button
                   className={`control-sync-toggle${control.synced ? " active" : ""}`}
@@ -1841,22 +1881,24 @@ export default function ControlCenterPage({ user, profile }) {
               </header>
               <div className="control-console">
                 <section className="control-console-lane shock-lane">
-                  <header><span><Zap /></span><div><small>Shock</small><strong>{control.intensity}%</strong></div></header>
-                  <ControlRail label="Intensity" icon={Gauge} tone="danger" value={control.intensity} min={0} max={deviceSafety.max_intensity} suffix="%" disabled={busy} onChange={(value) => { updateControl(device.id, { intensity: value }); sendLive(device.id, value); }} />
-                  {!live && <ControlRail label="Duration" icon={Clock3} tone="danger" value={control.duration} min={1} max={Math.max(1, Math.floor(deviceSafety.max_duration))} suffix="s" disabled={busy} onChange={(value) => updateControl(device.id, { duration: value })} />}
+                  <header><span><Zap /></span><div><small>Shock</small><strong>{control.shockIntensity}%</strong></div></header>
+                  <div className="control-vertical-rails"><ControlRail vertical label="Intensity" icon={Gauge} tone="danger" value={control.shockIntensity} min={0} max={deviceSafety.max_intensity} suffix="%" disabled={busy || device.paused} onChange={(value) => { updateControl(device.id, { shockIntensity: value }); sendLive(device.id, "shock", value); }} />
+                  {!live && <ControlRail vertical label="Duration" icon={Clock3} tone="danger" value={control.shockDuration} min={1} max={Math.max(1, Math.floor(deviceSafety.max_duration))} suffix="s" disabled={busy || device.paused} onChange={(value) => updateControl(device.id, { shockDuration: value })} />}</div>
                   {!live && (deviceSafety.require_hold_to_shock !== false ? (
-                    <HoldCommandButton className="control-console-operate shock" disabled={busy && pendingWarning !== device.id} holdMs={deviceSafety.hold_milliseconds} onActivate={() => runAction(device.id, "shock")} onRelease={() => stopTargets(device.id)}>
+                    <HoldCommandButton className={`control-console-operate shock${commandFeedback === `${device.id}:shock` ? " command-confirmed" : ""}`} disabled={device.paused || (busy && pendingWarning !== device.id)} holdMs={deviceSafety.hold_milliseconds} onActivate={() => runAction(device.id, "shock")} onRelease={() => stopTargets(device.id)}>
                       {pendingWarning === device.id ? "Cancel shock" : "Hold to shock"}
                     </HoldCommandButton>
                   ) : (
-                    <button className="control-console-operate shock" disabled={busy && pendingWarning !== device.id} onClick={() => runAction(device.id, "shock")}>{pendingWarning === device.id ? "Cancel shock" : "Shock"}</button>
+                    <button className={`control-console-operate shock${commandFeedback === `${device.id}:shock` ? " command-confirmed" : ""}`} disabled={device.paused || (busy && pendingWarning !== device.id)} onClick={() => runAction(device.id, "shock")}>{pendingWarning === device.id ? "Cancel shock" : "Shock"}</button>
                   ))}
                 </section>
                 <section className="control-console-core">
-                  <button className="control-console-stop" onClick={() => stopTargets(device.id)} disabled={busy}><ShieldAlert /><strong>STOP</strong><small>Release all</small></button>
+                  <button className={`control-console-stop${device.paused ? " paused" : ""}${commandFeedback === `${device.id}:pause` ? " command-confirmed" : ""}`} onClick={() => activeOwner?.id === user.id ? toggleDevicePause(device) : stopTargets(device.id)} disabled={busy}><ShieldAlert /><strong>{activeOwner?.id === user.id ? (device.paused ? "RESUME" : "PAUSE") : "STOP"}</strong><small>{activeOwner?.id === user.id ? (device.paused ? "Allow commands" : "Block all access") : "Stop now"}</small></button>
                   <button
+                    className={commandFeedback === `${device.id}:beep` ? "command-confirmed" : ""}
                     onClick={() => runAction(device.id, "beep")}
                     disabled={
+                      device.paused ||
                       busy ||
                       (!providerStatus.paired &&
                         activeOwner?.id === user.id &&
@@ -1868,10 +1910,10 @@ export default function ControlCenterPage({ user, profile }) {
                   {!live && <button className={control.warningEnabled ? "active" : ""} onClick={() => updateControl(device.id, { warningEnabled: !control.warningEnabled })}><AlertTriangle /><span>{control.warningEnabled ? "Warning on" : "Warning off"}</span></button>}
                 </section>
                 <section className="control-console-lane vibrate-lane">
-                  <header><span><Hand /></span><div><small>Vibrate</small><strong>{control.intensity}%</strong></div></header>
-                  <ControlRail label="Intensity" icon={Gauge} value={control.intensity} min={0} max={deviceSafety.max_intensity} suffix="%" disabled={busy} onChange={(value) => { updateControl(device.id, { intensity: value }); sendLive(device.id, value); }} />
-                  {!live && <ControlRail label="Duration" icon={Clock3} value={control.duration} min={1} max={Math.max(1, Math.floor(deviceSafety.max_duration))} suffix="s" disabled={busy} onChange={(value) => updateControl(device.id, { duration: value })} />}
-                  {!live && <button className="control-console-operate" disabled={busy} onClick={() => runAction(device.id, "vibrate")}>Vibrate</button>}
+                  <header><span><Hand /></span><div><small>Vibrate</small><strong>{control.vibrateIntensity}%</strong></div></header>
+                  <div className="control-vertical-rails"><ControlRail vertical label="Intensity" icon={Gauge} value={control.vibrateIntensity} min={0} max={deviceSafety.max_intensity} suffix="%" disabled={busy || device.paused} onChange={(value) => { updateControl(device.id, { vibrateIntensity: value }); sendLive(device.id, "vibrate", value); }} />
+                  {!live && <ControlRail vertical label="Duration" icon={Clock3} value={control.vibrateDuration} min={1} max={Math.max(1, Math.floor(deviceSafety.max_duration))} suffix="s" disabled={busy || device.paused} onChange={(value) => updateControl(device.id, { vibrateDuration: value })} />}</div>
+                  {!live && <button className={`control-console-operate${commandFeedback === `${device.id}:vibrate` ? " command-confirmed" : ""}`} disabled={busy || device.paused} onClick={() => runAction(device.id, "vibrate")}>Vibrate</button>}
                 </section>
               </div>
               {!live && (

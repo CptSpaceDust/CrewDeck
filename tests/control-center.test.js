@@ -77,3 +77,15 @@ test("Control Center includes device operations and real dials", () => {
   ])
     assert.ok(page.includes(safetyFeature), `Missing ${safetyFeature}`);
 });
+
+test("Control Center separates vertical shock and vibrate controls and supports owner pause", () => {
+  const page = read("src", "renderer", "pages", "ControlCenterPage.jsx");
+  const css = read("src", "renderer", "space-glass.css");
+  assert.match(page, /shockIntensity/);
+  assert.match(page, /vibrateIntensity/);
+  assert.match(page, /action: "set_pause"/);
+  assert.match(page, /Disconnect API/);
+  assert.match(page, /crew_options/);
+  assert.match(css, /\.control-rail\.vertical/);
+  assert.match(css, /command-confirmed/);
+});
