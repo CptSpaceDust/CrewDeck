@@ -58,6 +58,9 @@ test("Control Center includes provider controls, vertical rails, and owner tools
   assert.doesNotMatch(page, /[⚡🔊]\s*(?:Vibrate|Beep|Shock)/);
   assert.match(css, /\.control-rail\.vertical/);
   assert.match(css, /\.control-vertical-rails/);
+  assert.match(css, /container-name:\s*control-device/);
+  assert.match(css, /@container control-device \(max-width: 880px\)/);
+  assert.match(css, /grid-template-areas:[\s\S]*"core core"[\s\S]*"shock vibrate"/);
   assert.match(css, /control-emergency-flash/);
   assert.match(css, /user-select: none/);
   for (const safetyFeature of [

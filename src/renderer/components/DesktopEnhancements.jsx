@@ -280,8 +280,8 @@ export function WhatsNew() {
             <div>
               <strong>Added</strong>
               <p>
-                Device owners can rename and configure their devices and
-                privately review or clear their command history.
+                Vertical controls now include clear progress tracks, larger
+                handles, and readable minimum and maximum labels.
               </p>
             </div>
           </article>
@@ -290,8 +290,8 @@ export function WhatsNew() {
             <div>
               <strong>Changed</strong>
               <p>
-                Authorized controllers now share Beep, one Warning control,
-                and personal presets in a responsive vertical console.
+                Pause, Beep, and Warning move into a dedicated safety row when
+                the Control Center card becomes narrow.
               </p>
             </div>
           </article>
@@ -300,8 +300,8 @@ export function WhatsNew() {
             <div>
               <strong>Fixed</strong>
               <p>
-                PiShock pairing, Emergency Stop, narrow-window styling, and
-                repeated provider refreshes are corrected.
+                Shock, Vibrate, and duration controls no longer overlap at
+                smaller app window sizes.
               </p>
             </div>
           </article>

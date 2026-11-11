@@ -2,6 +2,17 @@
 
 Every published CrewDeck release is documented here and copied into its GitHub release notes.
 
+## [2.0.14] - 2026-11-10
+
+### Changed
+
+- Restyled the vertical Control Center sliders with clear progress tracks, larger handles, and properly positioned min/max labels.
+
+### Fixed
+
+- Made device consoles respond to their actual card width so the safety controls and duration sliders cannot overlap when the sidebar narrows the app.
+- At medium widths, Pause, Beep, and Warning now occupy their own row above the Shock and Vibrate panels; compact windows stack the panels cleanly.
+
 ## [2.0.13] - 2026-11-10
 
 ### Fixed
