@@ -2,6 +2,28 @@
 
 Every published CrewDeck release is documented here and copied into its GitHub release notes.
 
+## [2.0.15] - 2026-11-13
+
+### Added
+
+- Added per-device Warning, Beep, live-control, Vibrate, and Shock permissions to temporary links and quick codes.
+- Added real-time editing and revocation for active shared access, synchronized guest devices, and safe QR handoff with save and print actions.
+- Added multiple mixed OpenShock/PiShock provider connections per member and member profile photos in the Control Center picker.
+
+### Changed
+
+- Updated PiShock pairing to the current header-authenticated API flow with provider-specific, actionable errors while keeping credentials encrypted and server-side.
+- Logged-in guests now use their CrewDeck identity automatically; only signed-out guests are asked for a nickname.
+- Device commands use latest-value live queues and defer nonessential history writes so provider requests are not blocked.
+- The Control Center share builder, capability controls, generated result, and QR presentation now reflow cleanly at wide and minimum window sizes.
+
+### Fixed
+
+- Fixed partial synchronized-command failures by immediately stopping every selected device.
+- Fixed Stop, Pause, Unpause, and Emergency Stop appearing in device command history.
+- Fixed capability labels colliding in shared-access forms and kept long modal actions reachable with a sticky footer.
+- Replaced small Control Center status lines with the shared accessible toast system.
+
 ## [2.0.14] - 2026-11-10
 
 ### Changed

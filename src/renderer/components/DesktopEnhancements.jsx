@@ -280,8 +280,8 @@ export function WhatsNew() {
             <div>
               <strong>Added</strong>
               <p>
-                Vertical controls now include clear progress tracks, larger
-                handles, and readable minimum and maximum labels.
+                Shared access now includes per-device permissions, live limit
+                updates, quick codes, and a scannable QR handoff.
               </p>
             </div>
           </article>
@@ -290,8 +290,8 @@ export function WhatsNew() {
             <div>
               <strong>Changed</strong>
               <p>
-                Pause, Beep, and Warning move into a dedicated safety row when
-                the Control Center card becomes narrow.
+                PiShock pairing, mixed provider connections, guest identity,
+                and command delivery are faster and more reliable.
               </p>
             </div>
           </article>
@@ -300,8 +300,8 @@ export function WhatsNew() {
             <div>
               <strong>Fixed</strong>
               <p>
-                Shock, Vibrate, and duration controls no longer overlap at
-                smaller app window sizes.
+                Control Center forms no longer collide at narrow widths, and
+                safety stop actions stay out of command history.
               </p>
             </div>
           </article>

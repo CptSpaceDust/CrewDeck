@@ -53,7 +53,7 @@ test("What’s Changed contains Added, Changed, and Fixed summaries", () => {
   assert.match(source, /<strong>Added<\/strong>/);
   assert.match(source, /<strong>Changed<\/strong>/);
   assert.match(source, /<strong>Fixed<\/strong>/);
-  assert.match(source, /clear progress tracks/);
-  assert.match(source, /dedicated safety row/);
-  assert.match(source, /no longer overlap/);
+  assert.match(source, /per-device permissions/);
+  assert.match(source, /mixed provider connections/);
+  assert.match(source, /no longer collide/);
 });
