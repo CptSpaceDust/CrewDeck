@@ -14,9 +14,14 @@ const {
 } = require("electron");
 const fs = require("node:fs");
 const path = require("node:path");
+const { execFile } = require("node:child_process");
+const { promisify } = require("node:util");
 const { pathToFileURL } = require("node:url");
 const { AppLockStore } = require("./app-lock-store");
+const { AccessKeyStore } = require("./access-key-store");
 const { autoUpdater } = require("electron-updater");
+
+const execFileAsync = promisify(execFile);
 
 const APP_HOST = "app.cptspacedust.local";
 const APP_ORIGIN = `https://${APP_HOST}`;
@@ -68,6 +73,10 @@ let mainWindow;
 let tray;
 let isQuitting = false;
 let lockStore;
+let accessKeyStore;
+let accessKeyPresence = null;
+let accessKeyMonitor;
+let accessKeyRefreshActive = false;
 let locked = false;
 let blurTimer;
 let failedAttempts = [];
@@ -84,6 +93,38 @@ let updateState = {
   percent: 0,
   message: "",
 };
+
+const REMOVABLE_DRIVE_SCRIPT = [
+  "$ErrorActionPreference='SilentlyContinue'",
+  "$items=@()",
+  "Get-Disk | Where-Object { $_.BusType -in @('USB','SD','MMC') } | ForEach-Object { $disk=$_; Get-Partition -DiskNumber $disk.Number | Where-Object { $_.DriveLetter } | ForEach-Object { $volume=Get-Volume -DriveLetter $_.DriveLetter; $items += [PSCustomObject]@{ root=\"$($_.DriveLetter):\\\"; label=[string]$volume.FileSystemLabel; serial=[string]$volume.UniqueId; size=[int64]$volume.Size; free=[int64]$volume.SizeRemaining; bus=[string]$disk.BusType } } }",
+  'if(-not $items){ Get-CimInstance Win32_LogicalDisk -Filter "DriveType=2" | ForEach-Object { $items += [PSCustomObject]@{ root="$($_.DeviceID)\\"; label=[string]$_.VolumeName; serial=[string]$_.VolumeSerialNumber; size=[int64]$_.Size; free=[int64]$_.FreeSpace; bus=\'Removable\' } } }',
+  "$items | Sort-Object root -Unique | ConvertTo-Json -Compress",
+].join("; ");
+
+async function listRemovableDrives() {
+  if (process.platform !== "win32") return [];
+  try {
+    const { stdout } = await execFileAsync(
+      "powershell.exe",
+      ["-NoProfile", "-NonInteractive", "-Command", REMOVABLE_DRIVE_SCRIPT],
+      { windowsHide: true, timeout: 10_000, maxBuffer: 512 * 1024 },
+    );
+    const parsed = stdout.trim() ? JSON.parse(stdout.trim()) : [];
+    return (Array.isArray(parsed) ? parsed : [parsed])
+      .map((drive) => ({
+        root: String(drive.root || "").toUpperCase(),
+        label: String(drive.label || "Removable drive"),
+        serial: String(drive.serial || ""),
+        size: Number(drive.size || 0),
+        free: Number(drive.free || 0),
+        bus: String(drive.bus || "Removable"),
+      }))
+      .filter((drive) => /^[A-Z]:\\$/.test(drive.root) && drive.serial);
+  } catch {
+    return [];
+  }
+}
 
 function sendUpdateState(patch = {}) {
   updateState = { ...updateState, ...patch, currentVersion: app.getVersion() };
@@ -172,22 +213,81 @@ function registerAppOrigin() {
 }
 
 function sendLockState() {
+  const keyState = accessKeyStore
+    ? accessKeyStore.publicSettings(accessKeyPresence)
+    : { enabled: false, present: false };
   mainWindow?.webContents.send("app-lock:state", {
     locked,
     ...lockStore.publicSettings(),
+    accessKey: keyState,
   });
+  if (mainWindow && !mainWindow.isDestroyed())
+    mainWindow.setTitle(
+      keyState.enabled && !keyState.present ? "Daily Focus" : "CrewDeck",
+    );
   updateTrayMenu();
 }
 
+function closePrivateAuxiliaryWindows() {
+  for (const child of [...messageWindows]) {
+    if (!child.isDestroyed()) child.close();
+  }
+}
+
+async function refreshAccessKeyPresence({ notify = true } = {}) {
+  if (!accessKeyStore || accessKeyRefreshActive) return accessKeyPresence;
+  accessKeyRefreshActive = true;
+  try {
+    const drives = await listRemovableDrives();
+    const nextPresence = accessKeyStore.findMatchingDrive(drives);
+    const changed =
+      String(nextPresence?.serial || "") !==
+      String(accessKeyPresence?.serial || "");
+    accessKeyPresence = nextPresence;
+    if (accessKeyStore.settings.enabled) {
+      if (nextPresence) {
+        if (locked) {
+          locked = false;
+          failedAttempts = [];
+        }
+      } else if (!locked) {
+        locked = true;
+        closePrivateAuxiliaryWindows();
+      }
+    }
+    if (notify && changed) {
+      sendLockState();
+      if (!locked) {
+        if (pendingDeepLink) deliverDeepLink(pendingDeepLink);
+        deliverPendingNotificationRoute();
+      }
+    }
+    return accessKeyPresence;
+  } finally {
+    accessKeyRefreshActive = false;
+  }
+}
+
+function startAccessKeyMonitor() {
+  clearInterval(accessKeyMonitor);
+  accessKeyMonitor = setInterval(
+    () => refreshAccessKeyPresence().catch(() => {}),
+    750,
+  );
+}
+
 function lockApp() {
+  if (accessKeyStore?.settings.enabled && accessKeyPresence) return false;
   if (!lockStore?.settings.enabled || locked) return false;
   locked = true;
+  closePrivateAuxiliaryWindows();
   sendLockState();
   return true;
 }
 
 function scheduleLock() {
   clearTimeout(blurTimer);
+  if (accessKeyStore?.settings.enabled) return;
   if (locked || !lockStore?.settings.enabled) return;
   blurTimer = setTimeout(lockApp, lockStore.settings.timeoutMinutes * 60_000);
 }
@@ -212,8 +312,18 @@ function updateTrayMenu() {
         click: showMainWindow,
       },
       {
-        label: locked ? "App locked" : "Lock app",
-        enabled: Boolean(lockStore?.settings.enabled && !locked),
+        label: accessKeyStore?.settings.enabled
+          ? accessKeyPresence
+            ? "Access key connected"
+            : "Privacy cover active"
+          : locked
+            ? "App locked"
+            : "Lock app",
+        enabled: Boolean(
+          !accessKeyStore?.settings.enabled &&
+            lockStore?.settings.enabled &&
+            !locked,
+        ),
         click: lockApp,
       },
       { type: "separator" },
@@ -540,11 +650,18 @@ function setupIpc() {
   ipcMain.handle("app-lock:get-state", () => ({
     locked,
     ...lockStore.publicSettings(),
+    accessKey: accessKeyStore.publicSettings(accessKeyPresence),
   }));
   ipcMain.handle("app-lock:set-pin", (_event, payload = {}) =>
     lockStore.setPin(payload.pin, payload.currentPin),
   );
   ipcMain.handle("app-lock:disable", (_event, payload = {}) => {
+    if (accessKeyStore.settings.enabled)
+      return {
+        ok: false,
+        error:
+          "Disable the physical access key before removing its recovery PIN.",
+      };
     const result = lockStore.disable(payload.pin);
     if (result.ok) {
       locked = false;
@@ -561,6 +678,11 @@ function setupIpc() {
     failedAttempts = failedAttempts.filter((time) => now - time < 60_000);
     if (failedAttempts.length >= 5)
       return { ok: false, error: "Too many attempts. Please wait one minute." };
+    if (accessKeyStore.settings.enabled && !accessKeyPresence)
+      return {
+        ok: false,
+        error: "The configured access key is not connected.",
+      };
     if (!locked || lockStore.verify(payload.pin)) {
       locked = false;
       failedAttempts = [];
@@ -571,6 +693,77 @@ function setupIpc() {
     }
     failedAttempts.push(now);
     return { ok: false, error: "That PIN is incorrect." };
+  });
+  ipcMain.handle("access-key:get-state", () =>
+    accessKeyStore.publicSettings(accessKeyPresence),
+  );
+  ipcMain.handle("access-key:list-drives", async (event) => {
+    if (!isTrustedRendererOrigin(event.sender.getURL())) return [];
+    return listRemovableDrives();
+  });
+  ipcMain.handle("access-key:provision", async (event, payload = {}) => {
+    if (!isTrustedRendererOrigin(event.sender.getURL()))
+      return { ok: false, error: "Access denied." };
+    if (!lockStore.settings.enabled)
+      return {
+        ok: false,
+        error: "Enable a local recovery PIN before creating an access key.",
+      };
+    const drives = await listRemovableDrives();
+    const selected = drives.find(
+      (drive) => drive.root === String(payload.root || "").toUpperCase(),
+    );
+    if (!selected)
+      return {
+        ok: false,
+        error: "That removable drive is no longer connected.",
+      };
+    const result = accessKeyStore.provision(selected);
+    if (!result.ok) return result;
+    accessKeyPresence = selected;
+    locked = false;
+    execFile(
+      "attrib.exe",
+      ["+h", "+s", result.keyPath],
+      {
+        windowsHide: true,
+      },
+      () => {},
+    );
+    sendLockState();
+    return {
+      ok: true,
+      settings: accessKeyStore.publicSettings(accessKeyPresence),
+    };
+  });
+  ipcMain.handle("access-key:disable", async (event) => {
+    if (!isTrustedRendererOrigin(event.sender.getURL()))
+      return { ok: false, error: "Access denied." };
+    const drives = await listRemovableDrives();
+    const result = accessKeyStore.disable(drives);
+    if (!result.ok) return result;
+    accessKeyPresence = null;
+    locked = false;
+    sendLockState();
+    return result;
+  });
+  ipcMain.handle("access-key:recover", async (event, payload = {}) => {
+    if (!isTrustedRendererOrigin(event.sender.getURL()))
+      return { ok: false, error: "Access denied." };
+    const now = Date.now();
+    failedAttempts = failedAttempts.filter((time) => now - time < 60_000);
+    if (failedAttempts.length >= 5)
+      return { ok: false, error: "Too many attempts. Please wait one minute." };
+    if (!lockStore.verify(payload.pin)) {
+      failedAttempts.push(now);
+      return { ok: false, error: "That recovery PIN is incorrect." };
+    }
+    accessKeyStore.disable([]);
+    accessKeyPresence = null;
+    locked = false;
+    failedAttempts = [];
+    sendLockState();
+    return { ok: true };
   });
   ipcMain.handle("desktop:notify", (_event, payload = {}) =>
     showDesktopNotification(payload),
@@ -726,12 +919,15 @@ if (!gotSingleInstanceLock) {
     event.preventDefault();
     deliverDeepLink(url);
   });
-  app.whenReady().then(() => {
+  app.whenReady().then(async () => {
     DEEP_LINK_SCHEMES.forEach((scheme) =>
       app.setAsDefaultProtocolClient(scheme),
     );
     lockStore = new AppLockStore(
       path.join(app.getPath("userData"), "app-lock.json"),
+    );
+    accessKeyStore = new AccessKeyStore(
+      path.join(app.getPath("userData"), "access-key.json"),
     );
     if (!installerPreferences.applied) {
       app.setLoginItemSettings({
@@ -742,7 +938,10 @@ if (!gotSingleInstanceLock) {
           : [],
       });
     }
-    locked = lockStore.settings.enabled;
+    await refreshAccessKeyPresence({ notify: false });
+    locked = accessKeyStore.settings.enabled
+      ? !accessKeyPresence
+      : lockStore.settings.enabled;
     extractShareTarget(process.argv.slice(1));
     const startupLink = process.argv.find((value) => parseDeepLink(value));
     if (startupLink) pendingDeepLink = startupLink;
@@ -751,6 +950,7 @@ if (!gotSingleInstanceLock) {
     setupIpc();
     createWindow();
     createTray();
+    startAccessKeyMonitor();
     configureUpdater();
   });
 }
@@ -764,6 +964,7 @@ app.on("window-all-closed", () => {
   // Keep the process and notification-area icon alive after closing the window.
 });
 app.on("will-quit", () => {
+  clearInterval(accessKeyMonitor);
   tray?.destroy();
   tray = null;
 });

@@ -61,4 +61,11 @@ contextBridge.exposeInMainWorld("desktop", {
     lockNow: () => ipcRenderer.invoke("app-lock:lock-now"),
     onState: (callback) => subscribe("app-lock:state", callback),
   },
+  accessKey: {
+    getState: () => ipcRenderer.invoke("access-key:get-state"),
+    listDrives: () => ipcRenderer.invoke("access-key:list-drives"),
+    provision: (root) => ipcRenderer.invoke("access-key:provision", { root }),
+    disable: () => ipcRenderer.invoke("access-key:disable"),
+    recover: (pin) => ipcRenderer.invoke("access-key:recover", { pin }),
+  },
 });

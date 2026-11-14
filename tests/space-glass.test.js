@@ -53,7 +53,7 @@ test("What’s Changed contains Added, Changed, and Fixed summaries", () => {
   assert.match(source, /<strong>Added<\/strong>/);
   assert.match(source, /<strong>Changed<\/strong>/);
   assert.match(source, /<strong>Fixed<\/strong>/);
-  assert.match(source, /clearer planner view/);
-  assert.match(source, /three-part console/);
-  assert.match(source, /PiShock pairing/);
+  assert.match(source, /physical app/);
+  assert.match(source, /clearer planner/);
+  assert.match(source, /private focus screen/);
 });

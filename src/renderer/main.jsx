@@ -1,6 +1,7 @@
 import React, { Component } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
+import VisualQaScreen from "./components/VisualQaScreen";
 import "./styles.css";
 import "./space-glass.css";
 import { applyPreferences } from "./lib/preferences";
@@ -91,6 +92,38 @@ if (!window.desktop) {
       lockNow: async () => ({ ok: false }),
       onState: () => () => {},
     },
+    accessKey: {
+      getState: async () => ({ enabled: false, present: false }),
+      listDrives: async () => [],
+      provision: async () => ({
+        ok: false,
+        error: "Physical access keys are available in the desktop build.",
+      }),
+      disable: async () => ({ ok: true }),
+      recover: async () => ({ ok: false }),
+    },
+  };
+}
+
+const visualQa = ["127.0.0.1", "localhost"].includes(location.hostname)
+  ? new URLSearchParams(location.search).get("visual-qa")
+  : "";
+if (visualQa === "physical-key") {
+  window.desktop.accessKey = {
+    getState: async () => ({ enabled: false, present: false }),
+    listDrives: async () => [
+      {
+        root: "E:\\",
+        label: "Crew Key",
+        serial: "VISUAL-QA",
+        size: 128849018880,
+        free: 96636764160,
+        bus: "USB",
+      },
+    ],
+    provision: async () => ({ ok: true }),
+    disable: async () => ({ ok: true }),
+    recover: async () => ({ ok: false }),
   };
 }
 
@@ -100,7 +133,7 @@ if (!rootNode) throw new Error("CrewDeck root element is missing.");
 createRoot(rootNode).render(
   <RootErrorBoundary>
     <React.StrictMode>
-      <App />
+      {visualQa ? <VisualQaScreen view={visualQa} /> : <App />}
     </React.StrictMode>
   </RootErrorBoundary>,
 );

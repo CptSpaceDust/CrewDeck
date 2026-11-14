@@ -6,8 +6,9 @@ import { Modal, Field } from "./ui";
 import CaptainMusic from "./CaptainMusic";
 import CaptainMessages from "./CaptainMessages";
 import { meetupInstant } from "../lib/time";
-import { Megaphone, WandSparkles } from "lucide-react";
+import { KeyRound, Megaphone, WandSparkles } from "lucide-react";
 import CaptainAutomationStudio from "./CaptainAutomationStudio";
+import PhysicalAccessKey from "./PhysicalAccessKey";
 
 export const restrictionNames = {
   site: "Site access",
@@ -372,6 +373,16 @@ export default function CaptainControls({
           tone="blue"
         >
           {communityOperations}
+        </CaptainSection>
+        <CaptainSection
+          id="physical-access-key"
+          icon={<KeyRound />}
+          title="Physical App Access Key"
+          description="Use one removable USB drive or SD card to unlock CrewDeck and show a privacy cover when it is removed."
+          status="Local device security"
+          tone="blue"
+        >
+          <PhysicalAccessKey />
         </CaptainSection>
         <CaptainSection
           id="meetup-management"

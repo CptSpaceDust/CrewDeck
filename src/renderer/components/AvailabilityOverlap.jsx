@@ -96,8 +96,17 @@ export function AvailabilityOverlap({
   useEffect(() => {
     if (!userId || participantIds.length < 2 || !suggestions.length) return;
     const cacheKey = `availability:${[...participantIds].sort().join(":")}:${date}:${duration}`;
-    const row = { cache_key:cacheKey, owner_id:userId, participant_ids:participantIds, result:{ date, duration, suggestions }, expires_at:new Date(Date.now()+15*60000).toISOString() };
-    supabase.from("availability_overlap_cache").upsert(row).then(() => {});
+    const row = {
+      cache_key: cacheKey,
+      owner_id: userId,
+      participant_ids: participantIds,
+      result: { date, duration, suggestions },
+      expires_at: new Date(Date.now() + 15 * 60000).toISOString(),
+    };
+    supabase
+      .from("availability_overlap_cache")
+      .upsert(row)
+      .then(() => {});
     localStorage.setItem("crewdeck.quick-gather-overlap", JSON.stringify(row));
   }, [userId, participantIds.join("|"), date, duration, suggestions]);
   if (participantIds.length < 2) return null;
@@ -178,37 +187,42 @@ export function AvailabilityOverlap({
         </span>
       </button>
       {open && (
-        <div>
-          <div className="meetup-overlap-toolbar">
-            <button
-              type="button"
-              onClick={() => shiftDate(-1)}
-              aria-label="Previous day"
+        <div className="meetup-overlap-body">
+          <div className="meetup-overlap-controls">
+            <div className="meetup-overlap-toolbar">
+              <button
+                type="button"
+                onClick={() => shiftDate(-1)}
+                aria-label="Previous day"
+              >
+                ‹
+              </button>
+              <label>
+                Date
+                <input
+                  type="date"
+                  min={localDateKey(new Date())}
+                  value={date}
+                  onChange={(event) => setDate(event.target.value)}
+                />
+              </label>
+              <button
+                type="button"
+                onClick={() => shiftDate(1)}
+                aria-label="Next day"
+              >
+                ›
+              </button>
+            </div>
+            <div
+              className="meetup-overlap-legend"
+              aria-label="Availability key"
             >
-              ‹
-            </button>
-            <label>
-              Date
-              <input
-                type="date"
-                min={localDateKey(new Date())}
-                value={date}
-                onChange={(event) => setDate(event.target.value)}
-              />
-            </label>
-            <button
-              type="button"
-              onClick={() => shiftDate(1)}
-              aria-label="Next day"
-            >
-              ›
-            </button>
-          </div>
-          <div className="meetup-overlap-legend" aria-label="Availability key">
-            <span className="available">Available</span>
-            <span className="partial">Already planned</span>
-            <span className="unavailable">Unavailable</span>
-            <span className="unknown">Unknown</span>
+              <span className="available">Available</span>
+              <span className="partial">Already planned</span>
+              <span className="unavailable">Unavailable</span>
+              <span className="unknown">Unknown</span>
+            </div>
           </div>
           <div className="meetup-overlap-people">
             {people.map((person) => {
@@ -226,17 +240,19 @@ export function AvailabilityOverlap({
               return (
                 <div className="meetup-overlap-row" key={person.id}>
                   <div className="meetup-overlap-identity">
-                    {person.avatar ? (
-                      <img src={person.avatar} alt="" />
-                    ) : (
-                      <span className="meetup-overlap-avatar">
-                        {person.username?.[0]}
+                    <div className="meetup-overlap-person">
+                      {person.avatar ? (
+                        <img src={person.avatar} alt="" />
+                      ) : (
+                        <span className="meetup-overlap-avatar">
+                          {person.username?.[0]}
+                        </span>
+                      )}
+                      <span>
+                        <strong>{person.username}</strong>
+                        <small>{local}</small>
                       </span>
-                    )}
-                    <span>
-                      <strong>{person.username}</strong>
-                      <small>{local}</small>
-                    </span>
+                    </div>
                     {people.length === 2 && zone && (
                       <button
                         type="button"

@@ -1,7 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Bell, CheckCircle2, MessageCircle, Phone, PhoneOff, X } from "lucide-react";
+import {
+  Bell,
+  CheckCircle2,
+  MessageCircle,
+  Phone,
+  PhoneOff,
+  X,
+} from "lucide-react";
 import AuthScreen from "./components/AuthScreen";
 import LockScreen from "./components/LockScreen";
+import PrivacyCover from "./components/PrivacyCover";
 import ResetPasswordScreen from "./components/ResetPasswordScreen";
 import Sidebar from "./components/Sidebar";
 import AppSettings from "./components/AppSettings";
@@ -679,7 +687,12 @@ export default function App() {
   ]);
   if (!startupMinimumElapsed || lock.loading || loading)
     return <StartupScreen />;
-  if (lock.locked) return <LockScreen />;
+  if (lock.locked)
+    return lock.accessKey?.enabled && !lock.accessKey?.present ? (
+      <PrivacyCover />
+    ) : (
+      <LockScreen />
+    );
   if (recovery)
     return <ResetPasswordScreen onDone={() => setRecovery(false)} />;
   if (!session) return <AuthScreen />;

@@ -280,8 +280,8 @@ export function WhatsNew() {
             <div>
               <strong>Added</strong>
               <p>
-                Availability comparison now has a clearer planner view, and
-                logged-out invitations can be opened from neutral code entry.
+                Captains can turn one USB drive or SD card into a physical app
+                key, with safe PIN recovery if the key is lost.
               </p>
             </div>
           </article>
@@ -290,8 +290,8 @@ export function WhatsNew() {
             <div>
               <strong>Changed</strong>
               <p>
-                Control Center now uses a compact three-part console with
-                independent Shock and Vibrate controls at every window size.
+                Availability comparison now has a clearer planner, stable member
+                details, and easier shared-time suggestions.
               </p>
             </div>
           </article>
@@ -300,8 +300,8 @@ export function WhatsNew() {
             <div>
               <strong>Fixed</strong>
               <p>
-                PiShock pairing, guest permissions, dependency security, and
-                owner-only Pause visibility are repaired.
+                Schedule overlap and recovery-lockout risks are fixed, and a
+                removed physical key now activates a private focus screen.
               </p>
             </div>
           </article>

@@ -2,6 +2,24 @@
 
 Every published CrewDeck release is documented here and copied into its GitHub release notes.
 
+## [2.0.17] - 2026-11-14
+
+### Added
+
+- Added a Captain-only physical access key that binds CrewDeck to one removable USB drive or SD card while preserving the device's storage.
+- Added automatic unlock when the configured key is connected, immediate privacy protection when it is removed, and PIN-based recovery for a lost key.
+- Added a neutral Daily Focus privacy cover with a local focus timer and quick note instead of exposing CrewDeck's locked screen.
+
+### Changed
+
+- Rebuilt availability comparison with a stable member column, an independent time grid, a contained date toolbar, and clearer shared-time suggestions.
+- The physical key stores a hidden random credential on the removable drive and only its cryptographic hash and drive identity in CrewDeck; it never formats or repartitions the drive.
+
+### Fixed
+
+- Prevented member names, local-time details, and availability actions from overlapping the first schedule slots.
+- Prevented the recovery PIN from being removed while a physical access key is active.
+
 ## [2.0.16] - 2026-11-13
 
 ### Changed
