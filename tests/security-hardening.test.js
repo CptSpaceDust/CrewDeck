@@ -10,6 +10,8 @@ test("patched desktop dependencies stay pinned", () => {
   assert.equal(pkg.devDependencies["source-map-js"], "1.2.2");
   assert.equal(pkg.devDependencies.electron, "44.9.3");
   assert.equal(pkg.devDependencies.vite, "6.4.5");
+  assert.equal(pkg.overrides.joi, "17.13.9");
+  assert.equal(pkg.overrides["@electron/universal"].minimatch, "11.0.1");
 });
 
 test("release and database security gates remain enabled", () => {

@@ -60,13 +60,12 @@ test("Control Center includes provider controls, vertical rails, and owner tools
   assert.match(css, /\.control-vertical-rails/);
   assert.match(css, /container-name:\s*control-device/);
   assert.match(css, /@container control-device \(max-width: 880px\)/);
-  assert.match(css, /grid-template-areas:[\s\S]*"core core"[\s\S]*"shock vibrate"/);
+  assert.match(css, /grid-template-columns:\s*minmax\(190px, 1fr\)[\s\S]*minmax\(190px, 1fr\)/);
   assert.match(css, /control-emergency-flash/);
   assert.match(css, /user-select: none/);
   for (const safetyFeature of [
     "captain_create_control_access_link",
     "Duplicate command blocked",
-    "Hold to shock",
     "Device settings and safety",
     "require_hold_to_shock",
     "Maximum uses",
@@ -74,6 +73,7 @@ test("Control Center includes provider controls, vertical rails, and owner tools
     "Quick access code",
   ])
     assert.ok(page.includes(safetyFeature), `Missing ${safetyFeature}`);
+  assert.doesNotMatch(page, />Hold to shock</);
 });
 
 test("Control Center separates vertical shock and vibrate controls and supports owner pause", () => {

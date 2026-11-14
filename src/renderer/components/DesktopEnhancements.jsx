@@ -280,8 +280,8 @@ export function WhatsNew() {
             <div>
               <strong>Added</strong>
               <p>
-                Shared access now includes per-device permissions, live limit
-                updates, quick codes, and a scannable QR handoff.
+                Availability comparison now has a clearer planner view, and
+                logged-out invitations can be opened from neutral code entry.
               </p>
             </div>
           </article>
@@ -290,8 +290,8 @@ export function WhatsNew() {
             <div>
               <strong>Changed</strong>
               <p>
-                PiShock pairing, mixed provider connections, guest identity,
-                and command delivery are faster and more reliable.
+                Control Center now uses a compact three-part console with
+                independent Shock and Vibrate controls at every window size.
               </p>
             </div>
           </article>
@@ -300,8 +300,8 @@ export function WhatsNew() {
             <div>
               <strong>Fixed</strong>
               <p>
-                Control Center forms no longer collide at narrow widths, and
-                safety stop actions stay out of command history.
+                PiShock pairing, guest permissions, dependency security, and
+                owner-only Pause visibility are repaired.
               </p>
             </div>
           </article>

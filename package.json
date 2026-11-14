@@ -1,6 +1,6 @@
 {
   "name": "crewdeck-desktop",
-  "version": "2.0.15",
+  "version": "2.0.16",
   "private": true,
   "author": "CptSpaceDust",
   "description": "The private desktop home for the CrewDeck community.",
@@ -93,6 +93,13 @@
     ]
   },
   "overrides": {
-    "@electron/get": "5.1.0"
+    "@electron/get": "5.1.0",
+    "joi": "17.13.9",
+    "app-builder-lib": {
+      "minimatch": "11.0.1"
+    },
+    "@electron/universal": {
+      "minimatch": "11.0.1"
+    }
   }
 }

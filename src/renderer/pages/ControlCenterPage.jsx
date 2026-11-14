@@ -45,7 +45,7 @@ const initialSafety = () => ({
   high_intensity_threshold: 40,
   cooldown_seconds: 3,
   hold_milliseconds: 800,
-  require_hold_to_shock: true,
+  require_hold_to_shock: false,
 });
 
 async function sha256(value) {
@@ -74,53 +74,6 @@ async function copyControlText(value) {
   } catch {}
   field.remove();
   return copied;
-}
-
-function HoldCommandButton({
-  holdMs,
-  className = "",
-  disabled,
-  children,
-  onActivate,
-  onRelease,
-}) {
-  const timer = useRef(null);
-  const activated = useRef(false);
-  const [holding, setHolding] = useState(false);
-  const stop = () => {
-    window.clearTimeout(timer.current);
-    setHolding(false);
-    if (activated.current) onRelease?.();
-    activated.current = false;
-  };
-  return (
-    <button
-      className={`${className}${holding ? " holding" : ""}`}
-      disabled={disabled}
-      style={{ "--hold-ms": `${holdMs}ms` }}
-      onContextMenu={(event) => event.preventDefault()}
-      onPointerDown={(event) => {
-        if (disabled) return;
-        event.preventDefault();
-        event.currentTarget.setPointerCapture(event.pointerId);
-        setHolding(true);
-        timer.current = window.setTimeout(
-          async () => {
-            activated.current = true;
-            await onActivate?.();
-          },
-          Math.max(0, holdMs),
-        );
-      }}
-      onPointerUp={stop}
-      onPointerCancel={stop}
-      onPointerLeave={(event) => {
-        if (event.buttons) stop();
-      }}
-    >
-      {children}
-    </button>
-  );
 }
 
 function canUseControlCenter() {
@@ -220,28 +173,11 @@ function GuestDeviceCard({ device, synced, onSync, onCommand }) {
         {device.allow_vibrate !== false && <button className={feedback === "vibrate" ? "command-confirmed" : ""} disabled={busy || device.is_paused} onClick={() => run("vibrate")}>
           Vibrate
         </button>}
-        {device.allow_shock !== false && (device.require_hold_to_shock === false ? (
-          <button
-            className={`danger${feedback === "shock" ? " command-confirmed" : ""}`}
-            disabled={busy || device.is_paused}
-            onClick={() => run("shock")}
-          >
-            Shock
-          </button>
-        ) : (
-          <HoldCommandButton
-            className={`danger${feedback === "shock" ? " command-confirmed" : ""}`}
-            disabled={busy || device.is_paused}
-            holdMs={device.hold_milliseconds || 800}
-            onActivate={() => run("shock")}
-            onRelease={() => onCommand("stop", 0, 0)}
-          >
-            Hold to shock
-          </HoldCommandButton>
-        ))}
-        <button className={feedback === "stop" ? "command-confirmed" : ""} disabled={busy} onClick={() => run("stop")}>
-          Stop now
-        </button>
+        {device.allow_shock !== false && <button
+          className={`danger${feedback === "shock" ? " command-confirmed" : ""}`}
+          disabled={busy || device.is_paused}
+          onClick={() => run("shock")}
+        >Shock</button>}
         {device.allow_beep !== false && <button className={feedback === "beep" ? "command-confirmed" : ""} disabled={busy || device.is_paused} onClick={() => run("beep")}>
           Beep
         </button>}
@@ -635,7 +571,7 @@ export default function ControlCenterPage({ user, profile }) {
         const defaults = safety[device.id] || initialSafety();
         return [device.id, existing
           ? { ...existing, included: true }
-          : { shocker_id: device.id, shocker_name: device.name || "Control module", max_intensity: defaults.max_intensity, max_duration: defaults.max_duration, require_hold_to_shock: defaults.require_hold_to_shock !== false, hold_milliseconds: defaults.hold_milliseconds, allow_warning: true, allow_beep: true, allow_live: false, allow_vibrate: true, allow_shock: false, included: false }];
+          : { shocker_id: device.id, shocker_name: device.name || "Control module", max_intensity: defaults.max_intensity, max_duration: defaults.max_duration, require_hold_to_shock: false, hold_milliseconds: defaults.hold_milliseconds, allow_warning: true, allow_beep: true, allow_live: false, allow_vibrate: true, allow_shock: true, included: false }];
       })),
     });
   }
@@ -652,13 +588,13 @@ export default function ControlCenterPage({ user, profile }) {
           shocker_name: device.shocker_name,
           max_intensity: Number(device.max_intensity),
           max_duration: Number(device.max_duration),
-          require_hold_to_shock: device.require_hold_to_shock !== false,
+          require_hold_to_shock: false,
           hold_milliseconds: Number(device.hold_milliseconds || 800),
           allow_warning: device.allow_warning !== false,
           allow_beep: device.allow_beep !== false,
           allow_live: device.allow_live === true,
           allow_vibrate: device.allow_vibrate !== false,
-          allow_shock: device.allow_shock === true,
+          allow_shock: device.allow_shock !== false,
         }));
       if (providerStatus.paired) {
         await invokeProvider({ action: "update_share", link_id: editingLink.id, expires_at: expiresAt, max_uses: Number(editingLink.max_uses), devices: sharedDevices });
@@ -790,13 +726,13 @@ export default function ControlCenterPage({ user, profile }) {
               included: true,
               max_intensity: limits.max_intensity,
               max_duration: limits.max_duration,
-              require_hold_to_shock: limits.require_hold_to_shock !== false,
+              require_hold_to_shock: false,
               hold_milliseconds: limits.hold_milliseconds,
               allow_warning: true,
               allow_beep: true,
               allow_live: false,
               allow_vibrate: true,
-              allow_shock: false,
+              allow_shock: true,
             },
           ];
         }),
@@ -829,14 +765,13 @@ export default function ControlCenterPage({ user, profile }) {
         shocker_name: device.name || "Control module",
         max_intensity: linkSettings.devices[device.id].max_intensity,
         max_duration: linkSettings.devices[device.id].max_duration,
-        require_hold_to_shock:
-          linkSettings.devices[device.id].require_hold_to_shock,
+        require_hold_to_shock: false,
         hold_milliseconds: linkSettings.devices[device.id].hold_milliseconds,
         allow_warning: linkSettings.devices[device.id].allow_warning !== false,
         allow_beep: linkSettings.devices[device.id].allow_beep !== false,
         allow_live: linkSettings.devices[device.id].allow_live === true,
         allow_vibrate: linkSettings.devices[device.id].allow_vibrate !== false,
-        allow_shock: linkSettings.devices[device.id].allow_shock === true,
+        allow_shock: linkSettings.devices[device.id].allow_shock !== false,
       }));
     if (providerStatus.paired) {
       await invokeProvider({
@@ -1622,23 +1557,6 @@ export default function ControlCenterPage({ user, profile }) {
                         ["allow_shock", "Shock"],
                       ].map(([field, label]) => <label key={field}><input type="checkbox" checked={item[field] === true} disabled={!item.included} onChange={(event) => update({ [field]: event.target.checked })} /><span aria-hidden="true" /><span>{label}</span></label>)}
                     </fieldset>
-                    <label className="control-link-hold-toggle">
-                      <input
-                        type="checkbox"
-                        checked={item.require_hold_to_shock !== false}
-                        disabled={!item.included}
-                        onChange={(event) =>
-                          update({
-                            require_hold_to_shock: event.target.checked,
-                          })
-                        }
-                      />
-                      <span aria-hidden="true" />
-                      <span>
-                        <strong>Require hold to shock</strong>
-                        <small>{item.hold_milliseconds} ms safety hold</small>
-                      </span>
-                    </label>
                   </section>
                 );
               })}
@@ -1728,7 +1646,6 @@ export default function ControlCenterPage({ user, profile }) {
                         <label><span>Max duration</span><input type="number" min="0.3" max="30" step="0.1" disabled={!device.included} value={device.max_duration} onChange={(event) => update({ max_duration: Number(event.target.value) })} /></label>
                       </div>
                       <fieldset className="control-link-capabilities-app"><legend>Allowed controls</legend>{[["allow_warning", "Warning"], ["allow_beep", "Beep"], ["allow_live", "Live control"], ["allow_vibrate", "Vibrate"], ["allow_shock", "Shock"]].map(([field, label]) => <label key={field}><input type="checkbox" disabled={!device.included} checked={device[field] === true} onChange={(event) => update({ [field]: event.target.checked })} /><span aria-hidden="true" /><span>{label}</span></label>)}</fieldset>
-                      <label className="control-link-hold-toggle"><input type="checkbox" disabled={!device.included} checked={device.require_hold_to_shock !== false} onChange={(event) => update({ require_hold_to_shock: event.target.checked })} /><span aria-hidden="true" /><span><strong>Require hold to shock</strong><small>{device.hold_milliseconds || 800} ms safety hold</small></span></label>
                     </article>;
                   })}
                 </div>
@@ -1774,16 +1691,10 @@ export default function ControlCenterPage({ user, profile }) {
                   <header><span><Zap /></span><div><small>Shock</small><strong>{control.shockIntensity}%</strong></div></header>
                   <div className="control-vertical-rails"><ControlRail vertical label="Intensity" icon={Gauge} tone="danger" value={control.shockIntensity} min={0} max={deviceSafety.max_intensity} suffix="%" disabled={busy || device.paused} onChange={(value) => { updateControl(device.id, { shockIntensity: value }); sendLive(device.id, "shock", value); }} />
                   {!live && <ControlRail vertical label="Duration" icon={Clock3} tone="danger" value={control.shockDuration} min={1} max={Math.max(1, Math.floor(deviceSafety.max_duration))} suffix="s" disabled={busy || device.paused} onChange={(value) => updateControl(device.id, { shockDuration: value })} />}</div>
-                  {!live && (deviceSafety.require_hold_to_shock !== false ? (
-                    <HoldCommandButton className={`control-console-operate shock${commandFeedback === `${device.id}:shock` ? " command-confirmed" : ""}`} disabled={device.paused || (busy && pendingWarning !== device.id)} holdMs={deviceSafety.hold_milliseconds} onActivate={() => runAction(device.id, "shock")} onRelease={() => stopTargets(device.id)}>
-                      {pendingWarning === device.id ? "Cancel shock" : "Hold to shock"}
-                    </HoldCommandButton>
-                  ) : (
-                    <button className={`control-console-operate shock${commandFeedback === `${device.id}:shock` ? " command-confirmed" : ""}`} disabled={device.paused || (busy && pendingWarning !== device.id)} onClick={() => runAction(device.id, "shock")}>{pendingWarning === device.id ? "Cancel shock" : "Shock"}</button>
-                  ))}
+                  {!live && <button className={`control-console-operate shock${commandFeedback === `${device.id}:shock` ? " command-confirmed" : ""}`} disabled={device.paused || (busy && pendingWarning !== device.id)} onClick={() => runAction(device.id, "shock")}>{pendingWarning === device.id ? "Cancel shock" : "Shock"}</button>}
                 </section>
                 <section className="control-console-core">
-                  <button className={`control-console-stop${device.paused ? " paused" : ""}${commandFeedback === `${device.id}:pause` ? " command-confirmed" : ""}`} onClick={() => activeOwner?.id === user.id ? toggleDevicePause(device) : stopTargets(device.id)} disabled={busy}><ShieldAlert /><strong>{activeOwner?.id === user.id ? (device.paused ? "RESUME" : "PAUSE") : "STOP"}</strong><small>{activeOwner?.id === user.id ? (device.paused ? "Allow commands" : "Block all access") : "Stop now"}</small></button>
+                  {activeOwner?.id === user.id && <button className={`control-console-stop${device.paused ? " paused" : ""}${commandFeedback === `${device.id}:pause` ? " command-confirmed" : ""}`} onClick={() => toggleDevicePause(device)} disabled={busy}><ShieldAlert /><strong>{device.paused ? "RESUME" : "PAUSE"}</strong><small>{device.paused ? "Allow commands" : "Block all access"}</small></button>}
                   <button
                     className={commandFeedback === `${device.id}:beep` ? "command-confirmed" : ""}
                     onClick={() => runAction(device.id, "beep")}
@@ -1913,32 +1824,6 @@ export default function ControlCenterPage({ user, profile }) {
                             </label>
                           ))}
                         </div>
-                        <label className="control-safety-toggle">
-                          <input
-                            type="checkbox"
-                            checked={
-                              deviceSafety.require_hold_to_shock !== false
-                            }
-                            onChange={(event) =>
-                              setSafety((current) => ({
-                                ...current,
-                                [device.id]: {
-                                  ...deviceSafety,
-                                  require_hold_to_shock: event.target.checked,
-                                },
-                              }))
-                            }
-                          />
-                          <span aria-hidden="true" />
-                          <span>
-                            <strong>Hold to activate shock</strong>
-                            <small>
-                              Turn this off to send a shock with one click.
-                              Release-to-stop only applies while hold mode is
-                              on.
-                            </small>
-                          </span>
-                        </label>
                         <footer>
                           <span>
                             These limits are enforced before a command reaches

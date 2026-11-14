@@ -2,6 +2,22 @@
 
 Every published CrewDeck release is documented here and copied into its GitHub release notes.
 
+## [2.0.16] - 2026-11-13
+
+### Changed
+
+- Rebuilt the desktop and guest Control Center consoles around the compact PiShock-inspired three-column layout, with independent Shock and Vibrate rails and centered Beep/Warning actions.
+- Redesigned availability comparison as a clearly labeled planner card with an explicit open/close action and clearer guidance.
+- New guest links now enable Warning, Vibrate, and Shock by default while keeping every limit enforced by the owner’s grant.
+
+### Fixed
+
+- Fixed PiShock pairing to send the API key in PiShock’s documented validation and device-list query parameters while keeping credentials server-side.
+- Removed hold-to-shock from owner and guest controls, and prevented guests and trusted guests from seeing owner-only Pause controls.
+- Restored the neutral logged-out **Enter Code** account-menu action without revealing what a valid invitation grants.
+- Patched the dependency versions reported by GitHub’s scanner; the packaged dependency tree now audits with zero known vulnerabilities.
+- Fixed compact-window Control Center labels, guest-card overflow, and reduced-permission layouts.
+
 ## [2.0.15] - 2026-11-13
 
 ### Added

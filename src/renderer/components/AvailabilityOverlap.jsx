@@ -163,7 +163,8 @@ export function AvailabilityOverlap({
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
       >
-        <span>
+        <span className="meetup-overlap-summary-copy">
+          <span className="meetup-overlap-kicker">Availability planner</span>
           <strong>Compare schedules</strong>
           <small>
             {best
@@ -171,7 +172,10 @@ export function AvailabilityOverlap({
               : "No shared opening meets the current attendance target."}
           </small>
         </span>
-        <span aria-hidden="true">{open ? "−" : "+"}</span>
+        <span className="meetup-overlap-open-label">
+          {open ? "Hide comparison" : "Open comparison"}
+          <b aria-hidden="true">{open ? "−" : "+"}</b>
+        </span>
       </button>
       {open && (
         <div>

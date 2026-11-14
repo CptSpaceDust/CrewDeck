@@ -1434,7 +1434,7 @@ input[type="file"]::file-selector-button {
   overflow: hidden;
 }
 .control-rail.vertical .control-rail-heading { grid-template-columns: 15px 1fr; justify-self: stretch; }
-.control-rail.vertical .control-rail-heading b { min-width: 0; font-size: .76rem; line-height: 1.15; overflow-wrap: anywhere; }
+.control-rail.vertical .control-rail-heading b { min-width: 0; font-size: clamp(.66rem, 1.15vw, .76rem); line-height: 1.15; white-space: nowrap; }
 .control-rail.vertical .control-rail-heading output { grid-column: 1 / -1; justify-self: center; }
 .control-rail.vertical .control-rail-heading { grid-column: 1 / -1; }
 .control-rail.vertical input {
@@ -3361,4 +3361,41 @@ html[data-motion="reduced"] *::after {
 .field .space-time-picker select:focus {
   border: 0;
   box-shadow: none;
+}
+
+/* Control Center 2.0 console: compact PiShock-inspired three-column layout. */
+.control-center-page .control-device-grid { grid-template-columns: minmax(0, 1fr); }
+.control-center-page .control-console {
+  grid-template-columns: minmax(190px, 1fr) minmax(96px, 116px) minmax(190px, 1fr);
+  align-items: stretch;
+  gap: 12px;
+}
+.control-center-page .control-console-lane { min-height: 326px; padding: 13px; }
+.control-center-page .control-vertical-rails { min-height: 190px; }
+.control-center-page .control-rail.vertical input,
+.control-center-page .control-rail.vertical .control-rail-scale { height: 142px; }
+.control-center-page .control-console-core { align-content: center; }
+.control-center-page .control-link-hold-toggle,
+.control-center-page .control-safety-toggle { display: none !important; }
+
+@container control-device (max-width: 880px) and (min-width: 560px) {
+  .control-center-page .control-console {
+    grid-template-areas: none;
+    grid-template-columns: minmax(180px, 1fr) minmax(88px, 108px) minmax(180px, 1fr);
+  }
+  .control-center-page .control-console-lane.shock-lane,
+  .control-center-page .control-console-lane.vibrate-lane,
+  .control-center-page .control-console-core { grid-area: auto; }
+  .control-center-page .control-console-core { grid-template-columns: 1fr; }
+}
+
+@container control-device (max-width: 559px) {
+  .control-center-page .control-console {
+    grid-template-areas: "core" "shock" "vibrate";
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .control-center-page .control-console-core {
+    grid-area: core;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }

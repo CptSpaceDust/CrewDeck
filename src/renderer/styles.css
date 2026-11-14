@@ -9253,9 +9253,11 @@ html[data-color-indicators="labeled"] .presence-chip::before {
   width: 100%;
   align-items: center;
   justify-content: space-between;
-  padding: 0;
-  border: 0;
-  background: transparent;
+  min-height: 92px;
+  padding: 16px 18px;
+  border: 1px solid rgba(102, 196, 255, 0.26);
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(24, 74, 121, 0.34), rgba(60, 48, 132, 0.2));
   color: inherit;
   text-align: left;
   cursor: pointer;
@@ -9263,6 +9265,32 @@ html[data-color-indicators="labeled"] .presence-chip::before {
 .meetup-overlap-summary > span:first-child {
   display: grid;
   gap: 4px;
+}
+.meetup-overlap-kicker {
+  color: #70d7ff;
+  font-size: 0.66rem;
+  font-weight: 900;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+.meetup-overlap-open-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: #dff5ff;
+  font-size: 0.78rem;
+  font-weight: 850;
+  white-space: nowrap;
+}
+.meetup-overlap-open-label b {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1px solid rgba(112, 211, 255, 0.38);
+  border-radius: 10px;
+  background: rgba(10, 35, 67, 0.72);
+  font-size: 1.1rem;
 }
 .meetup-overlap-summary strong {
   color: #cfeeff;
@@ -9445,6 +9473,8 @@ html[data-color-indicators="labeled"] .presence-chip::before {
   .meetup-overlap-timeline {
     overflow-x: auto;
   }
+  .meetup-overlap-summary { align-items: flex-start; flex-direction: column; }
+  .meetup-overlap-open-label { width: 100%; justify-content: space-between; }
 }
 .crew-event-file-list {
   display: grid;
